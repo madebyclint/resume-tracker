@@ -2,9 +2,10 @@ import { useState } from "react";
 import { AppStateProvider, useAppState } from "./state/AppStateContext";
 import DashboardPage from "./pages/DashboardPage";
 import ChunkLibraryPage from "./pages/ChunkLibraryPage";
+import JobDescriptionsPage from "./pages/JobDescriptionsPage";
 import "./App.css";
 
-type Page = 'dashboard' | 'chunks';
+type Page = 'dashboard' | 'chunks' | 'jobs';
 
 function AppShell() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
@@ -14,6 +15,8 @@ function AppShell() {
     switch (currentPage) {
       case 'chunks':
         return <ChunkLibraryPage resumes={state.resumes} coverLetters={state.coverLetters} />;
+      case 'jobs':
+        return <JobDescriptionsPage />;
       case 'dashboard':
       default:
         return <DashboardPage />;
@@ -38,6 +41,13 @@ function AppShell() {
             style={{ cursor: 'pointer' }}
           >
             🧩 Chunk Library
+          </div>
+          <div
+            className={`nav-item ${currentPage === 'jobs' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('jobs')}
+            style={{ cursor: 'pointer' }}
+          >
+            📝 Job Descriptions
           </div>
         </nav>
       </aside>

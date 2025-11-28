@@ -1,4 +1,4 @@
-import { ChunkParseResult, ChunkType } from '../types';
+import { ChunkParseResult, ChunkType, JobDescription } from '../types';
 
 // AI Configuration
 interface AIConfig {
@@ -132,6 +132,41 @@ Return ONLY a valid JSON object with this structure:
       ]
     }
   ]
+}`;
+
+// Prompt for AI to parse job descriptions and extract key information
+const JOB_DESCRIPTION_PARSING_PROMPT = `You are an expert job posting analyzer. Your task is to extract structured information from job description text.
+
+Extract the following information:
+- role: Job title/position name
+- company: Company name (if mentioned)
+- department: Department/team name (if mentioned)
+- location: Location/remote information
+- salaryRange: Salary range (if mentioned)
+- experienceLevel: Required experience level (entry, mid, senior, etc.)
+- requiredSkills: Array of required/must-have skills and technologies
+- preferredSkills: Array of preferred/nice-to-have skills
+- responsibilities: Array of key job responsibilities
+- requirements: Array of job requirements (education, experience, etc.)
+
+Also generate:
+- keywords: Array of 10-15 relevant keywords for matching (skills, technologies, domains)
+
+Return ONLY a valid JSON object with this structure:
+{
+  "extractedInfo": {
+    "role": "Senior Software Engineer",
+    "company": "TechCorp",
+    "department": "Engineering",
+    "location": "San Francisco, CA / Remote",
+    "salaryRange": "$120k - $180k",
+    "experienceLevel": "Senior (5+ years)",
+    "requiredSkills": ["JavaScript", "React", "Node.js", "SQL"],
+    "preferredSkills": ["TypeScript", "AWS", "Docker"],
+    "responsibilities": ["Build scalable web applications", "Mentor junior developers"],
+    "requirements": ["Bachelor's degree in CS", "5+ years experience"]
+  },
+  "keywords": ["JavaScript", "React", "Node.js", "TypeScript", "AWS", "Docker", "SQL", "Senior", "Engineering", "Mentoring", "Scalable", "Web Applications", "Full Stack", "Backend", "Frontend"]
 }`;
 
 export async function parseTextIntoChunks(text: string): Promise<ChunkParseResult> {
@@ -545,6 +580,202 @@ export async function parseCoverLetterIntoChunks(text: string): Promise<ChunkPar
 
     return {
       chunks: [],
+      success: false,
+      error: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+}
+
+// Parse job description text and extract structured information
+export async function parseJobDescription(text: string): Promise<{
+  extractedInfo: JobDescription['extractedInfo'];
+  keywords: string[];
+  success: boolean;
+  error?: string;
+}> {
+  const config = getAIConfig();
+  
+  if (!config.apiKey) {
+    return {
+      extractedInfo: {
+        requiredSkills: [],
+        preferredSkills: [],
+        responsibilities: [],
+        requirements: []
+      },
+      keywords: [],
+      success: false,
+      error: 'AI service not configured. Please add your OpenAI API key.'
+    };
+  }
+
+  if (!config.apiUrl) {
+    return {
+      extractedInfo: {
+        requiredSkills: [],
+        preferredSkills: [],
+        responsibilities: [],
+        requirements: []
+      },
+      keywords: [],
+      success: false,
+      error: 'AI API URL not configured.'
+    };
+  }
+
+  try {
+    const response = await fetch(config.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model || 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: JOB_DESCRIPTION_PARSING_PROMPT
+          },
+          {
+            role: 'user',
+            content: `Please extract structured information from this job description:\n\n${text}`
+          }
+        ],
+        temperature: 0.1, // Low temperature for consistent parsing
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('AI API error response:', errorData);
+      
+      if (response.status === 401) {
+        return {
+          extractedInfo: {
+            requiredSkills: [],
+            preferredSkills: [],
+            responsibilities: [],
+            requirements: []
+          },
+          keywords: [],
+          success: false,
+          error: 'Invalid API key. Please check your OpenAI API key in the settings.'
+        };
+      }
+      
+      if (response.status === 429) {
+        return {
+          extractedInfo: {
+            requiredSkills: [],
+            preferredSkills: [],
+            responsibilities: [],
+            requirements: []
+          },
+          keywords: [],
+          success: false,
+          error: 'API rate limit exceeded. Please try again in a few minutes.'
+        };
+      }
+
+      return {
+        extractedInfo: {
+          requiredSkills: [],
+          preferredSkills: [],
+          responsibilities: [],
+          requirements: []
+        },
+        keywords: [],
+        success: false,
+        error: `AI API error: ${response.status} ${response.statusText}`
+      };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    
+    if (!content) {
+      return {
+        extractedInfo: {
+          requiredSkills: [],
+          preferredSkills: [],
+          responsibilities: [],
+          requirements: []
+        },
+        keywords: [],
+        success: false,
+        error: 'No response content from AI service.'
+      };
+    }
+
+    try {
+      const parsed = JSON.parse(content);
+      
+      if (!parsed.extractedInfo || !parsed.keywords) {
+        console.error('Invalid AI response structure:', parsed);
+        return {
+          extractedInfo: {
+            requiredSkills: [],
+            preferredSkills: [],
+            responsibilities: [],
+            requirements: []
+          },
+          keywords: [],
+          success: false,
+          error: 'Invalid response structure from AI service.'
+        };
+      }
+
+      return {
+        extractedInfo: parsed.extractedInfo,
+        keywords: parsed.keywords,
+        success: true
+      };
+
+    } catch (parseError) {
+      console.error('Failed to parse AI response as JSON:', parseError);
+      console.error('AI response content (first 500 chars):', content?.substring(0, 500));
+      console.error('Full AI response length:', content?.length);
+      
+      return {
+        extractedInfo: {
+          requiredSkills: [],
+          preferredSkills: [],
+          responsibilities: [],
+          requirements: []
+        },
+        keywords: [],
+        success: false,
+        error: 'Failed to parse AI response. The AI may have returned malformed JSON.'
+      };
+    }
+
+  } catch (error) {
+    console.error('Error calling AI API for job description parsing:', error);
+    
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return {
+        extractedInfo: {
+          requiredSkills: [],
+          preferredSkills: [],
+          responsibilities: [],
+          requirements: []
+        },
+        keywords: [],
+        success: false,
+        error: 'Network error: Unable to reach AI API. Check your internet connection.'
+      };
+    }
+
+    return {
+      extractedInfo: {
+        requiredSkills: [],
+        preferredSkills: [],
+        responsibilities: [],
+        requirements: []
+      },
+      keywords: [],
       success: false,
       error: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
     };

@@ -26,6 +26,32 @@ export interface CoverLetter {
   targetPosition?: string; // position this cover letter was written for
 }
 
+export interface JobDescription {
+  id: string;
+  title: string;
+  company: string;
+  rawText: string; // original pasted job description
+  extractedInfo: {
+    role?: string;
+    company?: string;
+    department?: string;
+    location?: string;
+    salaryRange?: string;
+    experienceLevel?: string;
+    requiredSkills: string[];
+    preferredSkills: string[];
+    responsibilities: string[];
+    requirements: string[];
+  };
+  keywords: string[]; // for matching
+  uploadDate: string;
+  linkedResumeIds: string[]; // manually connected resumes
+  linkedCoverLetterIds: string[]; // manually connected cover letters
+  applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered';
+  applicationDate?: string;
+  notes?: string;
+}
+
 // Union type for documents
 export type Document = Resume | CoverLetter;
 
@@ -91,4 +117,5 @@ export interface ChunkParseResult {
 export interface AppState {
   resumes: Resume[];
   coverLetters: CoverLetter[];
+  jobDescriptions: JobDescription[];
 }

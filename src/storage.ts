@@ -1,9 +1,10 @@
-import { AppState, Resume, CoverLetter, Chunk } from "./types";
+import { AppState, Resume, CoverLetter, JobDescription, Chunk } from "./types";
 
 const DB_NAME = "ResumeTrackerDB";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const RESUME_STORE = "resumes";
 const COVER_LETTER_STORE = "coverLetters";
+const JOB_DESCRIPTION_STORE = "jobDescriptions";
 const PDF_STORE = "pdfs";
 const CHUNKS_STORE = "chunks";
 
@@ -37,6 +38,7 @@ interface FileData {
 const emptyState: AppState = {
   resumes: [],
   coverLetters: [],
+  jobDescriptions: [],
 };
 
 // Utility function to create a hash of file content for duplicate detection
@@ -139,6 +141,14 @@ class IndexedDBStorage {
           const coverLetterStore = db.createObjectStore(COVER_LETTER_STORE, { keyPath: "id" });
           coverLetterStore.createIndex("uploadDate", "uploadDate", { unique: false });
           coverLetterStore.createIndex("targetCompany", "targetCompany", { unique: false });
+        }
+
+        // Create job descriptions store
+        if (!db.objectStoreNames.contains(JOB_DESCRIPTION_STORE)) {
+          const jobDescStore = db.createObjectStore(JOB_DESCRIPTION_STORE, { keyPath: "id" });
+          jobDescStore.createIndex("uploadDate", "uploadDate", { unique: false });
+          jobDescStore.createIndex("company", "company", { unique: false });
+          jobDescStore.createIndex("applicationStatus", "applicationStatus", { unique: false });
         }
 
         // Create PDF data store
@@ -421,19 +431,58 @@ class IndexedDBStorage {
     ]);
   }
 
+  async saveJobDescription(jobDescription: JobDescription): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    console.log('Saving job description:', jobDescription.title, 'Company:', jobDescription.company);
+
+    const transaction = this.db.transaction([JOB_DESCRIPTION_STORE], "readwrite");
+    const jobDescStore = transaction.objectStore(JOB_DESCRIPTION_STORE);
+
+    await this.promisifyRequest(jobDescStore.put(jobDescription));
+    console.log('Job description saved successfully');
+  }
+
+  async loadJobDescriptions(): Promise<JobDescription[]> {
+    await this.init();
+    if (!this.db) return [];
+
+    const transaction = this.db.transaction([JOB_DESCRIPTION_STORE], "readonly");
+    const jobDescStore = transaction.objectStore(JOB_DESCRIPTION_STORE);
+
+    const request = jobDescStore.getAll();
+    const jobDescriptions = await this.promisifyRequest<JobDescription[]>(request);
+
+    console.log('Loaded', jobDescriptions.length, 'job descriptions');
+    return jobDescriptions.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+  }
+
+  async deleteJobDescription(id: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([JOB_DESCRIPTION_STORE], "readwrite");
+    const jobDescStore = transaction.objectStore(JOB_DESCRIPTION_STORE);
+
+    await this.promisifyRequest(jobDescStore.delete(id));
+  }
+
   async clear(): Promise<void> {
     await this.init();
     if (!this.db) return;
 
-    const transaction = this.db.transaction([RESUME_STORE, COVER_LETTER_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
+    const transaction = this.db.transaction([RESUME_STORE, COVER_LETTER_STORE, JOB_DESCRIPTION_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
     const resumeStore = transaction.objectStore(RESUME_STORE);
     const coverLetterStore = transaction.objectStore(COVER_LETTER_STORE);
+    const jobDescStore = transaction.objectStore(JOB_DESCRIPTION_STORE);
     const pdfStore = transaction.objectStore(PDF_STORE);
     const chunkStore = transaction.objectStore(CHUNKS_STORE);
 
     await Promise.all([
       this.promisifyRequest(resumeStore.clear()),
       this.promisifyRequest(coverLetterStore.clear()),
+      this.promisifyRequest(jobDescStore.clear()),
       this.promisifyRequest(pdfStore.clear()),
       this.promisifyRequest(chunkStore.clear()),
     ]);
@@ -658,7 +707,8 @@ export async function loadState(): Promise<AppState> {
     
     const resumes = await storage.loadResumes();
     const coverLetters = await storage.loadCoverLetters();
-    return { resumes, coverLetters };
+    const jobDescriptions = await storage.loadJobDescriptions();
+    return { resumes, coverLetters, jobDescriptions };
   } catch (error) {
     console.error("Failed to load state from IndexedDB", error);
     return emptyState;
@@ -672,9 +722,10 @@ export async function saveState(state: AppState): Promise<void> {
 
   try {
     // Get current documents from IndexedDB to compare
-    const [currentResumes, currentCoverLetters] = await Promise.all([
+    const [currentResumes, currentCoverLetters, currentJobDescriptions] = await Promise.all([
       storage.loadResumes(),
-      storage.loadCoverLetters()
+      storage.loadCoverLetters(),
+      storage.loadJobDescriptions()
     ]);
     
     // Handle resumes
@@ -710,6 +761,24 @@ export async function saveState(state: AppState): Promise<void> {
     for (const coverLetter of state.coverLetters) {
       if (!currentCoverLetterIds.has(coverLetter.id)) {
         await storage.saveCoverLetter(coverLetter);
+      }
+    }
+
+    // Handle job descriptions
+    const currentJobDescriptionIds = new Set(currentJobDescriptions.map(jd => jd.id));
+    const newJobDescriptionIds = new Set(state.jobDescriptions.map(jd => jd.id));
+    
+    // Delete job descriptions that are no longer in the state
+    for (const currentJobDescription of currentJobDescriptions) {
+      if (!newJobDescriptionIds.has(currentJobDescription.id)) {
+        await storage.deleteJobDescription(currentJobDescription.id);
+      }
+    }
+    
+    // Save new or updated job descriptions
+    for (const jobDescription of state.jobDescriptions) {
+      if (!currentJobDescriptionIds.has(jobDescription.id)) {
+        await storage.saveJobDescription(jobDescription);
       }
     }
   } catch (error) {
@@ -884,6 +953,33 @@ export async function deleteAllChunks(): Promise<void> {
     await storage.deleteAllChunks();
   } catch (error) {
     console.error("Failed to delete all chunks from IndexedDB", error);
+    throw error;
+  }
+}
+
+// Job Description exports
+export async function saveJobDescription(jobDescription: JobDescription): Promise<void> {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    await storage.saveJobDescription(jobDescription);
+  } catch (error) {
+    console.error("Failed to save job description to IndexedDB", error);
+    throw error;
+  }
+}
+
+export async function deleteJobDescription(id: string): Promise<void> {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    await storage.deleteJobDescription(id);
+  } catch (error) {
+    console.error("Failed to delete job description from IndexedDB", error);
     throw error;
   }
 }
