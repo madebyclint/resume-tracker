@@ -18,6 +18,26 @@ Local-first React + TypeScript app that lets you curate resume content chunks, a
 - npm (comes with Node)
 
 ## Getting Started
+
+### 1. Environment Setup
+Copy the example environment file and configure your OpenAI API key:
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and replace `your_openai_api_key_here` with your actual OpenAI API key:
+```env
+VITE_OPENAI_API_KEY=sk-your-actual-api-key-here
+VITE_OPENAI_API_URL=https://api.openai.com/v1/chat/completions
+VITE_OPENAI_MODEL=gpt-3.5-turbo
+```
+
+**Get your OpenAI API key:**
+1. Go to https://platform.openai.com/api-keys
+2. Create a new API key
+3. Copy it to your `.env` file
+
+### 2. Install and Run
 ```bash
 # Install dependencies
 npm install
@@ -48,12 +68,12 @@ src/
 - `src/storage.ts` exposes `loadState`/`saveState`/`getEmptyState` and individual resume operations for direct database access.
 
 ## Current Features
-- Upload multiple PDF resume files with drag-and-drop support
-- Automatic text extraction from PDFs for search functionality
-- Full-text search across all uploaded resumes
-- View PDFs in browser and manage your resume library
-- Efficient IndexedDB storage for large files
-- Automatic migration from localStorage for existing users
+- **📄 Document Management**: Upload multiple Word (.docx) resume files with automatic text extraction
+- **🔍 Full-text Search**: Search across all uploaded resumes and extracted text content
+- **🤖 AI Semantic Chunking**: Parse resumes into reusable semantic chunks using OpenAI GPT
+- **✏️ Chunk Review & Editing**: Review, edit, and approve AI-generated chunks before saving
+- **💾 Local Storage**: Efficient IndexedDB storage for large files and chunk data
+- **🔄 Data Migration**: Automatic migration from localStorage for existing users
 
 ## Next Steps
 - Add export/import functionality for data backup and portability

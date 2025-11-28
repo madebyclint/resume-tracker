@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { Resume } from "../types";
-import { saveResume, deleteResume as deleteResumeFromStorage } from "../storage";
+import { useState, useEffect } from "react";
+import { Resume, Chunk } from "../types";
+import { saveResume, deleteResume as deleteResumeFromStorage, saveChunks, getChunksBySourceDoc } from "../storage";
 import { formatFileSize, formatDate, extractTextFromDocument } from "../utils/documentUtils";
+import { parseTextIntoChunks, isAIConfigured, showConfigInstructions } from "../utils/aiService";
+import ChunkReviewModal from "./ChunkReviewModal";
 
 interface ResumeTableProps {
   resumes: Resume[];
@@ -19,6 +21,119 @@ export default function ResumeTable({
   onShowPreview
 }: ResumeTableProps) {
   const [parsingResumeId, setParsingResumeId] = useState<string | null>(null);
+  const [chunkingResumeId, setChunkingResumeId] = useState<string | null>(null);
+  const [chunkReviewModal, setChunkReviewModal] = useState<{
+    isOpen: boolean;
+    chunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[];
+    resumeId: string;
+    resumeName: string;
+  }>({
+    isOpen: false,
+    chunks: [],
+    resumeId: '',
+    resumeName: ''
+  });
+  const [resumeChunkCounts, setResumeChunkCounts] = useState<Record<string, number>>({});
+
+  // Load chunk counts for all resumes
+  useEffect(() => {
+    const loadChunkCounts = async () => {
+      const counts: Record<string, number> = {};
+      for (const resume of resumes) {
+        try {
+          const chunks = await getChunksBySourceDoc(resume.id);
+          counts[resume.id] = chunks.length;
+        } catch (error) {
+          console.error(`Failed to load chunks for resume ${resume.id}:`, error);
+          counts[resume.id] = 0;
+        }
+      }
+      setResumeChunkCounts(counts);
+    };
+
+    if (resumes.length > 0) {
+      loadChunkCounts();
+    }
+  }, [resumes]);
+
+  const parseIntoChunks = async (resume: Resume) => {
+    if (!resume.textContent || resume.textContent.trim().length === 0) {
+      alert('No text content available. Please extract text first before parsing into chunks.');
+      return;
+    }
+
+    // Check if AI is configured
+    if (!isAIConfigured()) {
+      showConfigInstructions();
+      return;
+    }
+
+    setChunkingResumeId(resume.id);
+
+    try {
+      const result = await parseTextIntoChunks(resume.textContent);
+
+      if (!result.success) {
+        alert(`Failed to parse chunks: ${result.error}`);
+        return;
+      }
+
+      if (result.chunks.length === 0) {
+        alert('No chunks were generated from the text. The document may not contain parseable content.');
+        return;
+      }
+
+      // Open the review modal
+      setChunkReviewModal({
+        isOpen: true,
+        chunks: result.chunks,
+        resumeId: resume.id,
+        resumeName: resume.name
+      });
+
+    } catch (error) {
+      console.error('Error parsing chunks:', error);
+      alert('An unexpected error occurred while parsing chunks. Check the console for details.');
+    } finally {
+      setChunkingResumeId(null);
+    }
+  };
+
+  const handleSaveChunks = async (approvedChunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[]) => {
+    try {
+      // Convert to full Chunk objects
+      const chunks: Chunk[] = approvedChunks.map((chunk, index) => ({
+        ...chunk,
+        id: crypto.randomUUID(),
+        sourceDocId: chunkReviewModal.resumeId,
+        createdAt: new Date().toISOString(),
+        approved: true
+      }));
+
+      await saveChunks(chunks);
+
+      // Update chunk count
+      setResumeChunkCounts(prev => ({
+        ...prev,
+        [chunkReviewModal.resumeId]: chunks.length
+      }));
+
+      alert(`✅ Successfully saved ${chunks.length} chunks!`);
+
+    } catch (error) {
+      console.error('Error saving chunks:', error);
+      alert('Failed to save chunks. Check the console for details.');
+    }
+  };
+
+  const handleCloseChunkModal = () => {
+    setChunkReviewModal({
+      isOpen: false,
+      chunks: [],
+      resumeId: '',
+      resumeName: ''
+    });
+  };
 
   const parseText = async (resume: Resume) => {
     setParsingResumeId(resume.id);
@@ -184,7 +299,7 @@ export default function ResumeTable({
               <th>Type</th>
               <th>File Size</th>
               <th>Upload Date</th>
-              <th>Text Status</th>
+              <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -214,20 +329,38 @@ export default function ResumeTable({
                 <td>{formatFileSize(resume.fileSize)}</td>
                 <td>{formatDate(resume.uploadDate)}</td>
                 <td>
-                  {resume.textContent && resume.textContent.trim().length > 0 ? (
-                    <span style={{ color: "#22c55e", fontWeight: "600" }}>
-                      Text extracted ✓
-                    </span>
-                  ) : (
-                    <span style={{ color: "#ef4444", fontWeight: "600" }}>
-                      No text extracted ✗
-                    </span>
-                  )}
-                  {resume.textContent && (
-                    <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "2px" }}>
-                      {resume.textContent.length} characters
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                    {/* Text Status */}
+                    <div>
+                      {resume.textContent && resume.textContent.trim().length > 0 ? (
+                        <span style={{ color: "#22c55e", fontWeight: "600", fontSize: "0.8rem" }}>
+                          Text extracted ✓
+                        </span>
+                      ) : (
+                        <span style={{ color: "#ef4444", fontWeight: "600", fontSize: "0.8rem" }}>
+                          No text extracted ✗
+                        </span>
+                      )}
+                      {resume.textContent && (
+                        <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "1px" }}>
+                          {resume.textContent.length} characters
+                        </div>
+                      )}
                     </div>
-                  )}
+
+                    {/* Chunk Status */}
+                    <div>
+                      {resumeChunkCounts[resume.id] > 0 ? (
+                        <span style={{ color: "#8b5cf6", fontWeight: "600", fontSize: "0.8rem" }}>
+                          {resumeChunkCounts[resume.id]} chunks parsed ✓
+                        </span>
+                      ) : (
+                        <span style={{ color: "#6b7280", fontWeight: "600", fontSize: "0.8rem" }}>
+                          No chunks parsed
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </td>
                 <td>
                   <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -270,6 +403,35 @@ export default function ResumeTable({
                         Preview Text
                       </button>
                     )}
+
+                    {/* Parse into Chunks button - only show if text is extracted */}
+                    {resume.textContent && resume.textContent.trim().length > 0 && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => parseIntoChunks(resume)}
+                        disabled={chunkingResumeId === resume.id}
+                        style={{
+                          fontSize: "0.8rem",
+                          padding: "0.4rem 0.6rem",
+                          backgroundColor: chunkingResumeId === resume.id
+                            ? "#f0f0f0"
+                            : resumeChunkCounts[resume.id] > 0
+                              ? "#8b5cf6"
+                              : "#f59e0b",
+                          color: chunkingResumeId === resume.id ? "#666" : "white",
+                          border: "none"
+                        }}
+                      >
+                        {chunkingResumeId === resume.id
+                          ? 'Parsing...'
+                          : resumeChunkCounts[resume.id] > 0
+                            ? `Re-parse Chunks`
+                            : 'Parse into Chunks'
+                        }
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       className="secondary"
@@ -300,6 +462,15 @@ export default function ResumeTable({
           </tbody>
         </table>
       )}
+
+      {/* Chunk Review Modal */}
+      <ChunkReviewModal
+        isOpen={chunkReviewModal.isOpen}
+        onClose={handleCloseChunkModal}
+        chunks={chunkReviewModal.chunks}
+        onSave={handleSaveChunks}
+        documentName={chunkReviewModal.resumeName}
+      />
     </section>
   );
 }

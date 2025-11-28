@@ -1,9 +1,10 @@
-import { AppState, Resume } from "./types";
+import { AppState, Resume, Chunk } from "./types";
 
 const DB_NAME = "ResumeTrackerDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const RESUME_STORE = "resumes";
 const PDF_STORE = "pdfs";
+const CHUNKS_STORE = "chunks";
 
 interface ResumeMetadata {
   id: string;
@@ -51,6 +52,14 @@ class IndexedDBStorage {
         // Create PDF data store
         if (!db.objectStoreNames.contains(PDF_STORE)) {
           db.createObjectStore(PDF_STORE, { keyPath: "id" });
+        }
+
+        // Create chunks store
+        if (!db.objectStoreNames.contains(CHUNKS_STORE)) {
+          const chunkStore = db.createObjectStore(CHUNKS_STORE, { keyPath: "id" });
+          chunkStore.createIndex("sourceDocId", "sourceDocId", { unique: false });
+          chunkStore.createIndex("type", "type", { unique: false });
+          chunkStore.createIndex("createdAt", "createdAt", { unique: false });
         }
       };
     });
@@ -166,13 +175,24 @@ class IndexedDBStorage {
     await this.init();
     if (!this.db) throw new Error("Database not initialized");
 
-    const transaction = this.db.transaction([RESUME_STORE, PDF_STORE], "readwrite");
+    const transaction = this.db.transaction([RESUME_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
     const resumeStore = transaction.objectStore(RESUME_STORE);
     const pdfStore = transaction.objectStore(PDF_STORE);
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+
+    // Delete all chunks associated with this resume
+    const chunksIndex = chunkStore.index("sourceDocId");
+    const chunkKeysRequest = chunksIndex.getAllKeys(id);
+    const chunkKeys = await this.promisifyRequest<string[]>(chunkKeysRequest);
+    
+    const deleteChunkPromises = chunkKeys.map(chunkId => 
+      this.promisifyRequest(chunkStore.delete(chunkId))
+    );
 
     await Promise.all([
       this.promisifyRequest(resumeStore.delete(id)),
       this.promisifyRequest(pdfStore.delete(id)),
+      ...deleteChunkPromises
     ]);
   }
 
@@ -180,14 +200,94 @@ class IndexedDBStorage {
     await this.init();
     if (!this.db) return;
 
-    const transaction = this.db.transaction([RESUME_STORE, PDF_STORE], "readwrite");
+    const transaction = this.db.transaction([RESUME_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
     const resumeStore = transaction.objectStore(RESUME_STORE);
     const pdfStore = transaction.objectStore(PDF_STORE);
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
 
     await Promise.all([
       this.promisifyRequest(resumeStore.clear()),
       this.promisifyRequest(pdfStore.clear()),
+      this.promisifyRequest(chunkStore.clear()),
     ]);
+  }
+
+  // Chunk management methods
+  async saveChunk(chunk: Chunk): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+    
+    return this.promisifyRequest(chunkStore.put(chunk));
+  }
+
+  async saveChunks(chunks: Chunk[]): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+    
+    const promises = chunks.map(chunk => this.promisifyRequest(chunkStore.put(chunk)));
+    await Promise.all(promises);
+  }
+
+  async getChunksBySourceDoc(sourceDocId: string): Promise<Chunk[]> {
+    await this.init();
+    if (!this.db) return [];
+
+    const transaction = this.db.transaction([CHUNKS_STORE], "readonly");
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+    const index = chunkStore.index("sourceDocId");
+    
+    const chunks = await this.promisifyRequest<Chunk[]>(index.getAll(sourceDocId));
+    return chunks.sort((a, b) => a.order - b.order);
+  }
+
+  async getAllChunks(): Promise<Chunk[]> {
+    await this.init();
+    if (!this.db) return [];
+
+    const transaction = this.db.transaction([CHUNKS_STORE], "readonly");
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+    
+    return this.promisifyRequest<Chunk[]>(chunkStore.getAll());
+  }
+
+  async updateChunk(chunk: Chunk): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+    
+    return this.promisifyRequest(chunkStore.put(chunk));
+  }
+
+  async deleteChunk(id: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+    
+    return this.promisifyRequest(chunkStore.delete(id));
+  }
+
+  async deleteChunksBySourceDoc(sourceDocId: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+    const index = chunkStore.index("sourceDocId");
+    
+    const chunks = await this.promisifyRequest<Chunk[]>(index.getAll(sourceDocId));
+    const deletePromises = chunks.map(chunk => this.promisifyRequest(chunkStore.delete(chunk.id)));
+    
+    await Promise.all(deletePromises);
   }
 
   private promisifyRequest<T = any>(request: IDBRequest): Promise<T> {
@@ -400,5 +500,69 @@ export async function clearAllData(): Promise<void> {
     console.log('All data cleared from IndexedDB');
   } catch (error) {
     console.error('Error clearing IndexedDB:', error);
+  }
+}
+
+// Chunk management functions
+export async function saveChunk(chunk: Chunk): Promise<void> {
+  try {
+    await storage.saveChunk(chunk);
+  } catch (error) {
+    console.error("Failed to save chunk to IndexedDB", error);
+    throw error;
+  }
+}
+
+export async function saveChunks(chunks: Chunk[]): Promise<void> {
+  try {
+    await storage.saveChunks(chunks);
+  } catch (error) {
+    console.error("Failed to save chunks to IndexedDB", error);
+    throw error;
+  }
+}
+
+export async function getChunksBySourceDoc(sourceDocId: string): Promise<Chunk[]> {
+  try {
+    return await storage.getChunksBySourceDoc(sourceDocId);
+  } catch (error) {
+    console.error("Failed to get chunks from IndexedDB", error);
+    return [];
+  }
+}
+
+export async function getAllChunks(): Promise<Chunk[]> {
+  try {
+    return await storage.getAllChunks();
+  } catch (error) {
+    console.error("Failed to get all chunks from IndexedDB", error);
+    return [];
+  }
+}
+
+export async function updateChunk(chunk: Chunk): Promise<void> {
+  try {
+    await storage.updateChunk(chunk);
+  } catch (error) {
+    console.error("Failed to update chunk in IndexedDB", error);
+    throw error;
+  }
+}
+
+export async function deleteChunk(id: string): Promise<void> {
+  try {
+    await storage.deleteChunk(id);
+  } catch (error) {
+    console.error("Failed to delete chunk from IndexedDB", error);
+    throw error;
+  }
+}
+
+export async function deleteChunksBySourceDoc(sourceDocId: string): Promise<void> {
+  try {
+    await storage.deleteChunksBySourceDoc(sourceDocId);
+  } catch (error) {
+    console.error("Failed to delete chunks by source doc from IndexedDB", error);
+    throw error;
   }
 }
