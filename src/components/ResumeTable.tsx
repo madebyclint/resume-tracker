@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Resume, Chunk } from "../types";
-import { saveResume, deleteResume as deleteResumeFromStorage, saveChunks, getChunksBySourceDoc } from "../storage";
+import { saveResume, deleteResume as deleteResumeFromStorage, saveChunks, getChunksBySourceDoc, deleteChunksBySourceDoc } from "../storage";
 import { formatFileSize, formatDate, extractTextFromDocument } from "../utils/documentUtils";
 import { parseTextIntoChunks, isAIConfigured, showConfigInstructions } from "../utils/aiService";
 import { parseResumeWithRules, getParseResultSummary } from "../utils/plainTextParser";
@@ -71,6 +71,19 @@ export default function ResumeTable({
       return;
     }
 
+    // Check if re-parsing (chunks already exist)
+    const existingChunkCount = resumeChunkCounts[resume.id] || 0;
+    const isReparsing = existingChunkCount > 0;
+
+    if (isReparsing) {
+      const confirmReparse = confirm(
+        `This document already has ${existingChunkCount} parsed chunks.\n\n` +
+        'Re-parsing will replace all existing chunks with new ones.\n\n' +
+        'Do you want to continue?'
+      );
+      if (!confirmReparse) return;
+    }
+
     setChunkingResumeId(resume.id);
 
     try {
@@ -117,6 +130,14 @@ export default function ResumeTable({
 
   const handleSaveChunks = async (approvedChunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[]) => {
     try {
+      // Check if we're replacing existing chunks (re-parsing)
+      const existingChunks = await getChunksBySourceDoc(chunkReviewModal.resumeId);
+      
+      if (existingChunks.length > 0) {
+        // Delete existing chunks first
+        await deleteChunksBySourceDoc(chunkReviewModal.resumeId);
+      }
+
       // Convert to full Chunk objects
       const chunks: Chunk[] = approvedChunks.map((chunk, index) => ({
         ...chunk,
@@ -439,7 +460,7 @@ export default function ResumeTable({
                           }}
                           title="Fast rule-based parsing - no AI required"
                         >
-                          {chunkingResumeId === resume.id ? 'Parsing...' : 'Quick Parse'}
+                          {chunkingResumeId === resume.id ? 'Parsing...' : (resumeChunkCounts[resume.id] > 0 ? 'Re-parse (Quick)' : 'Quick Parse')}
                         </button>
                         <button
                           type="button"
@@ -455,7 +476,7 @@ export default function ResumeTable({
                           }}
                           title="AI-powered semantic parsing with OpenAI"
                         >
-                          {chunkingResumeId === resume.id ? 'AI Parsing...' : 'AI Parse'}
+                          {chunkingResumeId === resume.id ? 'AI Parsing...' : (resumeChunkCounts[resume.id] > 0 ? 'Re-parse (AI)' : 'AI Parse')}
                         </button>
                       </div>
                     )}

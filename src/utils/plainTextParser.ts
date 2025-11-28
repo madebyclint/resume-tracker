@@ -102,7 +102,7 @@ function identifySections(lines: string[]): ParsedSection[] {
       // Add content to current section
       currentSection.content!.push(line);
     } else {
-      // Content before any section header - treat as summary
+      // Content before any section header - treat as summary (header info)
       if (!sections.find(s => s.type === 'summary')) {
         sections.push({
           type: 'summary',

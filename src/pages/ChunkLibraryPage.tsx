@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Chunk, Resume, ChunkType } from '../types';
-import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk } from '../storage';
+import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks } from '../storage';
 import { getChunkTypeLabel } from '../utils/aiService';
 
 interface ChunkLibraryPageProps {
@@ -105,6 +105,26 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
     }
   };
 
+  const handleDeleteAllChunks = async () => {
+    if (!confirm('Are you sure you want to delete ALL chunks? This action cannot be undone.')) return;
+
+    if (!confirm('This will permanently delete all parsed chunks from all documents. Are you absolutely sure?')) return;
+
+    try {
+      await deleteAllChunks();
+      setChunks([]);
+      alert('All chunks have been deleted successfully.');
+
+      // Navigate back to dashboard if no chunks remain
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('chunksDeleted'));
+      }
+    } catch (error) {
+      console.error('Failed to delete all chunks:', error);
+      alert('Failed to delete all chunks. Please try again.');
+    }
+  };
+
   const handleCancelEdit = () => {
     setEditingChunk(null);
   };
@@ -137,7 +157,26 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
   return (
     <div className="page-card">
       <div style={{ marginBottom: '2rem' }}>
-        <h2>Chunk Library</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2 style={{ margin: 0 }}>Chunk Library</h2>
+          {chunks.length > 0 && (
+            <button
+              onClick={handleDeleteAllChunks}
+              style={{
+                padding: '0.5rem 1rem',
+                border: 'none',
+                borderRadius: '6px',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '600'
+              }}
+            >
+              Delete All Chunks
+            </button>
+          )}
+        </div>
         <p style={{ color: '#666', marginBottom: '1.5rem' }}>
           Manage and organize your parsed resume chunks. Total: {chunks.length} chunks
         </p>
@@ -273,6 +312,18 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
                     borderRadius: '12px'
                   }}>
                     {getChunkTypeLabel(chunk.type)}
+                  </span>
+                  <span style={{
+                    fontSize: '0.65rem',
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    color: chunk.parsedBy === 'ai' ? '#8b5cf6' : '#22c55e',
+                    backgroundColor: chunk.parsedBy === 'ai' ? '#f3f4f6' : '#f0fdf4',
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '12px',
+                    border: `1px solid ${chunk.parsedBy === 'ai' ? '#8b5cf6' : '#22c55e'}`
+                  }}>
+                    {chunk.parsedBy === 'ai' ? 'AI Parse' : chunk.parsedBy === 'rules' ? 'Quick Parse' : 'Manual'}
                   </span>
                   <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                     {getResumeNameById(chunk.sourceDocId)}

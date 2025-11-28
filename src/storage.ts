@@ -290,6 +290,16 @@ class IndexedDBStorage {
     await Promise.all(deletePromises);
   }
 
+  async deleteAllChunks(): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+    
+    return this.promisifyRequest(chunkStore.clear());
+  }
+
   private promisifyRequest<T = any>(request: IDBRequest): Promise<T> {
     return new Promise((resolve, reject) => {
       request.onsuccess = () => resolve(request.result);
@@ -563,6 +573,15 @@ export async function deleteChunksBySourceDoc(sourceDocId: string): Promise<void
     await storage.deleteChunksBySourceDoc(sourceDocId);
   } catch (error) {
     console.error("Failed to delete chunks by source doc from IndexedDB", error);
+    throw error;
+  }
+}
+
+export async function deleteAllChunks(): Promise<void> {
+  try {
+    await storage.deleteAllChunks();
+  } catch (error) {
+    console.error("Failed to delete all chunks from IndexedDB", error);
     throw error;
   }
 }
