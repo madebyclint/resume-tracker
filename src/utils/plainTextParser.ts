@@ -25,6 +25,40 @@ const SECTION_PATTERNS = {
   achievements: /^(achievements?|awards?|honors?|accomplishments?)\s*:?\s*$/i
 };
 
+// Helper function to detect header information (name, title, contact details)
+function isHeaderContent(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  
+  // Check for email patterns
+  if (PATTERNS.email.test(text)) return true;
+  
+  // Check for phone patterns
+  if (PATTERNS.phone.test(text)) return true;
+  
+  // Check for common address indicators
+  if (/\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|blvd|boulevard)\b/i.test(text)) return true;
+  
+  // Check for social media patterns
+  if (/(linkedin|github|twitter|instagram)\.com|@\w+/i.test(text)) return true;
+  
+  // Check for city, state patterns
+  if (/\b[A-Z][a-z]+,\s*[A-Z]{2}\b/.test(text)) return true;
+  
+  // Check for zip code patterns
+  if (/\b\d{5}(-\d{4})?\b/.test(text)) return true;
+  
+  // Check for job titles (likely in header when at the top)
+  if (/\b(engineer|developer|manager|director|analyst|specialist|coordinator|assistant|lead|senior|junior|architect|consultant|designer|administrator)\b/i.test(text) && 
+      text.length < 80) return true;
+  
+  // Check for name patterns (likely first line of resume - proper case, 2-4 words, no numbers)
+  if (/^[A-Z][a-z]+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)?(\s+[A-Z][a-z]+)?$/.test(text.trim()) && 
+      !/\d/.test(text) && 
+      text.length < 50) return true;
+  
+  return false;
+}
+
 // Patterns for extracting specific information
 const PATTERNS = {
   email: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
@@ -77,12 +111,21 @@ export function parseResumeWithRules(text: string): PlainTextParseResult {
 function identifySections(lines: string[]): ParsedSection[] {
   const sections: ParsedSection[] = [];
   let currentSection: Partial<ParsedSection> | null = null;
+  let preHeaderContent: string[] = [];
+  let preHeaderStartLine = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const sectionType = detectSectionHeader(line);
 
     if (sectionType) {
+      // Process any accumulated pre-header content
+      if (preHeaderContent.length > 0 && !currentSection) {
+        const headerAndSummary = separateHeaderFromSummary(preHeaderContent, preHeaderStartLine);
+        sections.push(...headerAndSummary);
+        preHeaderContent = [];
+      }
+
       // Close previous section
       if (currentSection) {
         currentSection.endLine = i - 1;
@@ -102,29 +145,80 @@ function identifySections(lines: string[]): ParsedSection[] {
       // Add content to current section
       currentSection.content!.push(line);
     } else {
-      // Content before any section header - treat as summary (header info)
-      if (!sections.find(s => s.type === 'summary')) {
-        sections.push({
-          type: 'summary',
-          content: [line],
-          startLine: 0,
-          endLine: i
-        });
-      } else {
-        // Add to existing summary
-        const summarySection = sections.find(s => s.type === 'summary');
-        if (summarySection) {
-          summarySection.content.push(line);
-          summarySection.endLine = i;
-        }
+      // Accumulate content before any section header
+      if (preHeaderContent.length === 0) {
+        preHeaderStartLine = i;
       }
+      preHeaderContent.push(line);
     }
+  }
+
+  // Process any remaining pre-header content
+  if (preHeaderContent.length > 0 && !currentSection) {
+    const headerAndSummary = separateHeaderFromSummary(preHeaderContent, preHeaderStartLine);
+    sections.push(...headerAndSummary);
   }
 
   // Close final section
   if (currentSection && currentSection.content && currentSection.content.length > 0) {
     currentSection.endLine = lines.length - 1;
     sections.push(currentSection as ParsedSection);
+  }
+
+  return sections;
+}
+
+/**
+ * Separate header information from summary content in the opening section
+ */
+function separateHeaderFromSummary(content: string[], startLine: number): ParsedSection[] {
+  const sections: ParsedSection[] = [];
+  const headerLines: string[] = [];
+  const summaryLines: string[] = [];
+  
+  let headerEndLine = startLine - 1;
+  let summaryStartLine = startLine;
+
+  for (let i = 0; i < content.length; i++) {
+    const line = content[i];
+    const isHeader = isHeaderContent(line);
+    
+    // First few lines are more likely to be header, especially if they look like contact info
+    const isEarlyLine = i < 4;
+    const shouldBeHeader = isHeader || (isEarlyLine && (
+      /^[A-Z][a-z]+\s+[A-Z][a-z]+/.test(line.trim()) || // Name pattern
+      line.length < 60 && !/^(summary|profile|objective|about)/i.test(line) // Short non-summary line
+    ));
+
+    if (shouldBeHeader) {
+      headerLines.push(line);
+      headerEndLine = startLine + i;
+      if (summaryLines.length === 0) {
+        summaryStartLine = startLine + i + 1;
+      }
+    } else {
+      summaryLines.push(line);
+    }
+  }
+
+  // Create header section if we have header content
+  if (headerLines.length > 0) {
+    sections.push({
+      type: 'header',
+      content: headerLines,
+      startLine: startLine,
+      endLine: headerEndLine
+    });
+  }
+
+  // Create summary section if we have summary content
+  if (summaryLines.length > 0) {
+    sections.push({
+      type: 'summary',
+      content: summaryLines,
+      startLine: summaryStartLine,
+      endLine: startLine + content.length - 1
+    });
   }
 
   return sections;
@@ -166,7 +260,19 @@ function sectionsToChunks(sections: ParsedSection[], allLines: string[]): Omit<C
   let chunkOrder = 1;
 
   for (const section of sections) {
-    if (section.type === 'summary') {
+    if (section.type === 'header') {
+      // Header is usually one chunk with contact info
+      const headerText = section.content.join(' ').trim();
+      if (headerText.length > 0) {
+        chunks.push({
+          type: 'header',
+          text: headerText,
+          tags: extractTags(headerText, 'header'),
+          order: chunkOrder++,
+          parsedBy: 'rules'
+        });
+      }
+    } else if (section.type === 'summary') {
       // Summary is usually one chunk
       const summaryText = section.content.join(' ').trim();
       if (summaryText.length > 0) {
@@ -335,6 +441,14 @@ function extractTags(text: string, type: ChunkType): string[] {
         tags.push(keyword);
       }
     });
+  }
+
+  // Add contact-related tags for header
+  if (type === 'header') {
+    if (PATTERNS.email.test(text)) tags.push('email');
+    if (PATTERNS.phone.test(text)) tags.push('phone');
+    if (/(linkedin|github|twitter)/i.test(text)) tags.push('social-media');
+    if (/\b[A-Z][a-z]+,\s*[A-Z]{2}\b/.test(text)) tags.push('location');
   }
 
   // Add type-specific tags

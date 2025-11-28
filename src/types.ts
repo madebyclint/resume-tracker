@@ -12,6 +12,7 @@ export interface Resume {
 }
 
 export type ChunkType = 
+  | 'header'
   | 'summary'
   | 'skills' 
   | 'experience_section'
