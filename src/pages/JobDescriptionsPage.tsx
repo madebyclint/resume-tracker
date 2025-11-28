@@ -253,10 +253,28 @@ const JobDescriptionsPage: React.FC = () => {
       return;
     }
 
+    // Quick diagnostic check
+    try {
+      const { getAllChunks } = await import('../storage');
+      const allChunks = await getAllChunks();
+      console.log('🔍 Diagnostic - Total chunks available:', allChunks.length);
+      console.log('🔍 Diagnostic - Resumes in state:', state.resumes.length);
+      console.log('🔍 Diagnostic - Cover letters in state:', state.coverLetters.length);
+
+      if (allChunks.length === 0) {
+        alert('❌ No content chunks found! Please:\n1. Upload some resumes or cover letters\n2. Make sure they are processed into chunks\n3. Check the Chunk Library page to verify chunks exist');
+        return;
+      }
+    } catch (error) {
+      console.error('Diagnostic check failed:', error);
+    }
+
     setIsGeneratingResume(true);
     setGenerationType('resume');
     setGeneratedTitle('Generated Resume');
-    setGeneratedDefaultName(`Resume - ${jobDescription.company} - ${jobDescription.title}`);
+    const cleanCompany = jobDescription.company.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    const cleanTitle = jobDescription.title.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    setGeneratedDefaultName(`${cleanCompany} - ${cleanTitle} - Resume`);
     setGeneratedContent('');
     setGenerationError(null);
     setIsGenerating(true);
@@ -265,9 +283,15 @@ const JobDescriptionsPage: React.FC = () => {
     try {
       // Find relevant chunks
       const relevantChunks = await findRelevantResumeChunks(jobDescription, 0.1, 15);
+      console.log('🎯 Found relevant resume chunks:', relevantChunks.map(c => ({ type: c.chunk.type, score: c.score })));
 
       if (relevantChunks.length === 0) {
-        throw new Error('No relevant resume chunks found. Please ensure you have uploaded and processed some resumes.');
+        const { getAllChunks } = await import('../storage');
+        const allChunks = await getAllChunks();
+        const resumeTypes = ['cv_header', 'cv_summary', 'cv_skills', 'cv_experience_section', 'cv_experience_bullet', 'cv_mission_fit'];
+        const resumeChunks = allChunks.filter(chunk => resumeTypes.includes(chunk.type));
+
+        throw new Error(`❌ No relevant resume chunks found!\n\nTotal chunks: ${allChunks.length}\nResume chunks: ${resumeChunks.length}\n\nPlease:\n1. Upload and process some resumes\n2. Ensure job description has clear keywords\n3. Check that your resume content matches the job requirements`);
       }
 
       // Generate resume using AI
@@ -301,7 +325,9 @@ const JobDescriptionsPage: React.FC = () => {
     setIsGeneratingCoverLetter(true);
     setGenerationType('cover_letter');
     setGeneratedTitle('Generated Cover Letter');
-    setGeneratedDefaultName(`Cover Letter - ${jobDescription.company} - ${jobDescription.title}`);
+    const cleanCompany = jobDescription.company.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    const cleanTitle = jobDescription.title.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    setGeneratedDefaultName(`${cleanCompany} - ${cleanTitle} - Cover Letter`);
     setGeneratedContent('');
     setGenerationError(null);
     setIsGenerating(true);
@@ -338,36 +364,49 @@ const JobDescriptionsPage: React.FC = () => {
 
   // Save generated content
   const handleSaveGenerated = async (name: string, content: string) => {
-    if (!selectedJob) return;
+    if (!selectedJob) {
+      console.error('No selected job found');
+      return;
+    }
+
+    console.log('Starting to save generated content:', { name, contentLength: content.length, generationType });
 
     try {
       if (generationType === 'resume') {
+        console.log('Saving generated resume...');
         const newResume = await saveGeneratedResume(name, content, selectedJob);
-        setState(prev => ({
-          ...prev,
-          resumes: [...prev.resumes, newResume],
-          jobDescriptions: prev.jobDescriptions.map(jd =>
-            jd.id === selectedJob.id
-              ? { ...jd, linkedResumeIds: [...jd.linkedResumeIds, newResume.id] }
-              : jd
-          )
-        }));
+        console.log('Resume saved successfully:', newResume);
+
+        // Load the updated state from the database to get the correct linking
+        const { loadState } = await import('../storage');
+        const updatedState = await loadState();
+        const updatedSelectedJob = updatedState.jobDescriptions.find((jd: JobDescription) => jd.id === selectedJob.id);
+
+        console.log('Updated job description linking:', updatedSelectedJob?.linkedResumeIds);
+
+        setState(updatedState);
+        console.log('State updated with fresh data from database');
       } else {
+        console.log('Saving generated cover letter...');
         const newCoverLetter = await saveGeneratedCoverLetter(name, content, selectedJob);
-        setState(prev => ({
-          ...prev,
-          coverLetters: [...prev.coverLetters, newCoverLetter],
-          jobDescriptions: prev.jobDescriptions.map(jd =>
-            jd.id === selectedJob.id
-              ? { ...jd, linkedCoverLetterIds: [...jd.linkedCoverLetterIds, newCoverLetter.id] }
-              : jd
-          )
-        }));
+        console.log('Cover letter saved successfully:', newCoverLetter);
+
+        // Load the updated state from the database to get the correct linking
+        const { loadState } = await import('../storage');
+        const updatedState = await loadState();
+        const updatedSelectedJob = updatedState.jobDescriptions.find((jd: JobDescription) => jd.id === selectedJob.id);
+
+        console.log('Updated job description linking:', updatedSelectedJob?.linkedCoverLetterIds);
+
+        setState(updatedState);
+        console.log('State updated with fresh data from database');
       }
 
-      alert(`${generationType === 'resume' ? 'Resume' : 'Cover letter'} saved successfully!`);
+      alert(`${generationType === 'resume' ? 'Resume' : 'Cover letter'} saved successfully! Check your ${generationType === 'resume' ? 'Resume' : 'Cover Letter'} library.`);
+      console.log('Save process completed successfully');
     } catch (error) {
       console.error('Error saving generated content:', error);
+      alert(`Failed to save ${generationType === 'resume' ? 'resume' : 'cover letter'}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   };
