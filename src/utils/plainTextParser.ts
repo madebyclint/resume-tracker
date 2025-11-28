@@ -174,7 +174,8 @@ function sectionsToChunks(sections: ParsedSection[], allLines: string[]): Omit<C
           type: 'summary',
           text: summaryText,
           tags: extractTags(summaryText, 'summary'),
-          order: chunkOrder++
+          order: chunkOrder++,
+          parsedBy: 'rules'
         });
       }
     } else if (section.type === 'skills') {
@@ -196,7 +197,8 @@ function sectionsToChunks(sections: ParsedSection[], allLines: string[]): Omit<C
           type: section.type,
           text: sectionText,
           tags: extractTags(sectionText, section.type),
-          order: chunkOrder++
+          order: chunkOrder++,
+          parsedBy: 'rules'
         });
       }
     }
@@ -223,7 +225,8 @@ function parseSkillsSection(text: string, startOrder: number): Omit<Chunk, 'id' 
         type: 'skills',
         text: skill,
         tags: [skill.toLowerCase().replace(/\s+/g, '-')],
-        order: startOrder + index
+        order: startOrder + index,
+        parsedBy: 'rules'
       });
     });
   } else {
@@ -232,7 +235,8 @@ function parseSkillsSection(text: string, startOrder: number): Omit<Chunk, 'id' 
       type: 'skills',
       text: text.trim(),
       tags: extractTags(text, 'skills'),
-      order: startOrder
+      order: startOrder,
+      parsedBy: 'rules'
     });
   }
 
@@ -255,7 +259,8 @@ function parseExperienceSection(content: string[], startOrder: number): Omit<Chu
         type: 'experience_section',
         text: line,
         tags: extractTags(line, 'experience_section'),
-        order: currentOrder++
+        order: currentOrder++,
+        parsedBy: 'rules'
       });
     } 
     // Check if this is a bullet point
@@ -265,7 +270,8 @@ function parseExperienceSection(content: string[], startOrder: number): Omit<Chu
         type: 'experience_bullet',
         text: bulletText,
         tags: extractTags(bulletText, 'experience_bullet'),
-        order: currentOrder++
+        order: currentOrder++,
+        parsedBy: 'rules'
       });
     }
     // Other experience content
@@ -274,7 +280,8 @@ function parseExperienceSection(content: string[], startOrder: number): Omit<Chu
         type: 'experience_bullet',
         text: line.trim(),
         tags: extractTags(line, 'experience_bullet'),
-        order: currentOrder++
+        order: currentOrder++,
+        parsedBy: 'rules'
       });
     }
   }

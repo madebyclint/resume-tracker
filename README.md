@@ -70,13 +70,32 @@ src/
 ## Current Features
 - **📄 Document Management**: Upload multiple Word (.docx) resume files with automatic text extraction
 - **🔍 Full-text Search**: Search across all uploaded resumes and extracted text content
-- **🤖 AI Semantic Chunking**: Parse resumes into reusable semantic chunks using OpenAI GPT
-- **✏️ Chunk Review & Editing**: Review, edit, and approve AI-generated chunks before saving
+- **🤖 Hybrid Parsing System**: 
+  - **Quick Parse**: Fast rule-based parsing (no AI required)
+  - **AI Parse**: Advanced semantic parsing using OpenAI GPT
+- **✏️ Chunk Review & Editing**: Review, edit, and approve generated chunks before saving
+- **🧩 Chunk Library**: Dedicated interface to manage, filter, and organize all parsed chunks
+- **🏷️ Smart Tagging**: Automatic tag extraction for skills, technologies, and competencies
 - **💾 Local Storage**: Efficient IndexedDB storage for large files and chunk data
 - **🔄 Data Migration**: Automatic migration from localStorage for existing users
 
-## Next Steps
-- Add export/import functionality for data backup and portability
-- Implement resume comparison and analysis features
-- Add tagging and categorization for better organization
-- Enhance PDF viewer with annotation capabilities
+## Parsing Methods
+
+### **🚀 Quick Parse (Rule-Based)**
+- **Fast**: No API calls, instant results
+- **Reliable**: Works offline, no external dependencies
+- **Good for**: Basic document structure, contact info, skills lists, experience bullets
+- **Identifies**: Section headers, bullet points, date ranges, job titles, skills
+
+### **🤖 AI Parse (OpenAI)**
+- **Smart**: Context-aware semantic understanding
+- **Flexible**: Handles complex layouts and varied formats  
+- **Good for**: Nuanced content classification, quality assessment, semantic grouping
+- **Requires**: OpenAI API key configuration
+
+## Next Steps: Phase 2
+- **📋 Job Description Analysis**: Parse and analyze job postings
+- **🎯 Chunk Matching**: Match relevant chunks to JD requirements  
+- **📝 Resume Generation**: Assemble tailored resumes from selected chunks
+- **📊 Application Tracking**: Track applications and success metrics
+- **📤 Export/Import**: Data backup and portability features

@@ -28,11 +28,13 @@ export default function ResumeTable({
     chunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[];
     resumeId: string;
     resumeName: string;
+    parsedBy: 'ai' | 'rules';
   }>({
     isOpen: false,
     chunks: [],
     resumeId: '',
-    resumeName: ''
+    resumeName: '',
+    parsedBy: 'rules'
   });
   const [resumeChunkCounts, setResumeChunkCounts] = useState<Record<string, number>>({});
 
@@ -101,7 +103,8 @@ export default function ResumeTable({
         isOpen: true,
         chunks: result.chunks,
         resumeId: resume.id,
-        resumeName: resume.name
+        resumeName: resume.name,
+        parsedBy: useAI ? 'ai' : 'rules'
       });
 
     } catch (error) {
@@ -120,7 +123,8 @@ export default function ResumeTable({
         id: crypto.randomUUID(),
         sourceDocId: chunkReviewModal.resumeId,
         createdAt: new Date().toISOString(),
-        approved: true
+        approved: true,
+        parsedBy: chunkReviewModal.parsedBy
       }));
 
       await saveChunks(chunks);
@@ -144,7 +148,8 @@ export default function ResumeTable({
       isOpen: false,
       chunks: [],
       resumeId: '',
-      resumeName: ''
+      resumeName: '',
+      parsedBy: 'rules'
     });
   };
 
