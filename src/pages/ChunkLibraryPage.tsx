@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Chunk, Resume, ChunkType } from '../types';
-import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks } from '../storage';
+import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks, exportChunksAsJSON, exportAllDataAsJSON } from '../storage';
 import { getChunkTypeLabel } from '../utils/aiService';
 
 interface ChunkLibraryPageProps {
@@ -72,30 +72,30 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
     // Apply sorting
     filtered.sort((a, b) => {
       const direction = sortConfig.direction === 'asc' ? 1 : -1;
-      
+
       switch (sortConfig.field) {
         case 'type':
           return direction * a.type.localeCompare(b.type);
-        
+
         case 'sourceDoc':
           const aDocName = getResumeNameById(a.sourceDocId);
           const bDocName = getResumeNameById(b.sourceDocId);
           const docCompare = aDocName.localeCompare(bDocName);
           // If same document, sort by order
           return docCompare !== 0 ? direction * docCompare : a.order - b.order;
-        
+
         case 'order':
           return direction * (a.order - b.order);
-        
+
         case 'createdAt':
           return direction * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        
+
         case 'textLength':
           return direction * (a.text.length - b.text.length);
-        
+
         case 'parsedBy':
           return direction * a.parsedBy.localeCompare(b.parsedBy);
-        
+
         default:
           return 0;
       }
@@ -158,6 +158,44 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
     }
   };
 
+  const handleExportChunks = async () => {
+    try {
+      const jsonData = await exportChunksAsJSON();
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `chunks-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      alert(`✅ Successfully exported ${chunks.length} chunks to JSON file!`);
+    } catch (error) {
+      console.error('Failed to export chunks:', error);
+      alert('Failed to export chunks. Please try again.');
+    }
+  };
+
+  const handleExportAllData = async () => {
+    try {
+      const jsonData = await exportAllDataAsJSON();
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `full-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      alert(`✅ Successfully exported full backup (${resumes.length} resumes, ${chunks.length} chunks) to JSON file!`);
+    } catch (error) {
+      console.error('Failed to export all data:', error);
+      alert('Failed to export all data. Please try again.');
+    }
+  };
+
   const handleCancelEdit = () => {
     setEditingChunk(null);
   };
@@ -194,21 +232,55 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h2 style={{ margin: 0 }}>Chunk Library</h2>
           {chunks.length > 0 && (
-            <button
-              onClick={handleDeleteAllChunks}
-              style={{
-                padding: '0.5rem 1rem',
-                border: 'none',
-                borderRadius: '6px',
-                backgroundColor: '#ef4444',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                fontWeight: '600'
-              }}
-            >
-              Delete All Chunks
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={handleExportChunks}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: '600'
+                }}
+                title="Export all chunks as JSON backup file"
+              >
+                📥 Export Chunks
+              </button>
+              <button
+                onClick={handleExportAllData}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: '600'
+                }}
+                title="Export all data (resumes + chunks) as JSON backup file"
+              >
+                📦 Export All Data
+              </button>
+              <button
+                onClick={handleDeleteAllChunks}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: '600'
+                }}
+              >
+                Delete All Chunks
+              </button>
+            </div>
           )}
         </div>
         <p style={{ color: '#666', marginBottom: '1.5rem' }}>
@@ -354,11 +426,11 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
             {searchTerm && ` matching "${searchTerm}"`}
           </div>
           <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
-            Sorted by {sortConfig.field === 'sourceDoc' ? 'Document' : 
-                      sortConfig.field === 'textLength' ? 'Text Length' :
-                      sortConfig.field === 'createdAt' ? 'Date Created' :
-                      sortConfig.field === 'parsedBy' ? 'Parse Method' :
-                      sortConfig.field.charAt(0).toUpperCase() + sortConfig.field.slice(1)} 
+            Sorted by {sortConfig.field === 'sourceDoc' ? 'Document' :
+              sortConfig.field === 'textLength' ? 'Text Length' :
+                sortConfig.field === 'createdAt' ? 'Date Created' :
+                  sortConfig.field === 'parsedBy' ? 'Parse Method' :
+                    sortConfig.field.charAt(0).toUpperCase() + sortConfig.field.slice(1)}
             ({sortConfig.direction === 'asc' ? '↑' : '↓'})
           </div>
         </div>

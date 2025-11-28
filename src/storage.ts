@@ -585,3 +585,54 @@ export async function deleteAllChunks(): Promise<void> {
     throw error;
   }
 }
+
+// Export all data as JSON for backup purposes
+export async function exportAllDataAsJSON(): Promise<string> {
+  try {
+    const [resumes, chunks] = await Promise.all([
+      storage.loadResumes(),
+      storage.getAllChunks()
+    ]);
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      version: '1.0',
+      resumes: resumes.map(resume => ({
+        ...resume,
+        // Don't include the actual file data in backup to keep size manageable
+        fileData: '[FILE_DATA_EXCLUDED]',
+      })),
+      chunks,
+      totalResumes: resumes.length,
+      totalChunks: chunks.length
+    };
+
+    return JSON.stringify(exportData, null, 2);
+  } catch (error) {
+    console.error("Failed to export data from IndexedDB", error);
+    throw error;
+  }
+}
+
+// Export chunks only as JSON for backup purposes
+export async function exportChunksAsJSON(): Promise<string> {
+  try {
+    const chunks = await storage.getAllChunks();
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      version: '1.0',
+      chunks,
+      totalChunks: chunks.length,
+      chunkTypes: chunks.reduce((types, chunk) => {
+        types[chunk.type] = (types[chunk.type] || 0) + 1;
+        return types;
+      }, {} as Record<string, number>)
+    };
+
+    return JSON.stringify(exportData, null, 2);
+  } catch (error) {
+    console.error("Failed to export chunks from IndexedDB", error);
+    throw error;
+  }
+}
