@@ -11,10 +11,11 @@ interface ResumeMetadata {
   fileName: string;
   fileSize: number;
   uploadDate: string;
+  fileType: 'docx';
   textContent?: string;
 }
 
-interface PdfData {
+interface FileData {
   id: string;
   data: ArrayBuffer;
 }
@@ -59,36 +60,37 @@ class IndexedDBStorage {
     await this.init();
     if (!this.db) throw new Error("Database not initialized");
 
-    console.log('Saving resume:', resume.name, 'PDF data length:', resume.pdfData.length);
+    console.log('Saving resume:', resume.name, 'File data length:', resume.fileData.length, 'Type:', resume.fileType);
 
     const transaction = this.db.transaction([RESUME_STORE, PDF_STORE], "readwrite");
     
     // Convert base64 to ArrayBuffer for efficient storage
-    const pdfBuffer = this.base64ToArrayBuffer(resume.pdfData);
-    console.log('Converted to ArrayBuffer, size:', pdfBuffer.byteLength);
+    const fileBuffer = this.base64ToArrayBuffer(resume.fileData);
+    console.log('Converted to ArrayBuffer, size:', fileBuffer.byteLength);
     
-    // Save metadata without PDF data
+    // Save metadata without file data
     const metadata: ResumeMetadata = {
       id: resume.id,
       name: resume.name,
       fileName: resume.fileName,
       fileSize: resume.fileSize,
       uploadDate: resume.uploadDate,
+      fileType: resume.fileType,
       textContent: resume.textContent,
     };
 
-    // Save PDF data separately
-    const pdfData: PdfData = {
+    // Save file data separately
+    const fileData: FileData = {
       id: resume.id,
-      data: pdfBuffer,
+      data: fileBuffer,
     };
 
     const resumeStore = transaction.objectStore(RESUME_STORE);
-    const pdfStore = transaction.objectStore(PDF_STORE);
+    const fileStore = transaction.objectStore(PDF_STORE); // Keep same store name for compatibility
 
     await Promise.all([
       this.promisifyRequest(resumeStore.put(metadata)),
-      this.promisifyRequest(pdfStore.put(pdfData)),
+      this.promisifyRequest(fileStore.put(fileData)),
     ]);
     
     console.log('Resume saved successfully:', resume.name);
@@ -100,7 +102,7 @@ class IndexedDBStorage {
 
     const transaction = this.db.transaction([RESUME_STORE, PDF_STORE], "readonly");
     const resumeStore = transaction.objectStore(RESUME_STORE);
-    const pdfStore = transaction.objectStore(PDF_STORE);
+    const fileStore = transaction.objectStore(PDF_STORE); // Keep same store name for compatibility
 
     const metadataRequest = resumeStore.getAll();
     const metadata = await this.promisifyRequest<ResumeMetadata[]>(metadataRequest);
@@ -110,19 +112,20 @@ class IndexedDBStorage {
     const resumes: Resume[] = [];
     
     for (const meta of metadata) {
-      const pdfRequest = pdfStore.get(meta.id);
-      const pdfData = await this.promisifyRequest<PdfData>(pdfRequest);
+      const fileRequest = fileStore.get(meta.id);
+      const storedFileData = await this.promisifyRequest<FileData>(fileRequest);
       
-      if (pdfData) {
-        console.log('Found PDF data for:', meta.name, 'size:', pdfData.data.byteLength);
-        const base64Data = this.arrayBufferToBase64(pdfData.data);
+      if (storedFileData) {
+        console.log('Found file data for:', meta.name, 'size:', storedFileData.data.byteLength, 'type:', meta.fileType || 'docx');
+        const base64Data = this.arrayBufferToBase64(storedFileData.data);
         console.log('Converted to base64, length:', base64Data.length);
         resumes.push({
           ...meta,
-          pdfData: base64Data,
+          fileType: meta.fileType || 'docx', // Default to docx for backwards compatibility
+          fileData: base64Data,
         });
       } else {
-        console.warn('No PDF data found for resume:', meta.name, 'ID:', meta.id);
+        console.warn('No file data found for resume:', meta.name, 'ID:', meta.id);
       }
     }
 

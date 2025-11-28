@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useAppState } from "../state/AppStateContext";
 import { Resume } from "../types";
 import { saveResume, deleteResume as deleteResumeFromStorage, debugIndexedDB } from "../storage";
-import * as pdfjsLib from 'pdfjs-dist';
+import * as mammoth from 'mammoth';
 
 function formatFileSize(bytes: number): string {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -15,96 +15,69 @@ function formatDate(date: string) {
   return new Date(date).toLocaleDateString();
 }
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.394/pdf.worker.min.js`;
+// Word document processing only - no PDF.js needed
 
-function validatePDFData(pdfData: string): boolean {
+
+
+// Word document text extraction
+async function extractTextFromWord(fileData: string): Promise<string> {
   try {
-    // Check if it's a valid data URL
-    if (!pdfData.startsWith('data:application/pdf;base64,')) {
-      console.error('PDF data is not a valid data URL');
-      return false;
-    }
-
-    // Check if base64 data exists
-    const base64Data = pdfData.split(',')[1];
-    if (!base64Data || base64Data.length === 0) {
-      console.error('No base64 data found');
-      return false;
-    }
-
-    // Try to decode base64
-    const binaryData = atob(base64Data);
-    if (binaryData.length === 0) {
-      console.error('Decoded binary data is empty');
-      return false;
-    }
-
-    // Check for PDF signature
-    const pdfSignature = binaryData.substring(0, 4);
-    if (pdfSignature !== '%PDF') {
-      console.error('PDF signature not found, got:', pdfSignature);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error validating PDF data:', error);
-    return false;
-  }
-}
-
-async function extractTextFromPDF(pdfData: string): Promise<string> {
-  try {
-    console.log('Extracting text from PDF, data length:', pdfData.length);
-
-    if (!validatePDFData(pdfData)) {
-      console.error('Invalid PDF data, skipping text extraction');
-      return '';
-    }
-
-    // Handle data URL format
-    const base64Data = pdfData.split(',')[1];
-    console.log('Base64 data length after split:', base64Data.length);
-
+    console.log('=== WORD DOCUMENT EXTRACTION START ===');
+    const base64Data = fileData.split(',')[1];
     const binaryData = atob(base64Data);
     const uint8Array = new Uint8Array(binaryData.length);
     for (let i = 0; i < binaryData.length; i++) {
       uint8Array[i] = binaryData.charCodeAt(i);
     }
 
-    console.log('Created Uint8Array, length:', uint8Array.length);
-    const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
-    console.log('PDF loaded successfully, pages:', pdf.numPages);
+    // Convert Uint8Array to ArrayBuffer
+    const arrayBuffer = uint8Array.buffer.slice(uint8Array.byteOffset, uint8Array.byteOffset + uint8Array.byteLength);
 
-    let fullText = '';
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .filter((item): item is any => 'str' in item)
-        .map(item => item.str)
-        .join(' ');
-      fullText += pageText + '\n';
-    }
-
-    console.log('Text extraction complete, text length:', fullText.length);
-    return fullText.trim();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    console.log('✅ Word extraction successful:', result.value.length, 'characters');
+    return result.value;
   } catch (error) {
-    console.error('Error extracting text from PDF:', error);
+    console.error('❌ Word extraction failed:', error);
     return '';
   }
 }
 
+// Alternative text extraction using manual text input fallback
+async function extractTextViaManualInput(fileName: string): Promise<string> {
+  return new Promise((resolve) => {
+    const userText = prompt(`Document text extraction failed for "${fileName}".\n\nPlease copy and paste the text content:\n\n1. Open your document\n2. Select all text (Cmd+A)\n3. Copy (Cmd+C)\n4. Paste below:`);
+    resolve(userText || '');
+  });
+}
 
+async function extractTextFromDocument(resume: Resume): Promise<string> {
+  console.log('=== WORD DOCUMENT TEXT EXTRACTION START ===');
 
-export default function DashboardPage() {
+  // Word document extraction
+  const wordText = await extractTextFromWord(resume.fileData);
+  if (wordText && wordText.trim().length > 0) {
+    return wordText.trim();
+  }
+
+  // Fallback to manual input if Word extraction fails
+  console.log('Attempting manual text input fallback...');
+  const manualText = await extractTextViaManualInput(resume.fileName);
+  if (manualText && manualText.trim().length > 0) {
+    console.log('✅ Manual text input successful:', manualText.length, 'characters');
+    return manualText.trim();
+  }
+
+  console.error('❌ All text extraction methods failed');
+  return '';
+} export default function DashboardPage() {
   const { state, setState, isLoading } = useAppState();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [parsingResumeId, setParsingResumeId] = useState<string | null>(null);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   if (isLoading) {
     return (
@@ -123,11 +96,13 @@ export default function DashboardPage() {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
 
-      // Only accept PDF files
-      if (file.type !== 'application/pdf') {
-        alert(`${file.name} is not a PDF file. Only PDF files are supported.`);
+      // Only accept Word documents
+      if (file.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        alert(`${file.name} is not supported. Only Word (.docx) files are accepted.`);
         continue;
       }
+
+      const fileType: 'docx' = 'docx';
 
       // Check file size (warn about very large files)
       if (file.size > 10 * 1024 * 1024) { // 10MB - IndexedDB can handle larger files
@@ -144,18 +119,20 @@ export default function DashboardPage() {
           reader.readAsDataURL(file);
         });
 
-        // Extract text content for search
-        const textContent = await extractTextFromPDF(base64);
-
         const resume: Resume = {
           id: crypto.randomUUID(),
-          name: file.name.replace('.pdf', ''),
+          name: file.name.replace(/\.docx$/i, ''),
           fileName: file.name,
           fileSize: file.size,
           uploadDate: new Date().toISOString(),
-          pdfData: base64,
-          textContent,
+          fileData: base64,
+          fileType: 'docx',
+          textContent: '',
         };
+
+        // Extract text content for search
+        const textContent = await extractTextFromDocument(resume);
+        resume.textContent = textContent;
 
         newResumes.push(resume);
 
@@ -187,6 +164,72 @@ export default function DashboardPage() {
     }
   };
 
+  const parseText = async (resume: Resume) => {
+    setParsingResumeId(resume.id);
+    try {
+      const textContent = await extractTextFromDocument(resume);
+
+      const updatedResume = {
+        ...resume,
+        textContent
+      };
+
+      // Save to IndexedDB
+      await saveResume(updatedResume);
+
+      // Update state
+      setState(prev => ({
+        ...prev,
+        resumes: prev.resumes.map(r =>
+          r.id === resume.id ? updatedResume : r
+        )
+      }));
+
+      if (textContent && textContent.trim().length > 0) {
+        alert(`✅ Text extracted successfully!\n\n📄 ${textContent.length} characters extracted`);
+      } else {
+        const shouldTryAgain = confirm(`❌ Automatic text extraction failed.\n\nThis can happen with:\n• Complex Word document layouts\n• Password-protected documents\n• Corrupted Word files\n\n🔧 Would you like to try the manual text input method?\n\n(Click OK to manually paste text, or Cancel to skip)`);
+
+        if (shouldTryAgain) {
+          // Trigger the manual extraction directly
+          const manualText = prompt(`📝 Manual Text Input\n\nPlease:\n1. Open your Word document\n2. Select all text (Cmd+A)\n3. Copy the text (Cmd+C)\n4. Paste it below:`);
+
+          if (manualText && manualText.trim().length > 0) {
+            const updatedResumeWithManualText = {
+              ...resume,
+              textContent: manualText.trim()
+            };
+
+            await saveResume(updatedResumeWithManualText);
+            setState(prev => ({
+              ...prev,
+              resumes: prev.resumes.map(r =>
+                r.id === resume.id ? updatedResumeWithManualText : r
+              )
+            }));
+
+            alert(`✅ Manual text input successful!\n\n📄 ${manualText.trim().length} characters added`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing text:', error);
+      alert('Error extracting text from Word document');
+    } finally {
+      setParsingResumeId(null);
+    }
+  };
+
+  const showTextPreview = (resume: Resume) => {
+    setPreviewText(resume.textContent || 'No text content available');
+    setShowPreview(true);
+  };
+
+  const closePreview = () => {
+    setShowPreview(false);
+    setPreviewText(null);
+  };
+
   const deleteResume = async (resumeId: string) => {
     if (confirm('Are you sure you want to delete this resume?')) {
       try {
@@ -205,19 +248,16 @@ export default function DashboardPage() {
   const openResume = (resume: Resume) => {
     console.log('=== OPENING RESUME ===');
     console.log('Resume name:', resume.name);
-    console.log('PDF data length:', resume.pdfData.length);
-    console.log('PDF data starts with:', resume.pdfData.substring(0, 100));
-    console.log('PDF data ends with:', resume.pdfData.substring(resume.pdfData.length - 50));
+    console.log('File data length:', resume.fileData.length);
+    console.log('File type:', resume.fileType);
 
-    if (!validatePDFData(resume.pdfData)) {
-      alert('Invalid PDF data. The file may be corrupted.');
-      return;
-    }
+    // Word documents cannot be displayed in browser - offer download instead
+    alert('Word documents cannot be previewed in the browser. The file will be downloaded for viewing.');
 
     try {
-      // Method 1: Try blob approach first (more reliable)
-      console.log('Trying blob approach...');
-      const base64Data = resume.pdfData.split(',')[1];
+      // Download Word document
+      console.log('Downloading Word document...');
+      const base64Data = resume.fileData.split(',')[1];
       const binaryData = atob(base64Data);
       const uint8Array = new Uint8Array(binaryData.length);
 
@@ -225,35 +265,28 @@ export default function DashboardPage() {
         uint8Array[i] = binaryData.charCodeAt(i);
       }
 
-      const blob = new Blob([uint8Array], { type: 'application/pdf' });
-      console.log('Created blob, size:', blob.size);
+      const blob = new Blob([uint8Array], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+      console.log('Created Word blob, size:', blob.size);
 
       const blobUrl = URL.createObjectURL(blob);
-      console.log('Created blob URL:', blobUrl);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = resume.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-      const newWindow = window.open(blobUrl, '_blank');
-      if (newWindow) {
-        console.log('Opened in new window successfully');
-        // Clean up after a delay
-        setTimeout(() => {
-          URL.revokeObjectURL(blobUrl);
-          console.log('Cleaned up blob URL');
-        }, 5000);
-      } else {
-        console.log('Popup blocked, trying download fallback...');
-        // Fallback: download the file
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = resume.fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-      }
+      // Clean up
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+        console.log('Cleaned up blob URL');
+      }, 1000);
     } catch (error) {
-      console.error('Error opening PDF:', error);
+      console.error('Error opening Word document:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Error opening PDF: ${errorMessage}. Check console for details.`);
+      alert(`Error opening Word document: ${errorMessage}. Check console for details.`);
     }
   };
 
@@ -273,7 +306,7 @@ export default function DashboardPage() {
       {/* Upload Section */}
       <section className="page-card">
         <h2>Upload Resumes</h2>
-        <p>Upload multiple PDF resume files to manage and track them.</p>
+        <p>Upload multiple Word resume documents (.docx) to manage and track them.</p>
 
 
 
@@ -284,7 +317,7 @@ export default function DashboardPage() {
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
           >
-            {isUploading ? 'Uploading...' : 'Select PDF Resumes'}
+            {isUploading ? 'Uploading...' : 'Select Word Resumes'}
           </button>
           <button
             type="button"
@@ -304,14 +337,14 @@ export default function DashboardPage() {
             Debug Storage
           </button>
           <span style={{ color: "#666", fontSize: "0.9rem" }}>
-            Multiple files supported (PDF only)
+            Multiple Word documents (.docx) supported
           </span>
         </div>
 
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,application/pdf"
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           multiple
           style={{ display: "none" }}
           onChange={(event) => handleFileUpload(event.target.files)}
@@ -375,15 +408,17 @@ export default function DashboardPage() {
         {state.resumes.length === 0 ? (
           <div style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
             <p>No resumes uploaded yet.</p>
-            <p>Click "Select PDF Resumes" above to get started.</p>
+            <p>Click "Select Word Resumes" above to get started.</p>
           </div>
         ) : (
           <table className="table">
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Type</th>
                 <th>File Size</th>
                 <th>Upload Date</th>
+                <th>Text Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -397,32 +432,92 @@ export default function DashboardPage() {
                       {resume.fileName}
                     </span>
                   </td>
+                  <td>
+                    <span style={{
+                      fontSize: "0.75rem",
+                      padding: "0.25rem 0.5rem",
+                      borderRadius: "12px",
+                      backgroundColor: "#2563eb",
+                      color: "white",
+                      fontWeight: "600",
+                      textTransform: "uppercase"
+                    }}>
+                      DOCX
+                    </span>
+                  </td>
                   <td>{formatFileSize(resume.fileSize)}</td>
                   <td>{formatDate(resume.uploadDate)}</td>
                   <td>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                    {resume.textContent && resume.textContent.trim().length > 0 ? (
+                      <span style={{ color: "#22c55e", fontWeight: "600" }}>
+                        Text extracted ✓
+                      </span>
+                    ) : (
+                      <span style={{ color: "#ef4444", fontWeight: "600" }}>
+                        No text extracted ✗
+                      </span>
+                    )}
+                    {resume.textContent && (
+                      <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "2px" }}>
+                        {resume.textContent.length} characters
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       <button
                         type="button"
                         className="secondary"
                         onClick={() => openResume(resume)}
                       >
-                        View
+                        Download
                       </button>
+                      {(!resume.textContent || resume.textContent.trim().length === 0) ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => parseText(resume)}
+                          disabled={parsingResumeId === resume.id}
+                          style={{
+                            fontSize: "0.8rem",
+                            padding: "0.4rem 0.6rem",
+                            backgroundColor: parsingResumeId === resume.id ? "#f0f0f0" : "#3b82f6",
+                            color: parsingResumeId === resume.id ? "#666" : "white",
+                            border: "none"
+                          }}
+                        >
+                          {parsingResumeId === resume.id ? 'Parsing...' : 'Parse Text'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => showTextPreview(resume)}
+                          style={{
+                            fontSize: "0.8rem",
+                            padding: "0.4rem 0.6rem",
+                            backgroundColor: "#10b981",
+                            color: "white",
+                            border: "none"
+                          }}
+                        >
+                          Preview Text
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="secondary"
                         onClick={() => {
-                          console.log('=== PDF VALIDATION TEST ===');
-                          const isValid = validatePDFData(resume.pdfData);
-                          console.log('PDF is valid:', isValid);
-                          if (isValid) {
-                            console.log('✓ PDF data is valid');
-                          }
-                          alert(`PDF validation: ${isValid ? 'VALID' : 'INVALID'} - Check console for details`);
+                          console.log('=== WORD DOCUMENT INFO ===');
+                          console.log('=== WORD DOCUMENT VALIDATION ===');
+                          console.log('File type:', resume.fileType);
+                          console.log('File size:', resume.fileSize);
+                          console.log('Has text content:', !!resume.textContent);
+                          alert(`Word Document Info:\nType: ${resume.fileType}\nSize: ${formatFileSize(resume.fileSize)}\nText extracted: ${resume.textContent ? 'Yes' : 'No'}`);
                         }}
                         style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }}
                       >
-                        Test
+                        Info
                       </button>
                       <button
                         type="button"
@@ -440,6 +535,78 @@ export default function DashboardPage() {
           </table>
         )}
       </section>
+
+      {/* Text Preview Modal */}
+      {showPreview && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: "white",
+            borderRadius: "8px",
+            padding: "1.5rem",
+            maxWidth: "80vw",
+            maxHeight: "80vh",
+            overflow: "auto",
+            position: "relative"
+          }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1rem"
+            }}>
+              <h3>Extracted Text Preview</h3>
+              <button
+                onClick={closePreview}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  padding: "0.25rem"
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{
+              backgroundColor: "#f8f9fa",
+              padding: "1rem",
+              borderRadius: "4px",
+              border: "1px solid #e9ecef",
+              maxHeight: "60vh",
+              overflow: "auto",
+              whiteSpace: "pre-wrap",
+              fontFamily: "monospace",
+              fontSize: "0.9rem",
+              lineHeight: "1.4"
+            }}>
+              {previewText}
+            </div>
+            <div style={{
+              marginTop: "1rem",
+              textAlign: "right"
+            }}>
+              <button
+                onClick={closePreview}
+                className="secondary"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

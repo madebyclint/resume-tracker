@@ -4,7 +4,8 @@ export interface Resume {
   fileName: string;
   fileSize: number;
   uploadDate: string;
-  pdfData: string; // base64 encoded PDF
+  fileData: string; // base64 encoded Word document
+  fileType: 'docx'; // only Word documents supported
   textContent?: string; // extracted text for search
 }
 
