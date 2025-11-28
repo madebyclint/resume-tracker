@@ -462,7 +462,7 @@ export default function ResumeTable({
                         >
                           {chunkingResumeId === resume.id ? 'Parsing...' : (resumeChunkCounts[resume.id] > 0 ? 'Re-parse (Quick)' : 'Quick Parse')}
                         </button>
-                        <button
+                        {/* <button
                           type="button"
                           className="secondary"
                           onClick={() => parseIntoChunks(resume, true)}
@@ -477,7 +477,7 @@ export default function ResumeTable({
                           title="AI-powered semantic parsing with OpenAI"
                         >
                           {chunkingResumeId === resume.id ? 'AI Parsing...' : (resumeChunkCounts[resume.id] > 0 ? 'Re-parse (AI)' : 'AI Parse')}
-                        </button>
+                        </button> */}
                       </div>
                     )}
 
