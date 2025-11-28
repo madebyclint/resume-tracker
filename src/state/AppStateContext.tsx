@@ -13,6 +13,7 @@ interface AppStateContextValue {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
   isLoading: boolean;
+  syncWithStorage: () => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateContextValue | undefined>(undefined);
@@ -38,23 +39,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     loadInitialState();
   }, []);
 
-  // Save state changes to IndexedDB
-  useEffect(() => {
-    if (isLoading) return; // Don't save during initial load
+  // Note: Individual resume saves are handled in FileUploadSection
+  // We don't auto-save the entire state on every change to avoid clearing IndexedDB
 
-    const saveStateAsync = async () => {
-      try {
-        await saveState(state);
-      } catch (error) {
-        console.error("Failed to save state:", error);
-      }
-    };
-
-    saveStateAsync();
-  }, [state, isLoading]);
+  const syncWithStorage = useCallback(async () => {
+    try {
+      const loadedState = await loadState();
+      setState(loadedState);
+    } catch (error) {
+      console.error("Failed to sync with storage:", error);
+    }
+  }, []);
 
   return (
-    <AppStateContext.Provider value={{ state, setState, isLoading }}>
+    <AppStateContext.Provider value={{ state, setState, isLoading, syncWithStorage }}>
       {children}
     </AppStateContext.Provider>
   );

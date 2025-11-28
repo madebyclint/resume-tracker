@@ -62,38 +62,52 @@ class IndexedDBStorage {
 
     console.log('Saving resume:', resume.name, 'File data length:', resume.fileData.length, 'Type:', resume.fileType);
 
-    const transaction = this.db.transaction([RESUME_STORE, PDF_STORE], "readwrite");
-    
-    // Convert base64 to ArrayBuffer for efficient storage
-    const fileBuffer = this.base64ToArrayBuffer(resume.fileData);
-    console.log('Converted to ArrayBuffer, size:', fileBuffer.byteLength);
-    
-    // Save metadata without file data
-    const metadata: ResumeMetadata = {
-      id: resume.id,
-      name: resume.name,
-      fileName: resume.fileName,
-      fileSize: resume.fileSize,
-      uploadDate: resume.uploadDate,
-      fileType: resume.fileType,
-      textContent: resume.textContent,
-    };
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([RESUME_STORE, PDF_STORE], "readwrite");
+      
+      transaction.oncomplete = () => {
+        console.log('Resume saved successfully:', resume.name);
+        resolve();
+      };
+      
+      transaction.onerror = () => {
+        console.error('Transaction failed for resume:', resume.name, transaction.error);
+        reject(transaction.error);
+      };
+      
+      try {
+        // Convert base64 to ArrayBuffer for efficient storage
+        const fileBuffer = this.base64ToArrayBuffer(resume.fileData);
+        console.log('Converted to ArrayBuffer, size:', fileBuffer.byteLength);
+        
+        // Save metadata without file data
+        const metadata: ResumeMetadata = {
+          id: resume.id,
+          name: resume.name,
+          fileName: resume.fileName,
+          fileSize: resume.fileSize,
+          uploadDate: resume.uploadDate,
+          fileType: resume.fileType,
+          textContent: resume.textContent,
+        };
 
-    // Save file data separately
-    const fileData: FileData = {
-      id: resume.id,
-      data: fileBuffer,
-    };
+        // Save file data separately
+        const fileData: FileData = {
+          id: resume.id,
+          data: fileBuffer,
+        };
 
-    const resumeStore = transaction.objectStore(RESUME_STORE);
-    const fileStore = transaction.objectStore(PDF_STORE); // Keep same store name for compatibility
+        const resumeStore = transaction.objectStore(RESUME_STORE);
+        const fileStore = transaction.objectStore(PDF_STORE); // Keep same store name for compatibility
 
-    await Promise.all([
-      this.promisifyRequest(resumeStore.put(metadata)),
-      this.promisifyRequest(fileStore.put(fileData)),
-    ]);
-    
-    console.log('Resume saved successfully:', resume.name);
+        resumeStore.put(metadata);
+        fileStore.put(fileData);
+        
+      } catch (error) {
+        console.error('Error preparing data for resume:', resume.name, error);
+        reject(error);
+      }
+    });
   }
 
   async loadResumes(): Promise<Resume[]> {
@@ -112,20 +126,35 @@ class IndexedDBStorage {
     const resumes: Resume[] = [];
     
     for (const meta of metadata) {
-      const fileRequest = fileStore.get(meta.id);
-      const storedFileData = await this.promisifyRequest<FileData>(fileRequest);
-      
-      if (storedFileData) {
-        console.log('Found file data for:', meta.name, 'size:', storedFileData.data.byteLength, 'type:', meta.fileType || 'docx');
-        const base64Data = this.arrayBufferToBase64(storedFileData.data);
-        console.log('Converted to base64, length:', base64Data.length);
-        resumes.push({
-          ...meta,
-          fileType: meta.fileType || 'docx', // Default to docx for backwards compatibility
-          fileData: base64Data,
-        });
-      } else {
-        console.warn('No file data found for resume:', meta.name, 'ID:', meta.id);
+      try {
+        const fileRequest = fileStore.get(meta.id);
+        const storedFileData = await this.promisifyRequest<FileData>(fileRequest);
+        
+        if (storedFileData && storedFileData.data && storedFileData.data.byteLength > 0) {
+          console.log('Found file data for:', meta.name, 'size:', storedFileData.data.byteLength, 'type:', meta.fileType || 'docx');
+          const base64Data = this.arrayBufferToBase64(storedFileData.data);
+          console.log('Converted to base64, length:', base64Data.length);
+          
+          // Validate the resume has required fields
+          if (meta.id && meta.name && meta.fileName && meta.uploadDate) {
+            resumes.push({
+              ...meta,
+              fileType: meta.fileType || 'docx', // Default to docx for backwards compatibility
+              fileData: base64Data,
+            });
+          } else {
+            console.warn('Resume metadata is incomplete for:', meta.name || meta.id, 'skipping...');
+          }
+        } else {
+          console.warn('No file data found for resume:', meta.name, 'ID:', meta.id, 'removing metadata...');
+          // Clean up orphaned metadata
+          const cleanupTransaction = this.db!.transaction([RESUME_STORE], "readwrite");
+          const cleanupStore = cleanupTransaction.objectStore(RESUME_STORE);
+          cleanupStore.delete(meta.id);
+        }
+      } catch (error) {
+        console.error('Error loading resume:', meta.name || meta.id, error);
+        // Continue with other resumes
       }
     }
 
@@ -205,14 +234,43 @@ class IndexedDBStorage {
 
     const metadataRequest = resumeStore.getAll();
     const pdfKeysRequest = pdfStore.getAllKeys();
+    const pdfDataRequest = pdfStore.getAll();
     
-    const metadata = await this.promisifyRequest(metadataRequest);
-    const pdfKeys = await this.promisifyRequest(pdfKeysRequest);
+    const metadata = await this.promisifyRequest<ResumeMetadata[]>(metadataRequest);
+    const pdfKeys = await this.promisifyRequest<string[]>(pdfKeysRequest);
+    const pdfData = await this.promisifyRequest<FileData[]>(pdfDataRequest);
     
+    console.log('Database name:', this.db.name);
+    console.log('Database version:', this.db.version);
+    console.log('Object stores:', Array.from(this.db.objectStoreNames));
     console.log('Resume metadata count:', metadata.length);
     console.log('PDF data count:', pdfKeys.length);
-    console.log('Resume metadata:', metadata);
+    console.log('Resume metadata:', metadata.map(m => ({ 
+      id: m.id, 
+      name: m.name, 
+      fileName: m.fileName,
+      fileSize: m.fileSize,
+      uploadDate: m.uploadDate,
+      hasTextContent: !!m.textContent 
+    })));
     console.log('PDF keys:', pdfKeys);
+    console.log('PDF data sizes:', pdfData.map(p => ({ 
+      id: p.id, 
+      dataSize: p.data?.byteLength || 0 
+    })));
+    
+    // Check for orphaned data
+    const metadataIds = new Set(metadata.map(m => m.id));
+    const pdfIds = new Set(pdfKeys);
+    const orphanedMetadata = [...metadataIds].filter(id => !pdfIds.has(id));
+    const orphanedPdfs = [...pdfIds].filter(id => !metadataIds.has(id));
+    
+    if (orphanedMetadata.length > 0) {
+      console.warn('Orphaned metadata (no corresponding file data):', orphanedMetadata);
+    }
+    if (orphanedPdfs.length > 0) {
+      console.warn('Orphaned file data (no corresponding metadata):', orphanedPdfs);
+    }
     
     console.log('=== End Debug Info ===');
   }
@@ -275,10 +333,23 @@ export async function saveState(state: AppState): Promise<void> {
   }
 
   try {
-    // Clear existing data and save all resumes
-    await storage.clear();
+    // Get current resumes from IndexedDB to compare
+    const currentResumes = await storage.loadResumes();
+    const currentIds = new Set(currentResumes.map(r => r.id));
+    const newIds = new Set(state.resumes.map(r => r.id));
+    
+    // Delete resumes that are no longer in the state
+    for (const currentResume of currentResumes) {
+      if (!newIds.has(currentResume.id)) {
+        await storage.deleteResume(currentResume.id);
+      }
+    }
+    
+    // Save new or updated resumes
     for (const resume of state.resumes) {
-      await storage.saveResume(resume);
+      if (!currentIds.has(resume.id)) {
+        await storage.saveResume(resume);
+      }
     }
   } catch (error) {
     console.error("Failed to save state to IndexedDB", error);
@@ -319,5 +390,15 @@ export async function debugIndexedDB(): Promise<void> {
     await storage.debug();
   } catch (error) {
     console.error('Error debugging IndexedDB:', error);
+  }
+}
+
+// Utility function for clearing all data (for debugging)
+export async function clearAllData(): Promise<void> {
+  try {
+    await storage.clear();
+    console.log('All data cleared from IndexedDB');
+  } catch (error) {
+    console.error('Error clearing IndexedDB:', error);
   }
 }
