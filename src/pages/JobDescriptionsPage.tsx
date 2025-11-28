@@ -32,6 +32,8 @@ const JobDescriptionsPage: React.FC = () => {
   const [generationType, setGenerationType] = useState<'resume' | 'cover_letter'>('resume');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [isGeneratingResume, setIsGeneratingResume] = useState(false);
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
 
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
@@ -251,6 +253,7 @@ const JobDescriptionsPage: React.FC = () => {
       return;
     }
 
+    setIsGeneratingResume(true);
     setGenerationType('resume');
     setGeneratedTitle('Generated Resume');
     setGeneratedDefaultName(`Resume - ${jobDescription.company} - ${jobDescription.title}`);
@@ -284,6 +287,7 @@ const JobDescriptionsPage: React.FC = () => {
       setGenerationError(error instanceof Error ? error.message : 'Unknown error occurred');
     } finally {
       setIsGenerating(false);
+      setIsGeneratingResume(false);
     }
   };
 
@@ -294,6 +298,7 @@ const JobDescriptionsPage: React.FC = () => {
       return;
     }
 
+    setIsGeneratingCoverLetter(true);
     setGenerationType('cover_letter');
     setGeneratedTitle('Generated Cover Letter');
     setGeneratedDefaultName(`Cover Letter - ${jobDescription.company} - ${jobDescription.title}`);
@@ -327,6 +332,7 @@ const JobDescriptionsPage: React.FC = () => {
       setGenerationError(error instanceof Error ? error.message : 'Unknown error occurred');
     } finally {
       setIsGenerating(false);
+      setIsGeneratingCoverLetter(false);
     }
   };
 
@@ -600,20 +606,36 @@ const JobDescriptionsPage: React.FC = () => {
                     <button
                       className="generate-button generate-resume"
                       onClick={() => handleGenerateResume(selectedJob)}
-                      disabled={isGenerating}
+                      disabled={isGeneratingResume || isGeneratingCoverLetter}
                     >
-                      🤖 Generate Resume
+                      {isGeneratingResume ? (
+                        <>
+                          <div className="button-spinner"></div>
+                          Generating Resume...
+                        </>
+                      ) : (
+                        <>🤖 Generate Resume</>
+                      )}
                     </button>
                     <button
                       className="generate-button generate-cover-letter"
                       onClick={() => handleGenerateCoverLetter(selectedJob)}
-                      disabled={isGenerating}
+                      disabled={isGeneratingResume || isGeneratingCoverLetter}
                     >
-                      🤖 Generate Cover Letter
+                      {isGeneratingCoverLetter ? (
+                        <>
+                          <div className="button-spinner"></div>
+                          Generating Cover Letter...
+                        </>
+                      ) : (
+                        <>🤖 Generate Cover Letter</>
+                      )}
                     </button>
                   </div>
                   <p className="generation-description">
                     Generate tailored documents using AI based on this job description and your existing content chunks.
+                    <br />
+                    <strong>💾 Generated documents will be saved to your Resume/Cover Letter library and automatically linked to this job.</strong>
                   </p>
                 </div>
 

@@ -832,7 +832,7 @@ export async function generateTailoredResume(
 
   const config = getAIConfig();
   
-  const prompt = `You are an expert resume writer. Generate a complete, professional resume tailored to the specific job description provided. Use the relevant resume chunks and additional context to create a compelling, ATS-friendly resume.
+  const prompt = `You are an expert resume writer. Generate a complete, professional resume using the following template structure. Tailor all content to the specific job description and use the provided resume chunks.
 
 JOB DESCRIPTION:
 Company: ${jobDescription.company}
@@ -849,9 +849,6 @@ ${jobDescription.extractedInfo.requirements.map(req => `- ${req}`).join('\n')}
 Key Responsibilities:
 ${jobDescription.extractedInfo.responsibilities.map(resp => `- ${resp}`).join('\n')}
 
-Full Job Description:
-${jobDescription.rawText}
-
 ${jobDescription.additionalContext ? `Additional Context: ${jobDescription.additionalContext}` : ''}
 
 RELEVANT RESUME CHUNKS (ordered by relevance):
@@ -862,17 +859,43 @@ ${item.chunk.text}
 
 ${additionalContext ? `ADDITIONAL CONTEXT:\n${additionalContext}` : ''}
 
-INSTRUCTIONS:
-1. Generate a complete, professional resume in a clean, readable format
-2. Prioritize the most relevant experience and skills from the chunks
-3. Tailor the content to match the job requirements and keywords
-4. Use quantifiable achievements when available
-5. Ensure ATS compatibility
-6. Use professional language and industry terminology
-7. Structure the resume logically (Header, Summary, Skills, Experience, etc.)
-8. Make sure to highlight skills and experience that directly match the job requirements
+RESUME TEMPLATE TO FOLLOW:
 
-Please generate the complete resume content now:`;
+[FULL NAME]
+[Email] | [Phone] | [City, State] | [LinkedIn URL]
+
+PROFESSIONAL SUMMARY
+[3-4 lines highlighting relevant experience, key skills matching the job, and value proposition]
+
+CORE COMPETENCIES
+• [Skill 1] • [Skill 2] • [Skill 3] • [Skill 4]
+• [Skill 5] • [Skill 6] • [Skill 7] • [Skill 8]
+
+PROFESSIONAL EXPERIENCE
+
+[Job Title] | [Company Name] | [Location] | [Date Range]
+• [Achievement-focused bullet with quantifiable results]
+• [Bullet highlighting relevant skills for target role]
+• [Bullet showing leadership/impact using action verbs]
+
+[Job Title] | [Company Name] | [Location] | [Date Range]
+• [Achievement-focused bullet with quantifiable results]
+• [Bullet highlighting relevant skills for target role]
+• [Bullet showing leadership/impact using action verbs]
+
+EDUCATION
+[Degree] in [Field] | [University Name] | [Location] | [Year]
+
+INSTRUCTIONS:
+1. Use the template structure above exactly
+2. Fill in content from the relevant chunks provided
+3. Prioritize skills and experience that match the job requirements
+4. Use action verbs and quantifiable achievements
+5. Ensure ATS compatibility with clean formatting
+6. Match keywords from the job description naturally
+7. Keep bullets concise but impactful (1-2 lines each)
+
+Generate the complete tailored resume now:`;
 
   try {
     const response = await fetch(config.apiUrl!, {
@@ -928,7 +951,7 @@ export async function generateTailoredCoverLetter(
 
   const config = getAIConfig();
   
-  const prompt = `You are an expert cover letter writer. Generate a compelling, personalized cover letter tailored to the specific job description provided. Use the relevant resume/cover letter chunks and additional context to create a persuasive application letter.
+  const prompt = `You are an expert cover letter writer. Generate a compelling, personalized cover letter using the following professional template structure. Tailor all content to the specific job description and use the provided content chunks.
 
 JOB DESCRIPTION:
 Company: ${jobDescription.company}
@@ -945,9 +968,6 @@ ${jobDescription.extractedInfo.requirements.map(req => `- ${req}`).join('\n')}
 Key Responsibilities:
 ${jobDescription.extractedInfo.responsibilities.map(resp => `- ${resp}`).join('\n')}
 
-Full Job Description:
-${jobDescription.rawText}
-
 ${jobDescription.additionalContext ? `Additional Context: ${jobDescription.additionalContext}` : ''}
 
 RELEVANT CONTENT CHUNKS (ordered by relevance):
@@ -958,19 +978,42 @@ ${item.chunk.text}
 
 ${additionalContext ? `ADDITIONAL CONTEXT:\n${additionalContext}` : ''}
 
-INSTRUCTIONS:
-1. Generate a complete, professional cover letter (3-4 paragraphs)
-2. Open with a strong, engaging introduction that mentions the specific role
-3. Highlight relevant experience and achievements from the chunks that match job requirements
-4. Demonstrate knowledge of the company and role (use additional context if available)
-5. Show enthusiasm and cultural fit
-6. Include specific examples and quantifiable achievements when possible
-7. Close with a strong call to action
-8. Use professional, engaging language
-9. Ensure the letter flows naturally and tells a compelling story
-10. Match keywords from the job description naturally
+COVER LETTER TEMPLATE TO FOLLOW:
 
-Please generate the complete cover letter content now:`;
+[Date]
+
+[Hiring Manager Name]
+[Company Name]
+[Company Address]
+
+Dear [Hiring Manager/Hiring Team],
+
+OPENING PARAGRAPH:
+I am writing to express my strong interest in the [Job Title] position at [Company Name]. With [X years] of experience in [relevant field], I am excited about the opportunity to contribute to [company's mission/specific project/team]. [Brief connection to company or role-specific hook].
+
+BODY PARAGRAPH 1 - RELEVANT EXPERIENCE:
+In my role as [Previous Title] at [Previous Company], I [specific achievement that matches job requirements with quantifiable results]. This experience has given me [relevant skills that match job description]. For example, [specific example from chunks that demonstrates required skills].
+
+BODY PARAGRAPH 2 - VALUE PROPOSITION:
+What particularly excites me about this opportunity is [specific aspect of role/company from job description]. My background in [relevant area] and proven ability to [specific skill from job requirements] would enable me to [how you'd add value]. [Another relevant achievement/skill from chunks].
+
+CLOSING PARAGRAPH:
+I would welcome the opportunity to discuss how my experience with [key skills/areas] can contribute to [company name]'s continued success. Thank you for your consideration, and I look forward to hearing from you.
+
+Sincerely,
+[Your Name]
+
+INSTRUCTIONS:
+1. Follow the template structure exactly
+2. Use content from the relevant chunks to fill in specific achievements and examples
+3. Match keywords from the job description naturally
+4. Show genuine enthusiasm for the role and company
+5. Include quantifiable achievements where possible
+6. Ensure the letter flows naturally and tells a compelling story
+7. Keep paragraphs concise but impactful
+8. Maintain professional tone throughout
+
+Generate the complete tailored cover letter now:`;
 
   try {
     const response = await fetch(config.apiUrl!, {
