@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Resume, CoverLetter, AppState } from "../types";
 import { saveResume, saveCoverLetter, debugIndexedDB, clearAllData } from "../storage";
+import { checkForDuplicates } from "../utils/duplicateChecker";
 import { formatFileSize, extractTextFromDocument } from "../utils/documentUtils";
 
 interface FileUploadSectionProps {
@@ -129,6 +130,35 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
         // Analyze filename for document type, company, and job role
         const analysis = analyzeFilename(file.name);
         let { documentType, companyName, jobRole } = analysis;
+
+        // Check for duplicates before processing
+        const duplicateCheck = await checkForDuplicates(file.name, file.size, base64, documentType);
+
+        if (duplicateCheck.isDuplicate && duplicateCheck.duplicateInfo) {
+          const { type, existingFile } = duplicateCheck.duplicateInfo;
+          let duplicateMessage = '';
+
+          switch (type) {
+            case 'filename':
+              duplicateMessage = `A file with the same name "${file.name}" already exists (uploaded ${new Date(existingFile.uploadDate).toLocaleDateString()}).`;
+              break;
+            case 'content':
+              duplicateMessage = `This file appears to be identical to "${existingFile.fileName}" (uploaded ${new Date(existingFile.uploadDate).toLocaleDateString()}).`;
+              break;
+            case 'size_and_name':
+              duplicateMessage = `A file with similar name and identical size already exists: "${existingFile.fileName}" (uploaded ${new Date(existingFile.uploadDate).toLocaleDateString()}).`;
+              break;
+          }
+
+          const shouldContinue = confirm(`⚠️ Possible Duplicate Detected\n\n${duplicateMessage}\n\nDo you want to upload this file anyway?`);
+
+          if (!shouldContinue) {
+            console.log(`Skipping duplicate file: ${file.name}`);
+            continue;
+          } else {
+            console.log(`User chose to upload potential duplicate: ${file.name}`);
+          }
+        }
 
         const detectedParts = [];
         if (companyName) detectedParts.push(`Company: ${companyName}`);

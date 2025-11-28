@@ -29,6 +29,27 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
   // Combine all documents for filtering
   const allDocuments: Document[] = [...resumes, ...coverLetters];
 
+  // Chunk type options for filtering
+  const chunkTypeOptions: (ChunkType | 'all')[] = [
+    'all',
+    // Resume chunk types
+    'cv_header',
+    'cv_summary',
+    'cv_skills',
+    'cv_experience_section',
+    'cv_experience_bullet',
+    'cv_mission_fit',
+    // Cover letter chunk types
+    'cl_intro',
+    'cl_body',
+    'cl_closing',
+    'cl_company_research',
+    'cl_skill_demonstration',
+    'cl_achievement_claim',
+    'cl_motivation_statement',
+    'cl_experience_mapping'
+  ];
+
   // Load all chunks on component mount
   useEffect(() => {
     loadAllChunks();
@@ -230,26 +251,6 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
     return 'Unknown Document';
   };
 
-  const chunkTypeOptions: (ChunkType | 'all')[] = [
-    'all',
-    // Resume chunk types
-    'cv_header',
-    'cv_summary',
-    'cv_skills',
-    'cv_experience_section',
-    'cv_experience_bullet',
-    'cv_mission_fit',
-    // Cover letter chunk types
-    'cl_intro',
-    'cl_body',
-    'cl_closing',
-    'cl_company_research',
-    'cl_skill_demonstration',
-    'cl_achievement_claim',
-    'cl_motivation_statement',
-    'cl_experience_mapping'
-  ];
-
   if (loading) {
     return (
       <div className="page-card" style={{ textAlign: 'center', padding: '3rem' }}>
@@ -334,6 +335,51 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
         <p style={{ color: '#666', marginBottom: '1.5rem' }}>
           Manage and organize your parsed resume chunks. Total: {chunks.length} chunks
         </p>
+
+        {/* Debug: Show actual chunk types in database */}
+        {(() => {
+          const uniqueTypes = [...new Set(chunks.map(chunk => chunk.type))];
+          const expectedTypes = chunkTypeOptions.slice(1); // excluding 'all'
+          const unexpectedTypes = uniqueTypes.filter(type => !expectedTypes.includes(type as ChunkType));
+
+          if (unexpectedTypes.length > 0) {
+            return (
+              <div style={{
+                marginBottom: '1.5rem',
+                padding: '1rem',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: '6px'
+              }}>
+                <p style={{ margin: '0 0 0.5rem 0', fontWeight: '600', color: '#92400e' }}>
+                  ⚠️ Legacy chunk types detected
+                </p>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', color: '#92400e' }}>
+                  Found unexpected chunk types: {unexpectedTypes.join(', ')}
+                </p>
+                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.875rem', color: '#92400e' }}>
+                  These need to be migrated to work with the type filter.
+                </p>
+                <button
+                  onClick={handleMigrateChunks}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: 'none',
+                    borderRadius: '4px',
+                    backgroundColor: '#f59e0b',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '600'
+                  }}
+                >
+                  Migrate Chunk Types
+                </button>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Filters and Sorting */}
         <div style={{
