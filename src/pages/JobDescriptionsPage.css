@@ -284,6 +284,31 @@
   color: #333;
 }
 
+.job-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.edit-button {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.edit-button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.edit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .delete-button {
   background: #dc3545;
   color: white;
@@ -320,12 +345,14 @@
 
 /* Info Sections */
 .job-info-section,
+.additional-context-section,
 .resume-matching-section,
 .keywords-section {
   margin-bottom: 30px;
 }
 
 .job-info-section h3,
+.additional-context-section h3,
 .resume-matching-section h3,
 .keywords-section h3 {
   margin: 0 0 15px 0;
@@ -364,6 +391,52 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.context-content {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+  margin-top: 8px;
+}
+
+.context-content p {
+  margin: 0;
+  color: #495057;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.job-url-section {
+  margin: 15px 0;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+}
+
+.job-url-section strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #555;
+}
+
+.job-url-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.job-url-link:hover {
+  background: #e3f2fd;
+  text-decoration: underline;
 }
 
 .skill-tag {

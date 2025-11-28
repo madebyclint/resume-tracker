@@ -14,12 +14,36 @@ const JobDescriptionsPage: React.FC = () => {
   const [formData, setFormData] = useState({
     title: '',
     company: '',
-    rawText: ''
+    url: '',
+    rawText: '',
+    additionalContext: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
 
-  const handleAddJobDescription = async () => {
+  const handleEditJobDescription = (jobId: string) => {
+    const job = state.jobDescriptions.find(jd => jd.id === jobId);
+    if (!job) return;
+
+    setFormData({
+      title: job.title,
+      company: job.company,
+      url: job.url || '',
+      rawText: job.rawText,
+      additionalContext: job.additionalContext || ''
+    });
+    setEditingJobId(jobId);
+    setShowAddForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingJobId(null);
+    setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '' });
+    setShowAddForm(false);
+  };
+
+  const handleSaveJobDescription = async () => {
     if (!formData.title.trim() || !formData.company.trim() || !formData.rawText.trim()) {
       alert('Please fill in all required fields');
       return;
@@ -28,46 +52,85 @@ const JobDescriptionsPage: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      // Parse job description with AI
-      const parseResult = await parseJobDescription(formData.rawText);
+      // Parse job description with AI (only if text has changed or it's a new job)
+      const isEditing = editingJobId !== null;
+      const existingJob = isEditing ? state.jobDescriptions.find(jd => jd.id === editingJobId) : null;
+
+      let parseResult = null;
+      if (!isEditing || (existingJob && existingJob.rawText !== formData.rawText.trim())) {
+        parseResult = await parseJobDescription(formData.rawText);
+      }
 
       // Use AI-extracted info to fill in missing fields if available
-      const finalTitle = formData.title.trim() || parseResult.extractedInfo.role || 'Untitled Position';
-      const finalCompany = formData.company.trim() || parseResult.extractedInfo.company || 'Unknown Company';
+      const finalTitle = formData.title.trim();
+      const finalCompany = formData.company.trim();
 
-      // Create job description object
-      const newJobDescription: JobDescription = {
-        id: crypto.randomUUID(),
-        title: finalTitle,
-        company: finalCompany,
-        rawText: formData.rawText.trim(),
-        extractedInfo: parseResult.extractedInfo,
-        keywords: parseResult.keywords,
-        uploadDate: new Date().toISOString(),
-        linkedResumeIds: [],
-        linkedCoverLetterIds: [],
-        applicationStatus: 'not_applied'
-      };
+      if (isEditing && existingJob) {
+        // Update existing job description
+        const updatedJobDescription: JobDescription = {
+          ...existingJob,
+          title: finalTitle,
+          company: finalCompany,
+          url: formData.url.trim() || undefined,
+          rawText: formData.rawText.trim(),
+          additionalContext: formData.additionalContext.trim() || undefined,
+          // Only update AI-extracted info if we re-parsed
+          ...(parseResult && {
+            extractedInfo: parseResult.extractedInfo,
+            keywords: parseResult.keywords
+          })
+        };
 
-      // Save to storage
-      await saveJobDescription(newJobDescription);
+        await saveJobDescription(updatedJobDescription);
 
-      // Update app state
-      setState(prev => ({
-        ...prev,
-        jobDescriptions: [...prev.jobDescriptions, newJobDescription]
-      }));
+        setState(prev => ({
+          ...prev,
+          jobDescriptions: prev.jobDescriptions.map(jd =>
+            jd.id === editingJobId ? updatedJobDescription : jd
+          )
+        }));
+
+        setEditingJobId(null);
+      } else {
+        // Create new job description
+        const newJobDescription: JobDescription = {
+          id: crypto.randomUUID(),
+          title: finalTitle,
+          company: finalCompany,
+          url: formData.url.trim() || undefined,
+          rawText: formData.rawText.trim(),
+          additionalContext: formData.additionalContext.trim() || undefined,
+          extractedInfo: parseResult?.extractedInfo || {
+            requiredSkills: [],
+            preferredSkills: [],
+            responsibilities: [],
+            requirements: []
+          },
+          keywords: parseResult?.keywords || [],
+          uploadDate: new Date().toISOString(),
+          linkedResumeIds: [],
+          linkedCoverLetterIds: [],
+          applicationStatus: 'not_applied'
+        };
+
+        await saveJobDescription(newJobDescription);
+
+        setState(prev => ({
+          ...prev,
+          jobDescriptions: [...prev.jobDescriptions, newJobDescription]
+        }));
+      }
 
       // Reset form
-      setFormData({ title: '', company: '', rawText: '' });
+      setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '' });
       setShowAddForm(false);
 
-      if (!parseResult.success && parseResult.error) {
+      if (parseResult && !parseResult.success && parseResult.error) {
         alert(`Job description saved, but AI parsing failed: ${parseResult.error}`);
       }
 
     } catch (error) {
-      console.error('Error adding job description:', error);
+      console.error('Error saving job description:', error);
       alert('Failed to save job description. Please try again.');
     } finally {
       setIsProcessing(false);
@@ -188,7 +251,7 @@ const JobDescriptionsPage: React.FC = () => {
 
       {showAddForm && (
         <div className="add-job-form">
-          <h2>Add New Job Description</h2>
+          <h2>{editingJobId ? 'Edit Job Description' : 'Add New Job Description'}</h2>
           <div className="form-grid">
             <div className="form-group">
               <label htmlFor="job-title">Job Title *</label>
@@ -214,6 +277,17 @@ const JobDescriptionsPage: React.FC = () => {
             </div>
           </div>
           <div className="form-group">
+            <label htmlFor="job-url">Job Listing URL (Optional)</label>
+            <input
+              id="job-url"
+              type="url"
+              value={formData.url}
+              onChange={(e) => setFormData(prev => ({ ...prev, url: e.target.value }))}
+              placeholder="https://company.com/careers/job-id"
+              disabled={isProcessing}
+            />
+          </div>
+          <div className="form-group">
             <label htmlFor="job-description">Job Description Text *</label>
             <textarea
               id="job-description"
@@ -224,20 +298,34 @@ const JobDescriptionsPage: React.FC = () => {
               disabled={isProcessing}
             />
           </div>
+          <div className="form-group">
+            <label htmlFor="additional-context">Additional Context (Optional)</label>
+            <textarea
+              id="additional-context"
+              value={formData.additionalContext}
+              onChange={(e) => setFormData(prev => ({ ...prev, additionalContext: e.target.value }))}
+              placeholder="Add any additional context that will help generate resumes and cover letters (e.g., bio info, recommendations, ChatGPT summaries, company insights, etc.)"
+              rows={6}
+              disabled={isProcessing}
+            />
+            <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+              This context will be used when generating tailored resumes and cover letters for this position.
+            </small>
+          </div>
           <div className="form-actions">
             <button
-              onClick={() => setShowAddForm(false)}
+              onClick={handleCancelEdit}
               disabled={isProcessing}
               className="cancel-button"
             >
               Cancel
             </button>
             <button
-              onClick={handleAddJobDescription}
+              onClick={handleSaveJobDescription}
               disabled={isProcessing}
               className="save-button"
             >
-              {isProcessing ? 'Processing...' : 'Save & Parse with AI'}
+              {isProcessing ? 'Processing...' : editingJobId ? 'Update Job Description' : 'Save & Parse with AI'}
             </button>
           </div>
         </div>
@@ -279,12 +367,21 @@ const JobDescriptionsPage: React.FC = () => {
               <div className="job-details">
                 <div className="job-details-header">
                   <h2>{selectedJob.title}</h2>
-                  <button
-                    className="delete-button"
-                    onClick={() => handleDeleteJobDescription(selectedJob.id)}
-                  >
-                    Delete
-                  </button>
+                  <div className="job-actions">
+                    <button
+                      className="edit-button"
+                      onClick={() => handleEditJobDescription(selectedJob.id)}
+                      disabled={showAddForm}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="delete-button"
+                      onClick={() => handleDeleteJobDescription(selectedJob.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
 
                 <div className="status-selector">
@@ -318,6 +415,20 @@ const JobDescriptionsPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {selectedJob.url && (
+                    <div className="job-url-section">
+                      <strong>Job Listing:</strong>
+                      <a
+                        href={selectedJob.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="job-url-link"
+                      >
+                        View Original Posting ↗
+                      </a>
+                    </div>
+                  )}
+
                   {selectedJob.extractedInfo.requiredSkills.length > 0 && (
                     <div className="skills-section">
                       <strong>Required Skills:</strong>
@@ -341,6 +452,15 @@ const JobDescriptionsPage: React.FC = () => {
                   )}
                 </div>
 
+                {selectedJob.additionalContext && (
+                  <div className="additional-context-section">
+                    <h3>Additional Context</h3>
+                    <div className="context-content">
+                      <p>{selectedJob.additionalContext}</p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="resume-matching-section">
                   <h3>Document Matching</h3>
                   {documentMatches.length > 0 ? (
@@ -359,8 +479,8 @@ const JobDescriptionsPage: React.FC = () => {
                             </span>
                             <button
                               className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                  (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
-                                  ? 'linked' : ''
+                                (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
+                                ? 'linked' : ''
                                 }`}
                               onClick={() => {
                                 if (match.documentType === 'resume') {

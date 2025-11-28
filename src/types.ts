@@ -30,7 +30,9 @@ export interface JobDescription {
   id: string;
   title: string;
   company: string;
+  url?: string; // URL of the original job listing
   rawText: string; // original pasted job description
+  additionalContext?: string; // optional additional context for resume/cover letter generation
   extractedInfo: {
     role?: string;
     company?: string;
