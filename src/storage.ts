@@ -841,3 +841,59 @@ export async function exportChunksAsJSON(): Promise<string> {
     throw error;
   }
 }
+
+// Migration function to update legacy chunk types and tags
+export async function migrateChunkTypesAndTags(): Promise<{ updated: number; total: number }> {
+  try {
+    const chunks = await storage.getAllChunks();
+    let updatedCount = 0;
+
+    const chunkTypeMap: Record<string, string> = {
+      // Legacy resume types -> new resume types
+      'header': 'cv_header',
+      'summary': 'cv_summary',
+      'skills': 'cv_skills',
+      'experience_section': 'cv_experience_section',
+      'experience_bullet': 'cv_experience_bullet',
+      'mission_fit': 'cv_mission_fit',
+      // Legacy cover letter types -> new cover letter types
+      'cover_letter_intro': 'cl_intro',
+      'cover_letter_body': 'cl_body',
+      'cover_letter_closing': 'cl_closing',
+      'company_research': 'cl_company_research',
+      'skill_demonstration': 'cl_skill_demonstration',
+      'achievement_claim': 'cl_achievement_claim',
+      'motivation_statement': 'cl_motivation_statement',
+      'experience_mapping': 'cl_experience_mapping'
+    };
+
+    for (const chunk of chunks) {
+      const newType = chunkTypeMap[chunk.type];
+      if (newType) {
+        // Update chunk type
+        const updatedChunk = { ...chunk, type: newType as any };
+        
+        // Update tags to include proper prefixes
+        const isResumeType = newType.startsWith('cv_');
+        const prefix = isResumeType ? 'Resume:' : 'Cover Letter:';
+        
+        updatedChunk.tags = chunk.tags.map(tag => {
+          // Skip if already has proper prefix
+          if (tag.startsWith('Resume:') || tag.startsWith('Cover Letter:')) {
+            return tag;
+          }
+          return `${prefix} ${tag}`;
+        });
+
+        // Save the updated chunk
+        await storage.updateChunk(updatedChunk);
+        updatedCount++;
+      }
+    }
+
+    return { updated: updatedCount, total: chunks.length };
+  } catch (error) {
+    console.error("Failed to migrate chunk types and tags:", error);
+    throw error;
+  }
+}

@@ -39,20 +39,22 @@ export function isCoverLetter(doc: Document): doc is CoverLetter {
 }
 
 export type ChunkType = 
-  | 'header'
-  | 'summary'
-  | 'skills' 
-  | 'experience_section'
-  | 'experience_bullet'
-  | 'mission_fit'
-  | 'cover_letter_intro'
-  | 'cover_letter_body'
-  | 'cover_letter_closing'
-  | 'company_research'
-  | 'skill_demonstration'
-  | 'achievement_claim'
-  | 'motivation_statement'
-  | 'experience_mapping';
+  // Resume chunk types
+  | 'cv_header'
+  | 'cv_summary'
+  | 'cv_skills' 
+  | 'cv_experience_section'
+  | 'cv_experience_bullet'
+  | 'cv_mission_fit'
+  // Cover letter chunk types
+  | 'cl_intro'
+  | 'cl_body'
+  | 'cl_closing'
+  | 'cl_company_research'
+  | 'cl_skill_demonstration'
+  | 'cl_achievement_claim'
+  | 'cl_motivation_statement'
+  | 'cl_experience_mapping';
 
 // Semantic relationships for cover letters
 export interface SemanticRelationship {

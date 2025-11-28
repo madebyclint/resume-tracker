@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Chunk, Resume, CoverLetter, ChunkType, Document, isResume, isCoverLetter } from '../types';
-import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks, exportChunksAsJSON, exportAllDataAsJSON } from '../storage';
+import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks, exportChunksAsJSON, exportAllDataAsJSON, migrateChunkTypesAndTags } from '../storage';
 import { getChunkTypeLabel } from '../utils/aiService';
 
 interface ChunkLibraryPageProps {
@@ -200,6 +200,23 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
     }
   };
 
+  const handleMigrateChunks = async () => {
+    if (!confirm('This will update all existing chunks to use the new chunk type system (cv_ for resumes, cl_ for cover letters) and add proper tag prefixes. Continue?')) {
+      return;
+    }
+
+    try {
+      const result = await migrateChunkTypesAndTags();
+      alert(`✅ Migration complete! Updated ${result.updated} out of ${result.total} chunks.`);
+
+      // Reload chunks to see the changes
+      loadAllChunks();
+    } catch (error) {
+      console.error('Failed to migrate chunks:', error);
+      alert('Failed to migrate chunks. Please try again.');
+    }
+  };
+
   const handleCancelEdit = () => {
     setEditingChunk(null);
   };
@@ -215,20 +232,22 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
 
   const chunkTypeOptions: (ChunkType | 'all')[] = [
     'all',
-    'header',
-    'summary',
-    'skills',
-    'experience_section',
-    'experience_bullet',
-    'mission_fit',
-    'cover_letter_intro',
-    'cover_letter_body',
-    'cover_letter_closing',
-    'company_research',
-    'skill_demonstration',
-    'achievement_claim',
-    'motivation_statement',
-    'experience_mapping'
+    // Resume chunk types
+    'cv_header',
+    'cv_summary',
+    'cv_skills',
+    'cv_experience_section',
+    'cv_experience_bullet',
+    'cv_mission_fit',
+    // Cover letter chunk types
+    'cl_intro',
+    'cl_body',
+    'cl_closing',
+    'cl_company_research',
+    'cl_skill_demonstration',
+    'cl_achievement_claim',
+    'cl_motivation_statement',
+    'cl_experience_mapping'
   ];
 
   if (loading) {
@@ -277,6 +296,22 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
                 title="Export all data (resumes + chunks) as JSON backup file"
               >
                 📦 Export All Data
+              </button>
+              <button
+                onClick={handleMigrateChunks}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#f59e0b',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: '600'
+                }}
+                title="Update existing chunks to new type system (cv_/cl_ prefixes)"
+              >
+                🔄 Migrate Chunks
               </button>
               <button
                 onClick={handleDeleteAllChunks}

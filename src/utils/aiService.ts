@@ -50,11 +50,11 @@ export function getConfigurationStatus(): { configured: boolean; message: string
 const RESUME_CHUNKING_PROMPT = `You are an expert resume parser. Your task is to analyze the provided resume text and break it down into semantic chunks for use in resume building.
 
 Parse the text into the following chunk types:
-- "summary": Professional summary or objective statements
-- "skills": Technical skills, soft skills, or competencies 
-- "experience_section": Job titles, company names, date ranges (headers of work experience)
-- "experience_bullet": Individual bullet points describing accomplishments or responsibilities
-- "mission_fit": Content about company culture fit, values alignment, or mission statements
+- "cv_summary": Professional summary or objective statements
+- "cv_skills": Technical skills, soft skills, or competencies 
+- "cv_experience_section": Job titles, company names, date ranges (headers of work experience)
+- "cv_experience_bullet": Individual bullet points describing accomplishments or responsibilities
+- "cv_mission_fit": Content about company culture fit, values alignment, or mission statements
 
 For each chunk, provide:
 - type: One of the chunk types above
@@ -73,9 +73,9 @@ Return ONLY a valid JSON object with this exact structure:
 {
   "chunks": [
     {
-      "type": "summary",
+      "type": "cv_summary",
       "text": "Results-driven software engineer...",
-      "tags": ["Software Engineering", "Leadership", "Problem Solving"],
+      "tags": ["Resume: Software Engineering", "Resume: Leadership", "Resume: Problem Solving"],
       "order": 1
     }
   ]
@@ -85,14 +85,14 @@ Return ONLY a valid JSON object with this exact structure:
 const COVER_LETTER_CHUNKING_PROMPT = `You are an expert cover letter analyzer specializing in semantic relationship extraction. Your task is to analyze cover letter text and extract semantically meaningful chunks with their relationships.
 
 Parse the text into semantic chunk types:
-- "company_research": Specific mentions or research about the target company
-- "skill_demonstration": Examples demonstrating specific skills or competencies
-- "achievement_claim": Quantified accomplishments or results
-- "motivation_statement": Expressions of interest, passion, or career goals
-- "experience_mapping": Connections between past experience and job requirements
-- "cover_letter_intro": Opening paragraphs and introductions
-- "cover_letter_body": Main narrative content
-- "cover_letter_closing": Closing statements and calls to action
+- "cl_company_research": Specific mentions or research about the target company
+- "cl_skill_demonstration": Examples demonstrating specific skills or competencies
+- "cl_achievement_claim": Quantified accomplishments or results
+- "cl_motivation_statement": Expressions of interest, passion, or career goals
+- "cl_experience_mapping": Connections between past experience and job requirements
+- "cl_intro": Opening paragraphs and introductions
+- "cl_body": Main narrative content
+- "cl_closing": Closing statements and calls to action
 
 For each chunk, provide:
 - type: One of the chunk types above
@@ -118,9 +118,9 @@ Return ONLY a valid JSON object with this structure:
 {
   "chunks": [
     {
-      "type": "company_research",
+      "type": "cl_company_research",
       "text": "I'm particularly drawn to TechCorp's mission to democratize AI and your recent Series B funding...",
-      "tags": ["Company Research", "AI", "Funding"],
+      "tags": ["Cover Letter: Company Research", "Cover Letter: AI", "Cover Letter: Funding"],
       "order": 1,
       "semanticRelationships": [
         {
@@ -321,20 +321,22 @@ export async function parseTextIntoChunks(text: string): Promise<ChunkParseResul
 // Helper function to validate chunk types
 export function isValidChunkType(type: string): type is ChunkType {
   const validTypes: ChunkType[] = [
-    'header',
-    'summary',
-    'skills', 
-    'experience_section',
-    'experience_bullet',
-    'mission_fit',
-    'cover_letter_intro',
-    'cover_letter_body',
-    'cover_letter_closing',
-    'company_research',
-    'skill_demonstration',
-    'achievement_claim',
-    'motivation_statement',
-    'experience_mapping'
+    // Resume chunk types
+    'cv_header',
+    'cv_summary',
+    'cv_skills', 
+    'cv_experience_section',
+    'cv_experience_bullet',
+    'cv_mission_fit',
+    // Cover letter chunk types
+    'cl_intro',
+    'cl_body',
+    'cl_closing',
+    'cl_company_research',
+    'cl_skill_demonstration',
+    'cl_achievement_claim',
+    'cl_motivation_statement',
+    'cl_experience_mapping'
   ];
   return validTypes.includes(type as ChunkType);
 }
@@ -509,9 +511,9 @@ export async function parseCoverLetterIntoChunks(text: string): Promise<ChunkPar
         const typedChunks = validChunks.map((chunk: any) => ({
           ...chunk,
           sourceDocType: 'cover_letter',
-          // Add "Cover Letter" prefix to tags to distinguish from resume content
+          // Add "Cover Letter:" prefix to tags to distinguish from resume content
           tags: chunk.tags.map((tag: string) => 
-            tag.toLowerCase().includes('cover letter') ? tag : `Cover Letter: ${tag}`
+            tag.toLowerCase().includes('cover letter:') ? tag : `Cover Letter: ${tag}`
           )
         }));      return {
         chunks: typedChunks,
@@ -550,22 +552,39 @@ export async function parseCoverLetterIntoChunks(text: string): Promise<ChunkPar
 }
 
 // Helper function to get human-readable chunk type names
-export function getChunkTypeLabel(type: ChunkType): string {
-  const labels: Record<ChunkType, string> = {
-    header: 'Header',
-    summary: 'Summary',
-    skills: 'Skills',
-    experience_section: 'Experience Section',
-    experience_bullet: 'Experience Bullet',
-    mission_fit: 'Mission Fit',
-    cover_letter_intro: 'Cover Letter Intro',
-    cover_letter_body: 'Cover Letter Body',
-    cover_letter_closing: 'Cover Letter Closing',
-    company_research: 'Company Research',
-    skill_demonstration: 'Skill Demonstration',
-    achievement_claim: 'Achievement Claim',
-    motivation_statement: 'Motivation Statement',
-    experience_mapping: 'Experience Mapping'
+export function getChunkTypeLabel(type: ChunkType | string): string {
+  const labels: Record<string, string> = {
+    // New Resume chunk types
+    cv_header: 'Resume: Header',
+    cv_summary: 'Resume: Summary',
+    cv_skills: 'Resume: Skills',
+    cv_experience_section: 'Resume: Experience Section',
+    cv_experience_bullet: 'Resume: Experience Bullet',
+    cv_mission_fit: 'Resume: Mission Fit',
+    // New Cover letter chunk types
+    cl_intro: 'Cover Letter: Intro',
+    cl_body: 'Cover Letter: Body',
+    cl_closing: 'Cover Letter: Closing',
+    cl_company_research: 'Cover Letter: Company Research',
+    cl_skill_demonstration: 'Cover Letter: Skill Demonstration',
+    cl_achievement_claim: 'Cover Letter: Achievement Claim',
+    cl_motivation_statement: 'Cover Letter: Motivation Statement',
+    cl_experience_mapping: 'Cover Letter: Experience Mapping',
+    // Legacy chunk types (backward compatibility)
+    header: 'Resume: Header',
+    summary: 'Resume: Summary',
+    skills: 'Resume: Skills',
+    experience_section: 'Resume: Experience Section',
+    experience_bullet: 'Resume: Experience Bullet',
+    mission_fit: 'Resume: Mission Fit',
+    cover_letter_intro: 'Cover Letter: Intro',
+    cover_letter_body: 'Cover Letter: Body',
+    cover_letter_closing: 'Cover Letter: Closing',
+    company_research: 'Cover Letter: Company Research',
+    skill_demonstration: 'Cover Letter: Skill Demonstration',
+    achievement_claim: 'Cover Letter: Achievement Claim',
+    motivation_statement: 'Cover Letter: Motivation Statement',
+    experience_mapping: 'Cover Letter: Experience Mapping'
   };
   return labels[type] || type;
 }
