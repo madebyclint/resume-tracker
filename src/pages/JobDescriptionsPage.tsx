@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription } from '../types';
-import { parseJobDescription, generateTailoredResume, generateTailoredCoverLetter, isAIConfigured } from '../utils/aiService';
+import { parseJobDescription, generateTailoredResume, generateTailoredCoverLetter, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured } from '../utils/aiService';
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
 import { findRelevantResumeChunks, findRelevantCoverLetterChunks } from '../utils/chunkMatcher';
@@ -34,6 +34,10 @@ const JobDescriptionsPage: React.FC = () => {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [isGeneratingResume, setIsGeneratingResume] = useState(false);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+
+  // Full text generation toggles
+  const [useFullTextForResume, setUseFullTextForResume] = useState(true);
+  const [useFullTextForCoverLetter, setUseFullTextForCoverLetter] = useState(true);
 
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
@@ -292,25 +296,38 @@ const JobDescriptionsPage: React.FC = () => {
     setShowGeneratedModal(true);
 
     try {
-      // Find relevant chunks
-      const relevantChunks = await findRelevantResumeChunks(jobDescription, 0.1, 15);
-      console.log('🎯 Found relevant resume chunks:', relevantChunks.map(c => ({ type: c.chunk.type, score: c.score })));
+      let result;
 
-      if (relevantChunks.length === 0) {
-        const { getAllChunks } = await import('../storage');
-        const allChunks = await getAllChunks();
-        const resumeTypes = ['cv_header', 'cv_summary', 'cv_skills', 'cv_experience_section', 'cv_experience_bullet', 'cv_mission_fit'];
-        const resumeChunks = allChunks.filter(chunk => resumeTypes.includes(chunk.type));
+      if (useFullTextForResume) {
+        // Generate from full resume text
+        console.log('🤖 Generating resume from full text...');
+        const fullResumeText = await getCombinedResumeText();
+        result = await generateTailoredResumeFromFullText(
+          jobDescription,
+          fullResumeText,
+          jobDescription.additionalContext
+        );
+      } else {
+        // Generate from chunks (original method)
+        console.log('🧩 Generating resume from chunks...');
+        const relevantChunks = await findRelevantResumeChunks(jobDescription, 0.1, 15);
+        console.log('🎯 Found relevant resume chunks:', relevantChunks.map(c => ({ type: c.chunk.type, score: c.score })));
 
-        throw new Error(`❌ No relevant resume chunks found!\n\nTotal chunks: ${allChunks.length}\nResume chunks: ${resumeChunks.length}\n\nPlease:\n1. Upload and process some resumes\n2. Ensure job description has clear keywords\n3. Check that your resume content matches the job requirements`);
+        if (relevantChunks.length === 0) {
+          const { getAllChunks } = await import('../storage');
+          const allChunks = await getAllChunks();
+          const resumeTypes = ['cv_header', 'cv_summary', 'cv_skills', 'cv_experience_section', 'cv_experience_bullet', 'cv_mission_fit'];
+          const resumeChunks = allChunks.filter(chunk => resumeTypes.includes(chunk.type));
+
+          throw new Error(`❌ No relevant resume chunks found!\n\nTotal chunks: ${allChunks.length}\nResume chunks: ${resumeChunks.length}\n\nPlease:\n1. Upload and process some resumes\n2. Ensure job description has clear keywords\n3. Check that your resume content matches the job requirements`);
+        }
+
+        result = await generateTailoredResume(
+          jobDescription,
+          relevantChunks,
+          jobDescription.additionalContext
+        );
       }
-
-      // Generate resume using AI
-      const result = await generateTailoredResume(
-        jobDescription,
-        relevantChunks,
-        jobDescription.additionalContext
-      );
 
       if (!result.success || !result.content) {
         throw new Error(result.error || 'Failed to generate resume');
@@ -356,19 +373,32 @@ const JobDescriptionsPage: React.FC = () => {
     setShowGeneratedModal(true);
 
     try {
-      // Find relevant chunks
-      const relevantChunks = await findRelevantCoverLetterChunks(jobDescription, 0.1, 15);
+      let result;
 
-      if (relevantChunks.length === 0) {
-        throw new Error('No relevant chunks found. Please ensure you have uploaded and processed some documents.');
+      if (useFullTextForCoverLetter) {
+        // Generate from full resume text
+        console.log('🤖 Generating cover letter from full text...');
+        const fullResumeText = await getCombinedResumeText();
+        result = await generateTailoredCoverLetterFromFullText(
+          jobDescription,
+          fullResumeText,
+          jobDescription.additionalContext
+        );
+      } else {
+        // Generate from chunks (original method)
+        console.log('🧩 Generating cover letter from chunks...');
+        const relevantChunks = await findRelevantCoverLetterChunks(jobDescription, 0.1, 15);
+
+        if (relevantChunks.length === 0) {
+          throw new Error('No relevant chunks found. Please ensure you have uploaded and processed some documents.');
+        }
+
+        result = await generateTailoredCoverLetter(
+          jobDescription,
+          relevantChunks,
+          jobDescription.additionalContext
+        );
       }
-
-      // Generate cover letter using AI
-      const result = await generateTailoredCoverLetter(
-        jobDescription,
-        relevantChunks,
-        jobDescription.additionalContext
-      );
 
       if (!result.success || !result.content) {
         throw new Error(result.error || 'Failed to generate cover letter');
@@ -782,8 +812,53 @@ const JobDescriptionsPage: React.FC = () => {
                       )}
                     </button>
                   </div>
+                  
+                  <div className="generation-options">
+                    <div className="generation-toggle">
+                      <label className="toggle-label">
+                        <input
+                          type="checkbox"
+                          checked={useFullTextForResume}
+                          onChange={(e) => setUseFullTextForResume(e.target.checked)}
+                          className="toggle-checkbox"
+                        />
+                        <span className="toggle-text">
+                          📄 Use Full Text Generation for Resume 
+                          <span className="toggle-badge">{useFullTextForResume ? 'ON' : 'OFF'}</span>
+                        </span>
+                      </label>
+                      <div className="toggle-description">
+                        {useFullTextForResume ? 
+                          'Generates from complete resume text for better context and flow' : 
+                          'Generates from relevant content chunks (original method)'
+                        }
+                      </div>
+                    </div>
+                    
+                    <div className="generation-toggle">
+                      <label className="toggle-label">
+                        <input
+                          type="checkbox"
+                          checked={useFullTextForCoverLetter}
+                          onChange={(e) => setUseFullTextForCoverLetter(e.target.checked)}
+                          className="toggle-checkbox"
+                        />
+                        <span className="toggle-text">
+                          📄 Use Full Text Generation for Cover Letter
+                          <span className="toggle-badge">{useFullTextForCoverLetter ? 'ON' : 'OFF'}</span>
+                        </span>
+                      </label>
+                      <div className="toggle-description">
+                        {useFullTextForCoverLetter ? 
+                          'Generates from complete resume text for better context and flow' : 
+                          'Generates from relevant content chunks (original method)'
+                        }
+                      </div>
+                    </div>
+                  </div>
+
                   <p className="generation-description">
-                    Generate tailored documents using AI based on this job description and your existing content chunks.
+                    Generate tailored documents using AI based on this job description and your existing content.
                     <br />
                     <strong>💾 Generated documents will be saved to your Resume/Cover Letter library and automatically linked to this job.</strong>
                   </p>

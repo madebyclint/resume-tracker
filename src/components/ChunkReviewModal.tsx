@@ -110,16 +110,16 @@ export default function ChunkReviewModal({
   const approvedCount = editableChunks.filter(chunk => chunk.approved).length;
   const totalCount = editableChunks.length;
 
-  const chunkTypeOptions: ChunkType[] = [
-    'header',
-    'summary',
-    'skills',
-    'experience_section',
-    'experience_bullet',
-    'mission_fit',
-    'cover_letter_intro',
-    'cover_letter_body',
-    'cover_letter_closing'
+  const resumeTypes = [
+    'cv_header',
+    'cv_summary',
+    'cv_skills',
+    'cv_experience_section',
+    'cv_experience_bullet',
+    'cv_mission_fit',
+    'cl_intro',
+    'cl_body',
+    'cl_closing'
   ];
 
   return (
@@ -273,7 +273,7 @@ export default function ChunkReviewModal({
                               borderRadius: '4px'
                             }}
                           >
-                            {chunkTypeOptions.map(type => (
+                            {resumeTypes.map(type => (
                               <option key={type} value={type}>
                                 {getChunkTypeLabel(type)}
                               </option>

@@ -204,7 +204,7 @@ function separateHeaderFromSummary(content: string[], startLine: number): Parsed
   // Create header section if we have header content
   if (headerLines.length > 0) {
     sections.push({
-      type: 'header',
+      type: 'cv_header',
       content: headerLines,
       startLine: startLine,
       endLine: headerEndLine
@@ -214,7 +214,7 @@ function separateHeaderFromSummary(content: string[], startLine: number): Parsed
   // Create summary section if we have summary content
   if (summaryLines.length > 0) {
     sections.push({
-      type: 'summary',
+      type: 'cv_summary',
       content: summaryLines,
       startLine: summaryStartLine,
       endLine: startLine + content.length - 1
@@ -243,10 +243,10 @@ function detectSectionHeader(line: string): ChunkType | null {
     
     // Map common words to chunk types
     const lowerLine = line.toLowerCase();
-    if (lowerLine.includes('skill')) return 'skills';
-    if (lowerLine.includes('experience') || lowerLine.includes('work')) return 'experience_section';
-    if (lowerLine.includes('education')) return 'experience_section'; // Treat education as experience for now
-    if (lowerLine.includes('project')) return 'experience_section';
+    if (lowerLine.includes('skill')) return 'cv_skills';
+    if (lowerLine.includes('experience') || lowerLine.includes('work')) return 'cv_experience_section';
+    if (lowerLine.includes('education')) return 'cv_experience_section'; // Treat education as experience for now
+    if (lowerLine.includes('project')) return 'cv_experience_section';
   }
 
   return null;
@@ -260,37 +260,37 @@ function sectionsToChunks(sections: ParsedSection[], allLines: string[]): Omit<C
   let chunkOrder = 1;
 
   for (const section of sections) {
-    if (section.type === 'header') {
+    if (section.type === 'cv_header') {
       // Header is usually one chunk with contact info
       const headerText = section.content.join(' ').trim();
       if (headerText.length > 0) {
         chunks.push({
-          type: 'header',
+          type: 'cv_header',
           text: headerText,
-          tags: extractTags(headerText, 'header'),
+          tags: extractTags(headerText, 'cv_header'),
           order: chunkOrder++,
           parsedBy: 'rules'
         });
       }
-    } else if (section.type === 'summary') {
+    } else if (section.type === 'cv_summary') {
       // Summary is usually one chunk
       const summaryText = section.content.join(' ').trim();
       if (summaryText.length > 0) {
         chunks.push({
-          type: 'summary',
+          type: 'cv_summary',
           text: summaryText,
-          tags: extractTags(summaryText, 'summary'),
+          tags: extractTags(summaryText, 'cv_summary'),
           order: chunkOrder++,
           parsedBy: 'rules'
         });
       }
-    } else if (section.type === 'skills') {
+    } else if (section.type === 'cv_skills') {
       // Skills can be broken down into individual items or groups
       const skillsText = section.content.join(' ');
       const skillChunks = parseSkillsSection(skillsText, chunkOrder);
       chunks.push(...skillChunks);
       chunkOrder += skillChunks.length;
-    } else if (section.type === 'experience_section' || section.content.some(line => PATTERNS.dateRange.test(line))) {
+    } else if (section.type === 'cv_experience_section' || section.content.some(line => PATTERNS.dateRange.test(line))) {
       // Experience sections - break into job headers and bullets
       const experienceChunks = parseExperienceSection(section.content, chunkOrder);
       chunks.push(...experienceChunks);
@@ -328,7 +328,7 @@ function parseSkillsSection(text: string, startOrder: number): Omit<Chunk, 'id' 
     // Multiple skill items
     skillGroups.forEach((skill, index) => {
       chunks.push({
-        type: 'skills',
+        type: 'cv_skills',
         text: skill,
         tags: [skill.toLowerCase().replace(/\s+/g, '-')],
         order: startOrder + index,
@@ -338,9 +338,9 @@ function parseSkillsSection(text: string, startOrder: number): Omit<Chunk, 'id' 
   } else {
     // Single skills chunk
     chunks.push({
-      type: 'skills',
+      type: 'cv_skills',
       text: text.trim(),
-      tags: extractTags(text, 'skills'),
+      tags: extractTags(text, 'cv_skills'),
       order: startOrder,
       parsedBy: 'rules'
     });
@@ -362,9 +362,9 @@ function parseExperienceSection(content: string[], startOrder: number): Omit<Chu
     if (PATTERNS.dateRange.test(line) || PATTERNS.jobTitle.test(line) || isJobHeader(line)) {
       currentJob = line;
       chunks.push({
-        type: 'experience_section',
+        type: 'cv_experience_section',
         text: line,
-        tags: extractTags(line, 'experience_section'),
+        tags: extractTags(line, 'cv_experience_section'),
         order: currentOrder++,
         parsedBy: 'rules'
       });
@@ -373,9 +373,9 @@ function parseExperienceSection(content: string[], startOrder: number): Omit<Chu
     else if (line.match(/^[\s]*[•·*\-+]/)) {
       const bulletText = line.replace(/^[\s]*[•·*\-+]\s*/, '').trim();
       chunks.push({
-        type: 'experience_bullet',
+        type: 'cv_experience_bullet',
         text: bulletText,
-        tags: extractTags(bulletText, 'experience_bullet'),
+        tags: extractTags(bulletText, 'cv_experience_bullet'),
         order: currentOrder++,
         parsedBy: 'rules'
       });
@@ -383,9 +383,9 @@ function parseExperienceSection(content: string[], startOrder: number): Omit<Chu
     // Other experience content
     else if (line.trim().length > 0) {
       chunks.push({
-        type: 'experience_bullet',
+        type: 'cv_experience_bullet',
         text: line.trim(),
-        tags: extractTags(line, 'experience_bullet'),
+        tags: extractTags(line, 'cv_experience_bullet'),
         order: currentOrder++,
         parsedBy: 'rules'
       });
@@ -435,7 +435,7 @@ function extractTags(text: string, type: ChunkType): string[] {
   });
 
   // Extract skill tags
-  if (type === 'summary' || type === 'skills') {
+  if (type === 'cv_summary' || type === 'cv_skills') {
     skillKeywords.forEach(keyword => {
       if (lowerText.includes(keyword)) {
         tags.push(keyword);
@@ -444,7 +444,7 @@ function extractTags(text: string, type: ChunkType): string[] {
   }
 
   // Add contact-related tags for header
-  if (type === 'header') {
+  if (type === 'cv_header') {
     if (PATTERNS.email.test(text)) tags.push('email');
     if (PATTERNS.phone.test(text)) tags.push('phone');
     if (/(linkedin|github|twitter)/i.test(text)) tags.push('social-media');
@@ -452,13 +452,13 @@ function extractTags(text: string, type: ChunkType): string[] {
   }
 
   // Add type-specific tags
-  if (type === 'experience_bullet' && lowerText.includes('led')) {
+  if (type === 'cv_experience_bullet' && lowerText.includes('led')) {
     tags.push('leadership');
   }
-  if (type === 'experience_bullet' && lowerText.includes('developed')) {
+  if (type === 'cv_experience_bullet' && lowerText.includes('developed')) {
     tags.push('development');
   }
-  if (type === 'experience_bullet' && lowerText.includes('managed')) {
+  if (type === 'cv_experience_bullet' && lowerText.includes('managed')) {
     tags.push('management');
   }
 

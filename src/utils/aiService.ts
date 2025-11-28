@@ -820,6 +820,146 @@ export function getChunkTypeLabel(type: ChunkType | string): string {
   return labels[type] || type;
 }
 
+// Generate a new resume using full resume text instead of chunks
+export async function generateTailoredResumeFromFullText(
+  jobDescription: JobDescription, 
+  fullResumeText: string, 
+  additionalContext?: string
+): Promise<{ success: boolean; content?: string; error?: string }> {
+  if (!isAIConfigured()) {
+    return { success: false, error: 'AI service is not configured. Please set up your OpenAI API key.' };
+  }
+
+  const config = getAIConfig();
+  
+  const prompt = `You are an expert resume writer specializing in ATS optimization. Generate a complete, professional resume in clean HTML format that EXACTLY follows the template structure and ATS best practices below. Use the provided full resume text to create personalized content tailored to the job description.
+
+JOB DESCRIPTION:
+Company: ${jobDescription.company}
+Position: ${jobDescription.title}
+Location: ${jobDescription.extractedInfo.location || 'Not specified'}
+Experience Level: ${jobDescription.extractedInfo.experienceLevel || 'Not specified'}
+
+Required Skills: ${jobDescription.extractedInfo.requiredSkills.join(', ')}
+Preferred Skills: ${jobDescription.extractedInfo.preferredSkills.join(', ')}
+
+Key Requirements:
+${jobDescription.extractedInfo.requirements.map(req => `- ${req}`).join('\n')}
+
+Key Responsibilities:
+${jobDescription.extractedInfo.responsibilities.map(resp => `- ${resp}`).join('\n')}
+
+${jobDescription.additionalContext ? `Additional Context: ${jobDescription.additionalContext}` : ''}
+
+FULL RESUME TEXT TO USE AS SOURCE:
+${fullResumeText}
+
+${additionalContext ? `ADDITIONAL CONTEXT:\n${additionalContext}` : ''}
+
+CRITICAL ATS OPTIMIZATION REQUIREMENTS:
+1. EXACT JOB TITLE MATCH: Use the EXACT job title from the job description in your header
+2. KEYWORD DENSITY: Repeat critical keywords 2-3 times across Summary, Skills, and Experience
+3. EXACT JD PHRASING: Mirror job description language verbatim in skills section
+4. ACTION VERBS: Use ATS-friendly verbs like Built, Designed, Implemented, Optimized, Delivered, Architected
+5. TECH STACK PLACEMENT: Add tech stack at end of each role in parentheses format
+6. METRICS FOCUS: Include measurable outcomes in experience bullets
+7. KEYWORD CLUSTER: Add a dense keyword block matching job requirements
+8. PLAIN TEXT FORMAT: No tables, columns, or special formatting that breaks ATS parsing
+
+RESUME HTML TEMPLATE STRUCTURE - ATS-OPTIMIZED:
+
+Generate a complete HTML document with this exact structure:
+- DOCTYPE html declaration with meta charset UTF-8
+- Embedded CSS styles for professional print layout (ATS-safe)
+- Body with resume content in structured divs
+- Use CSS classes: resume, header, name, title, contact, section, section-title, job-title, company-info
+- Font family: Calibri, Arial, sans-serif (ATS-friendly)
+- Professional font sizes: name 18px, section titles 11px, body text 10px
+- Include @media print styles for clean printing
+
+SECTION STRUCTURE (ATS-OPTIMIZED):
+1. HEADER: ALL CAPS name + EXACT job title from JD
+2. SUMMARY: Include 2-3 critical keywords from job requirements
+3. CORE SKILLS: Mirror JD phrasing exactly, repeat key terms
+4. TECHNICAL SKILLS: Separate section with exact JD technologies
+5. EXPERIENCE: Each role with (Tech: React, TypeScript, etc.) at end
+6. ATS KEYWORD CLUSTER: Dense keyword section for algorithm matching
+
+ATS FORMATTING REQUIREMENTS:
+- Single column layout only (no CSS columns for skills)
+- Plain text formatting, no special characters
+- Proper HTML semantic structure
+- Linear reading flow for ATS parsers
+
+CRITICAL ATS-OPTIMIZED INSTRUCTIONS:
+1. Generate COMPLETE HTML document with ATS-safe structure
+2. HEADER: Use ALL CAPS name + EXACT job title: "${jobDescription.title}"
+3. KEYWORD STRATEGY: Repeat these exact terms 2-3 times: ${jobDescription.extractedInfo.requiredSkills.slice(0, 5).join(', ')}
+4. SKILLS SECTION: Mirror job description phrasing exactly - use verbatim terms
+5. ACTION VERBS: Use Built, Designed, Implemented, Optimized, Delivered, Architected
+6. TECH STACK: End each experience role with (Tech: [technologies]) format
+7. METRICS: Include measurable outcomes in every experience bullet
+8. ATS KEYWORD CLUSTER: Add final section with dense keyword matching
+9. SINGLE COLUMN: No CSS columns or complex layouts that break ATS parsing
+10. SEMANTIC HTML: Proper heading hierarchy and list structures
+11. PLAIN TEXT: No special characters, icons, or formatting that breaks parsers
+12. JD ALIGNMENT: Match company culture and soft skill language from job posting
+13. FILENAME READY: Structure content for "clint-bush-[month]-[year]-[company]-[role]-resume" pattern
+14. Generate complete ATS-optimized HTML resume now:
+
+Generate a complete HTML resume document now:`;
+
+  try {
+    console.log('Making AI API request for full-text resume generation...');
+    
+    const response = await fetch(config.apiUrl!, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 3000
+      })
+    });
+
+    console.log('AI API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('AI API error response:', errorText);
+      throw new Error(`AI API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('AI API response data:', data);
+    
+    const content = data.choices?.[0]?.message?.content;
+
+    if (!content) {
+      throw new Error('No content generated by AI');
+    }
+
+    console.log('Full-text resume generation successful, content length:', content.length);
+    return { success: true, content };
+
+  } catch (error) {
+    console.error('Error generating resume from full text:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+    };
+  }
+}
+
 // Generate a new resume tailored to a specific job description
 export async function generateTailoredResume(
   jobDescription: JobDescription, 
@@ -969,6 +1109,131 @@ Generate a complete HTML resume document now:`;
   }
 }
 
+// Generate a new cover letter using full resume text instead of chunks
+export async function generateTailoredCoverLetterFromFullText(
+  jobDescription: JobDescription, 
+  fullResumeText: string, 
+  additionalContext?: string
+): Promise<{ success: boolean; content?: string; error?: string }> {
+  if (!isAIConfigured()) {
+    return { success: false, error: 'AI service is not configured. Please set up your OpenAI API key.' };
+  }
+
+  const config = getAIConfig();
+  
+  const prompt = `You are an expert cover letter writer. Generate a compelling, personalized cover letter using the following professional template structure. Tailor all content to the specific job description and use the provided full resume text as your source material.
+
+JOB DESCRIPTION:
+Company: ${jobDescription.company}
+Position: ${jobDescription.title}
+Location: ${jobDescription.extractedInfo.location || 'Not specified'}
+Experience Level: ${jobDescription.extractedInfo.experienceLevel || 'Not specified'}
+
+Required Skills: ${jobDescription.extractedInfo.requiredSkills.join(', ')}
+Preferred Skills: ${jobDescription.extractedInfo.preferredSkills.join(', ')}
+
+Key Requirements:
+${jobDescription.extractedInfo.requirements.map(req => `- ${req}`).join('\n')}
+
+Key Responsibilities:
+${jobDescription.extractedInfo.responsibilities.map(resp => `- ${resp}`).join('\n')}
+
+${jobDescription.additionalContext ? `Additional Context: ${jobDescription.additionalContext}` : ''}
+
+FULL RESUME TEXT TO USE AS SOURCE:
+${fullResumeText}
+
+${additionalContext ? `ADDITIONAL CONTEXT:\n${additionalContext}` : ''}
+
+COVER LETTER STRUCTURE:
+
+**HEADER:**
+- Use current date
+- Address to ${jobDescription.company} hiring team
+- Professional business letter format
+
+**OPENING PARAGRAPH:**
+- Express interest in ${jobDescription.title} position at ${jobDescription.company}
+- Mention years of relevant experience from resume
+- Include compelling hook about the company/role
+- Show enthusiasm and initial value proposition
+
+**BODY PARAGRAPH 1 - RELEVANT EXPERIENCE:**
+- Highlight most relevant previous role from resume
+- Include specific achievement with quantifiable results
+- Connect experience directly to job requirements
+- Use concrete examples from your background
+
+**BODY PARAGRAPH 2 - VALUE PROPOSITION:**
+- Reference specific aspects of ${jobDescription.title} role
+- Demonstrate knowledge of ${jobDescription.company}
+- Show how skills match job requirements
+- Include another achievement or skill demonstration
+
+**CLOSING PARAGRAPH:**
+- Reiterate interest and value you'd bring
+- Professional call to action
+- Thank them for consideration
+
+CRITICAL INSTRUCTIONS:
+1. Generate ACTUAL CONTENT, not placeholders or template text
+2. Use real information from the provided resume text
+3. Write a compelling, personalized letter for ${jobDescription.title} at ${jobDescription.company}
+4. Include specific achievements with quantifiable results from resume
+5. Match keywords from the job description naturally throughout
+6. Show genuine enthusiasm and knowledge of the company/role
+7. Ensure the letter flows naturally and tells a compelling story
+8. Keep paragraphs concise but impactful (3-4 sentences each)
+9. Maintain professional, engaging tone throughout
+10. Connect candidate's experience directly to job requirements
+11. Include specific examples that demonstrate relevant skills
+12. Create a strong call to action in closing
+13. Format as clean business letter suitable for document generation
+
+Generate a complete, personalized cover letter with actual content now:`;
+
+  try {
+    const response = await fetch(config.apiUrl!, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.8,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+
+    if (!content) {
+      throw new Error('No content generated by AI');
+    }
+
+    return { success: true, content };
+
+  } catch (error) {
+    console.error('Error generating cover letter from full text:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+    };
+  }
+}
+
 // Generate a new cover letter tailored to a specific job description
 export async function generateTailoredCoverLetter(
   jobDescription: JobDescription, 
@@ -1094,6 +1359,35 @@ Generate a complete, personalized cover letter with actual content now:`;
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error occurred' 
     };
+  }
+}
+
+// Get combined text content from all resumes for full-text generation
+export async function getCombinedResumeText(): Promise<string> {
+  try {
+    const { loadResumes } = await import('../storage');
+    const resumes = await loadResumes();
+    
+    if (resumes.length === 0) {
+      throw new Error('No resumes found. Please upload some resumes first.');
+    }
+
+    // Combine text content from all resumes
+    const combinedText = resumes
+      .filter(resume => resume.textContent && resume.textContent.trim().length > 0)
+      .map(resume => {
+        return `=== RESUME: ${resume.name} ===\n\n${resume.textContent}\n\n`;
+      })
+      .join('\n');
+
+    if (combinedText.trim().length === 0) {
+      throw new Error('No text content found in resumes. Please process your resumes to extract text content.');
+    }
+
+    return combinedText;
+  } catch (error) {
+    console.error('Error getting combined resume text:', error);
+    throw error;
   }
 }
 
