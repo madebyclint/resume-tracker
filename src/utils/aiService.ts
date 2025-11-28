@@ -228,6 +228,7 @@ export async function parseTextIntoChunks(text: string): Promise<ChunkParseResul
 // Helper function to validate chunk types
 export function isValidChunkType(type: string): type is ChunkType {
   const validTypes: ChunkType[] = [
+    'header',
     'summary',
     'skills', 
     'experience_section',
@@ -243,6 +244,7 @@ export function isValidChunkType(type: string): type is ChunkType {
 // Helper function to get human-readable chunk type names
 export function getChunkTypeLabel(type: ChunkType): string {
   const labels: Record<ChunkType, string> = {
+    header: 'Header',
     summary: 'Summary',
     skills: 'Skills',
     experience_section: 'Experience Section',

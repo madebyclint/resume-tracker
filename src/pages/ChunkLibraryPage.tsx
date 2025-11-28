@@ -7,6 +7,14 @@ interface ChunkLibraryPageProps {
   resumes: Resume[];
 }
 
+type SortField = 'type' | 'sourceDoc' | 'order' | 'createdAt' | 'textLength' | 'parsedBy';
+type SortDirection = 'asc' | 'desc';
+
+interface SortConfig {
+  field: SortField;
+  direction: SortDirection;
+}
+
 export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
   const [chunks, setChunks] = useState<Chunk[]>([]);
   const [filteredChunks, setFilteredChunks] = useState<Chunk[]>([]);
@@ -15,16 +23,17 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
   const [selectedChunkType, setSelectedChunkType] = useState<ChunkType | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingChunk, setEditingChunk] = useState<Chunk | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'sourceDoc', direction: 'asc' });
 
   // Load all chunks on component mount
   useEffect(() => {
     loadAllChunks();
   }, []);
 
-  // Filter chunks when filters change
+  // Filter chunks when filters or sort config change
   useEffect(() => {
     applyFilters();
-  }, [chunks, selectedResumeId, selectedChunkType, searchTerm]);
+  }, [chunks, selectedResumeId, selectedChunkType, searchTerm, sortConfig]);
 
   const loadAllChunks = async () => {
     setLoading(true);
@@ -60,12 +69,36 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
       );
     }
 
-    // Sort by source document and order
+    // Apply sorting
     filtered.sort((a, b) => {
-      if (a.sourceDocId !== b.sourceDocId) {
-        return a.sourceDocId.localeCompare(b.sourceDocId);
+      const direction = sortConfig.direction === 'asc' ? 1 : -1;
+      
+      switch (sortConfig.field) {
+        case 'type':
+          return direction * a.type.localeCompare(b.type);
+        
+        case 'sourceDoc':
+          const aDocName = getResumeNameById(a.sourceDocId);
+          const bDocName = getResumeNameById(b.sourceDocId);
+          const docCompare = aDocName.localeCompare(bDocName);
+          // If same document, sort by order
+          return docCompare !== 0 ? direction * docCompare : a.order - b.order;
+        
+        case 'order':
+          return direction * (a.order - b.order);
+        
+        case 'createdAt':
+          return direction * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        
+        case 'textLength':
+          return direction * (a.text.length - b.text.length);
+        
+        case 'parsedBy':
+          return direction * a.parsedBy.localeCompare(b.parsedBy);
+        
+        default:
+          return 0;
       }
-      return a.order - b.order;
     });
 
     setFilteredChunks(filtered);
@@ -136,6 +169,7 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
 
   const chunkTypeOptions: (ChunkType | 'all')[] = [
     'all',
+    'header',
     'summary',
     'skills',
     'experience_section',
@@ -181,10 +215,10 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
           Manage and organize your parsed resume chunks. Total: {chunks.length} chunks
         </p>
 
-        {/* Filters */}
+        {/* Filters and Sorting */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: '1rem',
           marginBottom: '1.5rem'
         }}>
@@ -235,6 +269,50 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
             </select>
           </div>
 
+          {/* Sort By */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.875rem' }}>
+              Sort By:
+            </label>
+            <select
+              value={sortConfig.field}
+              onChange={(e) => setSortConfig(prev => ({ ...prev, field: e.target.value as SortField }))}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            >
+              <option value="sourceDoc">Document</option>
+              <option value="type">Type</option>
+              <option value="order">Order</option>
+              <option value="createdAt">Date Created</option>
+              <option value="textLength">Text Length</option>
+              <option value="parsedBy">Parse Method</option>
+            </select>
+          </div>
+
+          {/* Sort Direction */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.875rem' }}>
+              Direction:
+            </label>
+            <select
+              value={sortConfig.direction}
+              onChange={(e) => setSortConfig(prev => ({ ...prev, direction: e.target.value as SortDirection }))}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px'
+              }}
+            >
+              <option value="asc">Ascending ↑</option>
+              <option value="desc">Descending ↓</option>
+            </select>
+          </div>
+
           {/* Search */}
           <div>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.875rem' }}>
@@ -262,12 +340,27 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
           marginBottom: '1rem',
           padding: '0.75rem',
           backgroundColor: '#f9fafb',
-          borderRadius: '4px'
+          borderRadius: '4px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.5rem'
         }}>
-          Showing {filteredChunks.length} of {chunks.length} chunks
-          {selectedResumeId !== 'all' && ` from ${getResumeNameById(selectedResumeId)}`}
-          {selectedChunkType !== 'all' && ` of type ${getChunkTypeLabel(selectedChunkType as ChunkType)}`}
-          {searchTerm && ` matching "${searchTerm}"`}
+          <div>
+            Showing {filteredChunks.length} of {chunks.length} chunks
+            {selectedResumeId !== 'all' && ` from ${getResumeNameById(selectedResumeId)}`}
+            {selectedChunkType !== 'all' && ` of type ${getChunkTypeLabel(selectedChunkType as ChunkType)}`}
+            {searchTerm && ` matching "${searchTerm}"`}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
+            Sorted by {sortConfig.field === 'sourceDoc' ? 'Document' : 
+                      sortConfig.field === 'textLength' ? 'Text Length' :
+                      sortConfig.field === 'createdAt' ? 'Date Created' :
+                      sortConfig.field === 'parsedBy' ? 'Parse Method' :
+                      sortConfig.field.charAt(0).toUpperCase() + sortConfig.field.slice(1)} 
+            ({sortConfig.direction === 'asc' ? '↑' : '↓'})
+          </div>
         </div>
       </div>
 
@@ -301,7 +394,7 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
                 alignItems: 'center',
                 backgroundColor: '#f9fafb'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                   <span style={{
                     fontSize: '0.75rem',
                     fontWeight: '600',
@@ -330,6 +423,12 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
                   </span>
                   <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
                     Order: {chunk.order}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                    {chunk.text.length} chars
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                    {new Date(chunk.createdAt).toLocaleDateString()}
                   </span>
                 </div>
 

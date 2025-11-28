@@ -111,6 +111,7 @@ export default function ChunkReviewModal({
   const totalCount = editableChunks.length;
 
   const chunkTypeOptions: ChunkType[] = [
+    'header',
     'summary',
     'skills',
     'experience_section',
