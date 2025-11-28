@@ -460,24 +460,8 @@ export default function ResumeTable({
                           }}
                           title="Fast rule-based parsing - no AI required"
                         >
-                          {chunkingResumeId === resume.id ? 'Parsing...' : (resumeChunkCounts[resume.id] > 0 ? 'Re-parse (Quick)' : 'Quick Parse')}
+                          {chunkingResumeId === resume.id ? 'Parsing...' : (resumeChunkCounts[resume.id] > 0 ? 'Re-parse' : 'Parse Chunks')}
                         </button>
-                        {/* <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => parseIntoChunks(resume, true)}
-                          disabled={chunkingResumeId === resume.id}
-                          style={{
-                            fontSize: "0.75rem",
-                            padding: "0.3rem 0.5rem",
-                            backgroundColor: chunkingResumeId === resume.id ? "#f0f0f0" : "#8b5cf6",
-                            color: chunkingResumeId === resume.id ? "#666" : "white",
-                            border: "none"
-                          }}
-                          title="AI-powered semantic parsing with OpenAI"
-                        >
-                          {chunkingResumeId === resume.id ? 'AI Parsing...' : (resumeChunkCounts[resume.id] > 0 ? 'Re-parse (AI)' : 'AI Parse')}
-                        </button> */}
                       </div>
                     )}
 
