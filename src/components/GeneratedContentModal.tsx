@@ -25,6 +25,7 @@ const GeneratedContentModal: React.FC<GeneratedContentModalProps> = ({
   const [fileName, setFileName] = useState(defaultName);
   const [editedContent, setEditedContent] = useState(content);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<'preview' | 'edit'>('preview');
 
   // Update content when prop changes
   React.useEffect(() => {
@@ -58,6 +59,18 @@ const GeneratedContentModal: React.FC<GeneratedContentModalProps> = ({
       onClose();
     }
   };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(editedContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    }
+  };
+
+  const isHtmlContent = editedContent.trim().startsWith('<!DOCTYPE html') || editedContent.trim().startsWith('<html');
 
   if (!isOpen) return null;
 
@@ -106,17 +119,53 @@ const GeneratedContentModal: React.FC<GeneratedContentModalProps> = ({
                 />
               </div>
 
+              {isHtmlContent && (
+                <div className="view-mode-controls">
+                  <button
+                    onClick={() => setViewMode('preview')}
+                    className={`mode-button ${viewMode === 'preview' ? 'active' : ''}`}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    onClick={() => setViewMode('edit')}
+                    className={`mode-button ${viewMode === 'edit' ? 'active' : ''}`}
+                  >
+                    Edit HTML
+                  </button>
+                  <button
+                    onClick={handlePrint}
+                    className="print-button"
+                  >
+                    🖨️ Print
+                  </button>
+                </div>
+              )}
+
               <div className="form-group">
-                <label htmlFor="content-editor">Content:</label>
-                <textarea
-                  id="content-editor"
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  rows={20}
-                  className="content-editor"
-                  placeholder="Generated content will appear here..."
-                  disabled={isSaving}
-                />
+                <label htmlFor="content-editor">
+                  {isHtmlContent && viewMode === 'preview' ? 'Resume Preview:' : 'Content:'}
+                </label>
+
+                {isHtmlContent && viewMode === 'preview' ? (
+                  <div className="html-preview">
+                    <iframe
+                      srcDoc={editedContent}
+                      className="resume-iframe"
+                      title="Resume Preview"
+                    />
+                  </div>
+                ) : (
+                  <textarea
+                    id="content-editor"
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    rows={20}
+                    className="content-editor"
+                    placeholder="Generated content will appear here..."
+                    disabled={isSaving}
+                  />
+                )}
               </div>
 
               <div className="modal-actions">

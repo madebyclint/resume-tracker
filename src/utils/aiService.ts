@@ -832,7 +832,7 @@ export async function generateTailoredResume(
 
   const config = getAIConfig();
   
-  const prompt = `You are an expert resume writer. Generate a complete, professional resume using the following template structure. Tailor all content to the specific job description and use the provided resume chunks.
+  const prompt = `You are an expert resume writer specializing in ATS optimization. Generate a complete, professional resume in clean HTML format that EXACTLY follows the template structure and ATS best practices below. Use the provided resume chunks to create real, personalized content tailored to the job description.
 
 JOB DESCRIPTION:
 Company: ${jobDescription.company}
@@ -859,52 +859,61 @@ ${item.chunk.text}
 
 ${additionalContext ? `ADDITIONAL CONTEXT:\n${additionalContext}` : ''}
 
-RESUME TEMPLATE STRUCTURE:
+CRITICAL ATS OPTIMIZATION REQUIREMENTS:
+1. EXACT JOB TITLE MATCH: Use the EXACT job title from the job description in your header
+2. KEYWORD DENSITY: Repeat critical keywords 2-3 times across Summary, Skills, and Experience
+3. EXACT JD PHRASING: Mirror job description language verbatim in skills section
+4. ACTION VERBS: Use ATS-friendly verbs like Built, Designed, Implemented, Optimized, Delivered, Architected
+5. TECH STACK PLACEMENT: Add tech stack at end of each role in parentheses format
+6. METRICS FOCUS: Include measurable outcomes in experience bullets
+7. KEYWORD CLUSTER: Add a dense keyword block matching job requirements
+8. PLAIN TEXT FORMAT: No tables, columns, or special formatting that breaks ATS parsing
 
-**HEADER SECTION:**
-- Extract the candidate's actual name, email, phone, location, LinkedIn from cv_header chunks
-- If header info is not in chunks, look for contact details in other chunk types
-- Format: Full Name on first line, then email | phone | city, state | LinkedIn URL on second line
-- Use the candidate's real information, not placeholder text
+RESUME HTML TEMPLATE STRUCTURE - ATS-OPTIMIZED:
 
-**PROFESSIONAL SUMMARY:**
-- Write 3-4 compelling lines using cv_summary chunks
-- Highlight experience most relevant to this ${jobDescription.title} role
-- Include key skills that match the job requirements
-- Show value proposition for ${jobDescription.company}
+Generate a complete HTML document with this exact structure:
+- DOCTYPE html declaration with meta charset UTF-8
+- Embedded CSS styles for professional print layout (ATS-safe)
+- Body with resume content in structured divs
+- Use CSS classes: resume, header, name, title, contact, section, section-title, job-title, company-info
+- Font family: Calibri, Arial, sans-serif (ATS-friendly)
+- Professional font sizes: name 18px, section titles 11px, body text 10px
+- Include @media print styles for clean printing
 
-**CORE COMPETENCIES:**
-- Extract technical and soft skills from cv_skills chunks  
-- Prioritize skills mentioned in the job description
-- Format as bullet points: • Skill • Skill • Skill
-- Include 6-10 most relevant skills
+SECTION STRUCTURE (ATS-OPTIMIZED):
+1. HEADER: ALL CAPS name + EXACT job title from JD
+2. SUMMARY: Include 2-3 critical keywords from job requirements
+3. CORE SKILLS: Mirror JD phrasing exactly, repeat key terms
+4. TECHNICAL SKILLS: Separate section with exact JD technologies
+5. EXPERIENCE: Each role with (Tech: React, TypeScript, etc.) at end
+6. ATS KEYWORD CLUSTER: Dense keyword section for algorithm matching
 
-**PROFESSIONAL EXPERIENCE:**
-- Use cv_experience_section chunks for job titles/companies/dates
-- Use cv_experience_bullet chunks for achievements
-- Prioritize experience most relevant to ${jobDescription.title}
-- Each bullet should have quantifiable results when possible
-- Use strong action verbs (Led, Developed, Implemented, etc.)
-- Focus on achievements that match job requirements
+ATS FORMATTING REQUIREMENTS:
+- Single column layout only (no CSS columns for skills)
+- Plain text formatting, no special characters
+- Proper HTML semantic structure
+- Linear reading flow for ATS parsers
 
-**EDUCATION:**
-- Include if found in chunks, otherwise create reasonable education background
+EXAMPLE FORMAT - Generate HTML document similar to this structure but with complete content:
+The output should be a full HTML document starting with DOCTYPE html, including head with embedded CSS styles for professional resume formatting, and body with structured content using the CSS classes mentioned above. Include all sections (SUMMARY, CORE SKILLS, EXPERIENCE) with proper HTML markup and styling for print-ready output.
 
-CRITICAL INSTRUCTIONS:
-1. Generate ACTUAL CONTENT, not placeholders like [Name] or [Company]
-2. Extract real information from the provided chunks
-3. Use the candidate's actual name, contact info, job history, and achievements
-4. Prioritize content that matches ${jobDescription.title} requirements
-5. Include specific skills mentioned in the job posting
-6. Use strong action verbs and quantifiable achievements
-7. Ensure ATS compatibility with clean, simple formatting
-8. Match keywords from the job description naturally throughout
-9. Keep bullets concise but impactful (1-2 lines each)
-10. Create a cohesive narrative that positions the candidate for this specific role
-11. If information is missing from chunks, create reasonable professional content
-12. Format should be clean text suitable for document generation
+CRITICAL ATS-OPTIMIZED INSTRUCTIONS:
+1. Generate COMPLETE HTML document with ATS-safe structure
+2. HEADER: Use ALL CAPS name + EXACT job title: "${jobDescription.title}"
+3. KEYWORD STRATEGY: Repeat these exact terms 2-3 times: ${jobDescription.extractedInfo.requiredSkills.slice(0, 5).join(', ')}
+4. SKILLS SECTION: Mirror job description phrasing exactly - use verbatim terms
+5. ACTION VERBS: Use Built, Designed, Implemented, Optimized, Delivered, Architected
+6. TECH STACK: End each experience role with (Tech: [technologies]) format
+7. METRICS: Include measurable outcomes in every experience bullet
+8. ATS KEYWORD CLUSTER: Add final section with dense keyword matching
+9. SINGLE COLUMN: No CSS columns or complex layouts that break ATS parsing
+10. SEMANTIC HTML: Proper heading hierarchy and list structures
+11. PLAIN TEXT: No special characters, icons, or formatting that breaks parsers
+12. JD ALIGNMENT: Match company culture and soft skill language from job posting
+13. FILENAME READY: Structure content for "clint-bush-[month]-[year]-[company]-[role]-resume" pattern
+14. Generate complete ATS-optimized HTML resume now:
 
-Generate a complete, ready-to-use resume with actual content now:`;
+Generate a complete HTML resume document now:`;
 
   try {
     console.log('Making AI API request for resume generation...');

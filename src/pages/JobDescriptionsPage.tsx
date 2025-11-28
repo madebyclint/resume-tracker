@@ -272,9 +272,20 @@ const JobDescriptionsPage: React.FC = () => {
     setIsGeneratingResume(true);
     setGenerationType('resume');
     setGeneratedTitle('Generated Resume');
-    const cleanCompany = jobDescription.company.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-    const cleanTitle = jobDescription.title.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-    setGeneratedDefaultName(`${cleanCompany} - ${cleanTitle} - Resume`);
+
+    // Generate ATS-optimized filename: clint-bush-November-2025-Mastercard-FE-resume
+    const currentDate = new Date();
+    const month = currentDate.toLocaleString('default', { month: 'long' });
+    const year = currentDate.getFullYear();
+    const cleanCompany = jobDescription.company.replace(/[^a-zA-Z0-9]/g, '').trim();
+    const cleanTitle = jobDescription.title
+      .replace(/[^a-zA-Z0-9 ]/g, '')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 8); // Limit to reasonable abbreviation
+
+    setGeneratedDefaultName(`clint-bush-${month}-${year}-${cleanCompany}-${cleanTitle}-resume`);
     setGeneratedContent('');
     setGenerationError(null);
     setIsGenerating(true);
@@ -325,9 +336,20 @@ const JobDescriptionsPage: React.FC = () => {
     setIsGeneratingCoverLetter(true);
     setGenerationType('cover_letter');
     setGeneratedTitle('Generated Cover Letter');
-    const cleanCompany = jobDescription.company.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-    const cleanTitle = jobDescription.title.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-    setGeneratedDefaultName(`${cleanCompany} - ${cleanTitle} - Cover Letter`);
+
+    // Generate filename: clint-bush-November-2025-Mastercard-FE-cover-letter
+    const currentDate = new Date();
+    const month = currentDate.toLocaleString('default', { month: 'long' });
+    const year = currentDate.getFullYear();
+    const cleanCompany = jobDescription.company.replace(/[^a-zA-Z0-9]/g, '').trim();
+    const cleanTitle = jobDescription.title
+      .replace(/[^a-zA-Z0-9 ]/g, '')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 8);
+
+    setGeneratedDefaultName(`clint-bush-${month}-${year}-${cleanCompany}-${cleanTitle}-cover-letter`);
     setGeneratedContent('');
     setGenerationError(null);
     setIsGenerating(true);
@@ -627,6 +649,95 @@ const JobDescriptionsPage: React.FC = () => {
                         ))}
                       </div>
                     </div>
+                  )}
+                </div>
+
+                {/* Linked Documents Section */}
+                <div className="linked-documents-section">
+                  <h3>Linked Documents</h3>
+
+                  {/* Linked Resumes */}
+                  {selectedJob.linkedResumeIds.length > 0 && (
+                    <div className="linked-category">
+                      <h4>📄 Resumes ({selectedJob.linkedResumeIds.length})</h4>
+                      <div className="linked-documents-list">
+                        {selectedJob.linkedResumeIds.map((resumeId) => {
+                          const resume = state.resumes.find((r: any) => r.id === resumeId);
+                          return resume ? (
+                            <div key={resumeId} className="linked-document-item">
+                              <div className="document-info">
+                                <span className="document-title">{resume.name || resume.fileName}</span>
+                                <span className="document-date">
+                                  {new Date(resume.uploadDate).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="document-actions">
+                                <button
+                                  className="view-button"
+                                  onClick={() => {
+                                    console.log('View resume:', resume.name);
+                                  }}
+                                >
+                                  View
+                                </button>
+                                <button
+                                  className="unlink-button"
+                                  onClick={() => handleLinkResume(selectedJob.id, resumeId)}
+                                  title="Unlink from this job"
+                                >
+                                  🔗
+                                </button>
+                              </div>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Linked Cover Letters */}
+                  {selectedJob.linkedCoverLetterIds.length > 0 && (
+                    <div className="linked-category">
+                      <h4>📝 Cover Letters ({selectedJob.linkedCoverLetterIds.length})</h4>
+                      <div className="linked-documents-list">
+                        {selectedJob.linkedCoverLetterIds.map((coverLetterId) => {
+                          const coverLetter = state.coverLetters.find((cl: any) => cl.id === coverLetterId);
+                          return coverLetter ? (
+                            <div key={coverLetterId} className="linked-document-item">
+                              <div className="document-info">
+                                <span className="document-title">{coverLetter.name || coverLetter.fileName}</span>
+                                <span className="document-date">
+                                  {new Date(coverLetter.uploadDate).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="document-actions">
+                                <button
+                                  className="view-button"
+                                  onClick={() => {
+                                    console.log('View cover letter:', coverLetter.name);
+                                  }}
+                                >
+                                  View
+                                </button>
+                                <button
+                                  className="unlink-button"
+                                  onClick={() => handleLinkCoverLetter(selectedJob.id, coverLetterId)}
+                                  title="Unlink from this job"
+                                >
+                                  🔗
+                                </button>
+                              </div>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0 && (
+                    <p className="no-linked-documents">
+                      No documents linked to this job yet. Generate new documents or link existing ones from the matching results below.
+                    </p>
                   )}
                 </div>
 

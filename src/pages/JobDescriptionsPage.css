@@ -346,6 +346,7 @@
 /* Info Sections */
 .job-info-section,
 .additional-context-section,
+.linked-documents-section,
 .resume-matching-section,
 .keywords-section {
   margin-bottom: 30px;
@@ -353,12 +354,109 @@
 
 .job-info-section h3,
 .additional-context-section h3,
+.linked-documents-section h3,
 .resume-matching-section h3,
 .keywords-section h3 {
   margin: 0 0 15px 0;
   color: #333;
   font-size: 16px;
   font-weight: 600;
+}
+
+/* Linked Documents Section */
+.linked-category {
+  margin-bottom: 20px;
+}
+
+.linked-category h4 {
+  margin: 0 0 10px 0;
+  color: #555;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.linked-documents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.linked-document-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.linked-document-item:hover {
+  background: #e9ecef;
+}
+
+.document-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-grow: 1;
+}
+
+.document-title {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.document-date {
+  color: #666;
+  font-size: 12px;
+}
+
+.document-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.view-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.view-button:hover {
+  background: #218838;
+}
+
+.unlink-button {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.unlink-button:hover {
+  background: #c82333;
+}
+
+.no-linked-documents {
+  color: #666;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+  background: #f8f9fa;
+  border: 1px dashed #dee2e6;
+  border-radius: 6px;
 }
 
 .info-grid {
