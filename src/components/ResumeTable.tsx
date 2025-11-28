@@ -3,6 +3,7 @@ import { Resume, Chunk } from "../types";
 import { saveResume, deleteResume as deleteResumeFromStorage, saveChunks, getChunksBySourceDoc } from "../storage";
 import { formatFileSize, formatDate, extractTextFromDocument } from "../utils/documentUtils";
 import { parseTextIntoChunks, isAIConfigured, showConfigInstructions } from "../utils/aiService";
+import { parseResumeWithRules, getParseResultSummary } from "../utils/plainTextParser";
 import ChunkReviewModal from "./ChunkReviewModal";
 
 interface ResumeTableProps {
@@ -56,14 +57,14 @@ export default function ResumeTable({
     }
   }, [resumes]);
 
-  const parseIntoChunks = async (resume: Resume) => {
+  const parseIntoChunks = async (resume: Resume, useAI: boolean = true) => {
     if (!resume.textContent || resume.textContent.trim().length === 0) {
       alert('No text content available. Please extract text first before parsing into chunks.');
       return;
     }
 
-    // Check if AI is configured
-    if (!isAIConfigured()) {
+    // Check if AI is configured when using AI parsing
+    if (useAI && !isAIConfigured()) {
       showConfigInstructions();
       return;
     }
@@ -71,7 +72,13 @@ export default function ResumeTable({
     setChunkingResumeId(resume.id);
 
     try {
-      const result = await parseTextIntoChunks(resume.textContent);
+      let result;
+
+      if (useAI) {
+        result = await parseTextIntoChunks(resume.textContent);
+      } else {
+        result = parseResumeWithRules(resume.textContent);
+      }
 
       if (!result.success) {
         alert(`Failed to parse chunks: ${result.error}`);
@@ -81,6 +88,12 @@ export default function ResumeTable({
       if (result.chunks.length === 0) {
         alert('No chunks were generated from the text. The document may not contain parseable content.');
         return;
+      }
+
+      // Show parsing summary
+      if (!useAI && 'sections' in result) {
+        const summary = getParseResultSummary(result as any);
+        console.log('Rule-based parsing result:', summary);
       }
 
       // Open the review modal
@@ -404,32 +417,42 @@ export default function ResumeTable({
                       </button>
                     )}
 
-                    {/* Parse into Chunks button - only show if text is extracted */}
+                    {/* Parse into Chunks buttons - only show if text is extracted */}
                     {resume.textContent && resume.textContent.trim().length > 0 && (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => parseIntoChunks(resume)}
-                        disabled={chunkingResumeId === resume.id}
-                        style={{
-                          fontSize: "0.8rem",
-                          padding: "0.4rem 0.6rem",
-                          backgroundColor: chunkingResumeId === resume.id
-                            ? "#f0f0f0"
-                            : resumeChunkCounts[resume.id] > 0
-                              ? "#8b5cf6"
-                              : "#f59e0b",
-                          color: chunkingResumeId === resume.id ? "#666" : "white",
-                          border: "none"
-                        }}
-                      >
-                        {chunkingResumeId === resume.id
-                          ? 'Parsing...'
-                          : resumeChunkCounts[resume.id] > 0
-                            ? `Re-parse Chunks`
-                            : 'Parse into Chunks'
-                        }
-                      </button>
+                      <div style={{ display: "flex", gap: "0.25rem" }}>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => parseIntoChunks(resume, false)}
+                          disabled={chunkingResumeId === resume.id}
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "0.3rem 0.5rem",
+                            backgroundColor: chunkingResumeId === resume.id ? "#f0f0f0" : "#22c55e",
+                            color: chunkingResumeId === resume.id ? "#666" : "white",
+                            border: "none"
+                          }}
+                          title="Fast rule-based parsing - no AI required"
+                        >
+                          {chunkingResumeId === resume.id ? 'Parsing...' : 'Quick Parse'}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => parseIntoChunks(resume, true)}
+                          disabled={chunkingResumeId === resume.id}
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "0.3rem 0.5rem",
+                            backgroundColor: chunkingResumeId === resume.id ? "#f0f0f0" : "#8b5cf6",
+                            color: chunkingResumeId === resume.id ? "#666" : "white",
+                            border: "none"
+                          }}
+                          title="AI-powered semantic parsing with OpenAI"
+                        >
+                          {chunkingResumeId === resume.id ? 'AI Parsing...' : 'AI Parse'}
+                        </button>
+                      </div>
                     )}
 
                     <button

@@ -24,14 +24,19 @@
   gap: 0.75rem;
 }
 
-.sidebar a {
+.sidebar a, .sidebar .nav-item {
   color: #e2e8f0;
   text-decoration: none;
   padding: 0.35rem 0.5rem;
   border-radius: 0.4rem;
+  transition: background-color 0.2s;
 }
 
-.sidebar a.active {
+.sidebar a:hover, .sidebar .nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar a.active, .sidebar .nav-item.active {
   background: rgba(255, 255, 255, 0.15);
 }
 
