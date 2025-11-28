@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Chunk, Resume, ChunkType } from '../types';
+import { Chunk, Resume, CoverLetter, ChunkType, Document, isResume, isCoverLetter } from '../types';
 import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks, exportChunksAsJSON, exportAllDataAsJSON } from '../storage';
 import { getChunkTypeLabel } from '../utils/aiService';
 
 interface ChunkLibraryPageProps {
   resumes: Resume[];
+  coverLetters: CoverLetter[];
 }
 
 type SortField = 'type' | 'sourceDoc' | 'order' | 'createdAt' | 'textLength' | 'parsedBy';
@@ -15,15 +16,18 @@ interface SortConfig {
   direction: SortDirection;
 }
 
-export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
+export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibraryPageProps) {
   const [chunks, setChunks] = useState<Chunk[]>([]);
   const [filteredChunks, setFilteredChunks] = useState<Chunk[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedResumeId, setSelectedResumeId] = useState<string>('all');
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string>('all');
   const [selectedChunkType, setSelectedChunkType] = useState<ChunkType | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingChunk, setEditingChunk] = useState<Chunk | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'sourceDoc', direction: 'asc' });
+
+  // Combine all documents for filtering
+  const allDocuments: Document[] = [...resumes, ...coverLetters];
 
   // Load all chunks on component mount
   useEffect(() => {
@@ -33,7 +37,7 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
   // Filter chunks when filters or sort config change
   useEffect(() => {
     applyFilters();
-  }, [chunks, selectedResumeId, selectedChunkType, searchTerm, sortConfig]);
+  }, [chunks, selectedDocumentId, selectedChunkType, searchTerm, sortConfig]);
 
   const loadAllChunks = async () => {
     setLoading(true);
@@ -50,9 +54,9 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
   const applyFilters = () => {
     let filtered = [...chunks];
 
-    // Filter by resume
-    if (selectedResumeId !== 'all') {
-      filtered = filtered.filter(chunk => chunk.sourceDocId === selectedResumeId);
+    // Filter by document
+    if (selectedDocumentId !== 'all') {
+      filtered = filtered.filter(chunk => chunk.sourceDocId === selectedDocumentId);
     }
 
     // Filter by chunk type
@@ -78,8 +82,8 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
           return direction * a.type.localeCompare(b.type);
 
         case 'sourceDoc':
-          const aDocName = getResumeNameById(a.sourceDocId);
-          const bDocName = getResumeNameById(b.sourceDocId);
+          const aDocName = getDocumentNameById(a.sourceDocId);
+          const bDocName = getDocumentNameById(b.sourceDocId);
           const docCompare = aDocName.localeCompare(bDocName);
           // If same document, sort by order
           return docCompare !== 0 ? direction * docCompare : a.order - b.order;
@@ -200,9 +204,13 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
     setEditingChunk(null);
   };
 
-  const getResumeNameById = (id: string): string => {
-    const resume = resumes.find(r => r.id === id);
-    return resume ? resume.name : 'Unknown Document';
+  const getDocumentNameById = (id: string): string => {
+    const document = allDocuments.find(d => d.id === id);
+    if (document) {
+      const prefix = isResume(document) ? 'Resume: ' : 'Cover Letter: ';
+      return `${prefix}${document.name}`;
+    }
+    return 'Unknown Document';
   };
 
   const chunkTypeOptions: (ChunkType | 'all')[] = [
@@ -215,7 +223,12 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
     'mission_fit',
     'cover_letter_intro',
     'cover_letter_body',
-    'cover_letter_closing'
+    'cover_letter_closing',
+    'company_research',
+    'skill_demonstration',
+    'achievement_claim',
+    'motivation_statement',
+    'experience_mapping'
   ];
 
   if (loading) {
@@ -300,8 +313,8 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
               Document:
             </label>
             <select
-              value={selectedResumeId}
-              onChange={(e) => setSelectedResumeId(e.target.value)}
+              value={selectedDocumentId}
+              onChange={(e) => setSelectedDocumentId(e.target.value)}
               style={{
                 width: '100%',
                 padding: '0.5rem',
@@ -312,7 +325,12 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
               <option value="all">All Documents</option>
               {resumes.map(resume => (
                 <option key={resume.id} value={resume.id}>
-                  {resume.name}
+                  Resume: {resume.name}
+                </option>
+              ))}
+              {coverLetters.map(coverLetter => (
+                <option key={coverLetter.id} value={coverLetter.id}>
+                  Cover Letter: {coverLetter.name}
                 </option>
               ))}
             </select>
@@ -421,7 +439,7 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
         }}>
           <div>
             Showing {filteredChunks.length} of {chunks.length} chunks
-            {selectedResumeId !== 'all' && ` from ${getResumeNameById(selectedResumeId)}`}
+            {selectedDocumentId !== 'all' && ` from ${getDocumentNameById(selectedDocumentId)}`}
             {selectedChunkType !== 'all' && ` of type ${getChunkTypeLabel(selectedChunkType as ChunkType)}`}
             {searchTerm && ` matching "${searchTerm}"`}
           </div>
@@ -491,7 +509,7 @@ export default function ChunkLibraryPage({ resumes }: ChunkLibraryPageProps) {
                     {chunk.parsedBy === 'ai' ? 'AI Parse' : chunk.parsedBy === 'rules' ? 'Quick Parse' : 'Manual'}
                   </span>
                   <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                    {getResumeNameById(chunk.sourceDocId)}
+                    {getDocumentNameById(chunk.sourceDocId)}
                   </span>
                   <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
                     Order: {chunk.order}

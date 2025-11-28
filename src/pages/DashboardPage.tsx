@@ -3,11 +3,13 @@ import { useAppState } from "../state/AppStateContext";
 import FileUploadSection from "../components/FileUploadSection";
 import StatsSection from "../components/StatsSection";
 import ResumeTable from "../components/ResumeTable";
+import CoverLetterTable from "../components/CoverLetterTable";
 import TextPreviewModal from "../components/TextPreviewModal";
 
 export default function DashboardPage() {
   const { state, setState, isLoading, syncWithStorage } = useAppState();
   const [searchTerm, setSearchTerm] = useState('');
+  const [coverLetterSearchTerm, setCoverLetterSearchTerm] = useState('');
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -24,7 +26,7 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div style={{ textAlign: 'center', padding: '2rem' }}>
-        <p>Loading resumes...</p>
+        <p>Loading documents...</p>
       </div>
     );
   }
@@ -39,12 +41,21 @@ export default function DashboardPage() {
 
       <StatsSection
         resumes={state.resumes}
+        coverLetters={state.coverLetters}
       />
 
       <ResumeTable
         resumes={state.resumes}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        setState={setState}
+        onShowPreview={handleShowPreview}
+      />
+
+      <CoverLetterTable
+        coverLetters={state.coverLetters}
+        searchTerm={coverLetterSearchTerm}
+        setSearchTerm={setCoverLetterSearchTerm}
         setState={setState}
         onShowPreview={handleShowPreview}
       />

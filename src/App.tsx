@@ -13,7 +13,7 @@ function AppShell() {
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'chunks':
-        return <ChunkLibraryPage resumes={state.resumes} />;
+        return <ChunkLibraryPage resumes={state.resumes} coverLetters={state.coverLetters} />;
       case 'dashboard':
       default:
         return <DashboardPage />;

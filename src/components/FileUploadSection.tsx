@@ -1,13 +1,93 @@
 import { useRef, useState } from "react";
-import { Resume } from "../types";
-import { saveResume, debugIndexedDB, clearAllData } from "../storage";
+import { Resume, CoverLetter, AppState } from "../types";
+import { saveResume, saveCoverLetter, debugIndexedDB, clearAllData } from "../storage";
 import { formatFileSize, extractTextFromDocument } from "../utils/documentUtils";
 
 interface FileUploadSectionProps {
-  state: { resumes: Resume[] };
-  setState: React.Dispatch<React.SetStateAction<{ resumes: Resume[] }>>;
+  state: AppState;
+  setState: React.Dispatch<React.SetStateAction<AppState>>;
   syncWithStorage?: () => Promise<void>;
 }
+
+// Function to parse structured filename: firstname-lastname-month-year-company-jobRoleKeyword-[coverletter|resume].docx
+const analyzeFilename = (filename: string): { documentType: 'resume' | 'cover_letter'; companyName?: string; jobRole?: string } => {
+  const originalName = filename.replace(/\.docx$/i, ''); // Remove extension
+  const parts = originalName.split('-');
+
+  // Expected pattern: firstname-lastname-month-year-company-jobRoleKeyword-[coverletter|resume]
+  // Minimum 7 parts: first, last, month, year, company, job, type
+  if (parts.length >= 7) {
+    const lastPart = parts[parts.length - 1].toLowerCase();
+
+    // Determine document type from last part
+    let documentType: 'resume' | 'cover_letter';
+    if (lastPart === 'coverletter' || lastPart === 'cover' || lastPart === 'cl') {
+      documentType = 'cover_letter';
+    } else if (lastPart === 'resume' || lastPart === 'cv') {
+      documentType = 'resume';
+    } else {
+      // Fallback: check if any part suggests cover letter
+      const coverLetterIndicators = ['cover', 'letter', 'coverletter', 'application'];
+      const isCoverLetter = parts.some(part =>
+        coverLetterIndicators.some(indicator => part.toLowerCase().includes(indicator))
+      );
+      documentType = isCoverLetter ? 'cover_letter' : 'resume';
+    }
+
+    // Extract company name (5th position: 0-indexed = parts[4])
+    let companyName: string | undefined;
+    if (parts[4] && parts[4].trim()) {
+      companyName = parts[4]
+        .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space before capital letters in camelCase
+        .trim()
+        .split(' ')
+        .map(word => {
+          // Keep certain words in specific case (e.g., AI, API, iOS)
+          const upperCaseWords = ['ai', 'api', 'ios', 'ui', 'ux', 'it', 'hr', 'pr'];
+          if (upperCaseWords.includes(word.toLowerCase())) {
+            return word.toUpperCase();
+          }
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(' ');
+    }
+
+    // Extract job role (6th position: 0-indexed = parts[5])
+    let jobRole: string | undefined;
+    if (parts[5] && parts[5].trim()) {
+      jobRole = parts[5]
+        .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space before capital letters in camelCase
+        .trim()
+        .split(' ')
+        .map(word => {
+          // Keep certain words in specific case (e.g., AI, API, iOS)
+          const upperCaseWords = ['ai', 'api', 'ios', 'ui', 'ux', 'it', 'hr', 'pr', 'ml', 'devops'];
+          if (upperCaseWords.includes(word.toLowerCase())) {
+            return word.toUpperCase();
+          }
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(' ');
+    }
+
+    console.log(`Structured filename parsed: ${originalName}
+      → Type: ${documentType}
+      → Company: ${companyName || 'Not detected'}
+      → Role: ${jobRole || 'Not detected'}`);
+
+    return { documentType, companyName, jobRole };
+  }
+
+  // Fallback to basic detection for non-structured filenames
+  const lowerName = filename.toLowerCase();
+  const coverLetterKeywords = ['cover', 'letter', 'coverletter', 'application', 'cl'];
+  const isCoverLetter = coverLetterKeywords.some(keyword => lowerName.includes(keyword));
+  const documentType = isCoverLetter ? 'cover_letter' : 'resume';
+
+  console.log(`Non-structured filename: ${originalName} → ${documentType} (basic detection)`);
+
+  return { documentType };
+};
 
 export default function FileUploadSection({ state, setState, syncWithStorage }: FileUploadSectionProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -18,7 +98,7 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
-    const newResumes: Resume[] = [];
+    const newDocuments: (Resume | CoverLetter)[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -46,30 +126,98 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
           reader.readAsDataURL(file);
         });
 
-        const resume: Resume = {
-          id: crypto.randomUUID(),
-          name: file.name.replace(/\.docx$/i, ''),
-          fileName: file.name,
-          fileSize: file.size,
-          uploadDate: new Date().toISOString(),
-          fileData: base64,
-          fileType: 'docx',
-          textContent: '',
-        };
+        // Analyze filename for document type, company, and job role
+        const analysis = analyzeFilename(file.name);
+        let { documentType, companyName, jobRole } = analysis;
 
-        // Extract text content for search
-        const textContent = await extractTextFromDocument(resume);
-        resume.textContent = textContent;
+        const detectedParts = [];
+        if (companyName) detectedParts.push(`Company: ${companyName}`);
+        if (jobRole) detectedParts.push(`Role: ${jobRole}`);
 
-        // Save each resume to IndexedDB immediately
-        try {
-          await saveResume(resume);
-          console.log(`Successfully saved ${file.name} to IndexedDB`);
-          newResumes.push(resume);
-        } catch (error) {
-          console.error(`Error saving ${file.name}:`, error);
-          alert(`Error saving ${file.name}. Please try again.`);
-          continue;
+        const detectedInfo = detectedParts.length > 0
+          ? `${documentType === 'resume' ? 'Resume' : 'Cover Letter'} (${detectedParts.join(', ')})`
+          : `${documentType === 'resume' ? 'Resume' : 'Cover Letter'}`;
+
+        console.log(`Auto-detected ${file.name} as: ${detectedInfo}`);
+
+        // Allow user to override detection if needed
+        const confirmMessage = `Detected "${file.name}" as: ${detectedInfo}\n\nIs this correct?`;
+        const isCorrect = confirm(confirmMessage);
+
+        if (!isCorrect) {
+          const alternativeType = documentType === 'resume' ? 'cover_letter' : 'resume';
+          const alternativeText = alternativeType === 'resume' ? 'Resume' : 'Cover Letter';
+          const useAlternative = confirm(`Should this be treated as a ${alternativeText} instead?`);
+          if (useAlternative) {
+            documentType = alternativeType;
+            console.log(`User override: ${file.name} changed to: ${documentType}`);
+          }
+        }
+
+        // Create document based on final type
+        if (documentType === 'resume') {
+          const resume: Resume = {
+            id: crypto.randomUUID(),
+            name: file.name.replace(/\.docx$/i, ''),
+            fileName: file.name,
+            fileSize: file.size,
+            uploadDate: new Date().toISOString(),
+            fileData: base64,
+            fileType: 'docx',
+            textContent: '',
+          };
+
+          // Extract text content for search
+          const textContent = await extractTextFromDocument(resume);
+          resume.textContent = textContent;
+
+          // Save resume to IndexedDB immediately
+          try {
+            await saveResume(resume);
+            console.log(`Successfully saved resume ${file.name} to IndexedDB`);
+            newDocuments.push(resume);
+          } catch (error) {
+            console.error(`Error saving resume ${file.name}:`, error);
+            alert(`Error saving ${file.name}. Please try again.`);
+            continue;
+          }
+        } else {
+          // Get target company and position for cover letter
+          const detectedInfo = [];
+          if (companyName) detectedInfo.push(`Company: ${companyName}`);
+          if (jobRole) detectedInfo.push(`Role: ${jobRole}`);
+          const detectedMsg = detectedInfo.length > 0 ? `\n\n✨ Detected: ${detectedInfo.join(', ')}` : '';
+
+          const targetCompany = prompt(`📄 Cover Letter Detected: ${file.name}${detectedMsg}\n\nEnter the target company (leave blank to use detected):`, companyName || '');
+          const targetPosition = prompt(`📄 Cover Letter: ${file.name}\n\nEnter the target position (leave blank to use detected):`, jobRole || '');
+
+          const coverLetter: CoverLetter = {
+            id: crypto.randomUUID(),
+            name: file.name.replace(/\.docx$/i, ''),
+            fileName: file.name,
+            fileSize: file.size,
+            uploadDate: new Date().toISOString(),
+            fileData: base64,
+            fileType: 'docx',
+            textContent: '',
+            targetCompany: targetCompany?.trim() || undefined,
+            targetPosition: targetPosition?.trim() || undefined,
+          };
+
+          // Extract text content for search
+          const textContent = await extractTextFromDocument(coverLetter);
+          coverLetter.textContent = textContent;
+
+          // Save cover letter to IndexedDB immediately
+          try {
+            await saveCoverLetter(coverLetter);
+            console.log(`Successfully saved cover letter ${file.name} to IndexedDB`);
+            newDocuments.push(coverLetter);
+          } catch (error) {
+            console.error(`Error saving cover letter ${file.name}:`, error);
+            alert(`Error saving ${file.name}. Please try again.`);
+            continue;
+          }
         }
       } catch (error) {
         console.error(`Error processing ${file.name}:`, error);
@@ -77,16 +225,10 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
       }
     }
 
-    if (newResumes.length > 0) {
+    if (newDocuments.length > 0) {
       // Sync with storage to get the latest state from IndexedDB
       if (syncWithStorage) {
         await syncWithStorage();
-      } else {
-        // Fallback to manual state update if sync function not available
-        setState(prev => ({
-          ...prev,
-          resumes: [...prev.resumes, ...newResumes]
-        }));
       }
     }
 
@@ -99,17 +241,22 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
 
   return (
     <section className="page-card">
-      <h2>Upload Resumes</h2>
-      <p>Upload multiple Word resume documents (.docx) to manage and track them.</p>
+      <h2>Upload Documents</h2>
+      <p>Upload Word documents (.docx) - we'll automatically extract document type, company, and job role from structured filenames.</p>
+      <p style={{ fontSize: "0.875rem", color: "#666", marginBottom: "1rem" }}>
+        💡 <strong>Structured Format:</strong> <code>firstname-lastname-month-year-company-jobRole-[coverletter|resume].docx</code>
+        <br />
+        <strong>Example:</strong> <code>john-smith-nov-2024-google-softwareEngineer-coverletter.docx</code>
+      </p>
 
-      <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button
           type="button"
           className="primary"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
         >
-          {isUploading ? 'Uploading...' : 'Select Word Resumes'}
+          {isUploading ? 'Uploading...' : '📄 Upload Documents'}
         </button>
         <button
           type="button"

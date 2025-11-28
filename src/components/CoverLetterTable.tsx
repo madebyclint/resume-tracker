@@ -1,99 +1,94 @@
 import { useState, useEffect } from "react";
-import { Resume, Chunk, AppState } from "../types";
-import { saveResume, deleteResume as deleteResumeFromStorage, saveChunks, getChunksBySourceDoc, deleteChunksBySourceDoc } from "../storage";
+import { CoverLetter, Chunk, AppState } from "../types";
+import { saveCoverLetter, deleteCoverLetter, saveChunks, getChunksBySourceDoc, deleteChunksBySourceDoc } from "../storage";
 import { formatFileSize, formatDate, extractTextFromDocument } from "../utils/documentUtils";
-import { parseTextIntoChunks, isAIConfigured, showConfigInstructions } from "../utils/aiService";
-import { parseResumeWithRules, getParseResultSummary } from "../utils/plainTextParser";
+import { parseCoverLetterIntoChunks, isAIConfigured, showConfigInstructions } from "../utils/aiService";
 import ChunkReviewModal from "./ChunkReviewModal";
+import ProgressSpinner from "./ProgressSpinner";
 
-interface ResumeTableProps {
-  resumes: Resume[];
+interface CoverLetterTableProps {
+  coverLetters: CoverLetter[];
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
   onShowPreview: (text: string) => void;
 }
 
-export default function ResumeTable({
-  resumes,
+export default function CoverLetterTable({
+  coverLetters,
   searchTerm,
   setSearchTerm,
   setState,
   onShowPreview
-}: ResumeTableProps) {
-  const [parsingResumeId, setParsingResumeId] = useState<string | null>(null);
-  const [chunkingResumeId, setChunkingResumeId] = useState<string | null>(null);
+}: CoverLetterTableProps) {
+  const [parsingCoverLetterId, setParsingCoverLetterId] = useState<string | null>(null);
+  const [chunkingCoverLetterId, setChunkingCoverLetterId] = useState<string | null>(null);
   const [chunkReviewModal, setChunkReviewModal] = useState<{
     isOpen: boolean;
     chunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[];
-    resumeId: string;
-    resumeName: string;
-    parsedBy: 'ai' | 'rules';
+    coverLetterId: string;
+    coverLetterName: string;
+    parsedBy: 'ai';
   }>({
     isOpen: false,
     chunks: [],
-    resumeId: '',
-    resumeName: '',
-    parsedBy: 'rules'
+    coverLetterId: '',
+    coverLetterName: '',
+    parsedBy: 'ai'
   });
-  const [resumeChunkCounts, setResumeChunkCounts] = useState<Record<string, number>>({});
+  const [coverLetterChunkCounts, setCoverLetterChunkCounts] = useState<Record<string, number>>({});
 
-  // Load chunk counts for all resumes
+  // Load chunk counts for all cover letters
   useEffect(() => {
     const loadChunkCounts = async () => {
       const counts: Record<string, number> = {};
-      for (const resume of resumes) {
+      for (const coverLetter of coverLetters) {
         try {
-          const chunks = await getChunksBySourceDoc(resume.id);
-          counts[resume.id] = chunks.length;
+          const chunks = await getChunksBySourceDoc(coverLetter.id);
+          counts[coverLetter.id] = chunks.length;
         } catch (error) {
-          console.error(`Failed to load chunks for resume ${resume.id}:`, error);
-          counts[resume.id] = 0;
+          console.error(`Failed to load chunks for cover letter ${coverLetter.id}:`, error);
+          counts[coverLetter.id] = 0;
         }
       }
-      setResumeChunkCounts(counts);
+      setCoverLetterChunkCounts(counts);
     };
 
-    if (resumes.length > 0) {
+    if (coverLetters.length > 0) {
       loadChunkCounts();
     }
-  }, [resumes]);
+  }, [coverLetters]);
 
-  const parseIntoChunks = async (resume: Resume, useAI: boolean = true) => {
-    if (!resume.textContent || resume.textContent.trim().length === 0) {
+  const parseIntoChunks = async (coverLetter: CoverLetter) => {
+    if (!coverLetter.textContent || coverLetter.textContent.trim().length === 0) {
       alert('No text content available. Please extract text first before parsing into chunks.');
       return;
     }
 
-    // Check if AI is configured when using AI parsing
-    if (useAI && !isAIConfigured()) {
+    // Check if AI is configured
+    if (!isAIConfigured()) {
       showConfigInstructions();
       return;
     }
 
     // Check if re-parsing (chunks already exist)
-    const existingChunkCount = resumeChunkCounts[resume.id] || 0;
+    const existingChunkCount = coverLetterChunkCounts[coverLetter.id] || 0;
     const isReparsing = existingChunkCount > 0;
 
     if (isReparsing) {
       const confirmReparse = confirm(
-        `This document already has ${existingChunkCount} parsed chunks.\n\n` +
+        `This cover letter already has ${existingChunkCount} parsed chunks.\n\n` +
         'Re-parsing will replace all existing chunks with new ones.\n\n' +
         'Do you want to continue?'
       );
       if (!confirmReparse) return;
     }
 
-    setChunkingResumeId(resume.id);
+    setChunkingCoverLetterId(coverLetter.id);
 
     try {
-      let result;
-
-      if (useAI) {
-        result = await parseTextIntoChunks(resume.textContent);
-      } else {
-        result = parseResumeWithRules(resume.textContent);
-      }
+      // Use AI semantic parsing for cover letters
+      const result = await parseCoverLetterIntoChunks(coverLetter.textContent);
 
       if (!result.success) {
         alert(`Failed to parse chunks: ${result.error}`);
@@ -105,58 +100,53 @@ export default function ResumeTable({
         return;
       }
 
-      // Show parsing summary
-      if (!useAI && 'sections' in result) {
-        const summary = getParseResultSummary(result as any);
-        console.log('Rule-based parsing result:', summary);
-      }
-
       // Open the review modal
       setChunkReviewModal({
         isOpen: true,
         chunks: result.chunks,
-        resumeId: resume.id,
-        resumeName: resume.name,
-        parsedBy: useAI ? 'ai' : 'rules'
+        coverLetterId: coverLetter.id,
+        coverLetterName: coverLetter.name,
+        parsedBy: 'ai'
       });
 
     } catch (error) {
       console.error('Error parsing chunks:', error);
       alert('An unexpected error occurred while parsing chunks. Check the console for details.');
     } finally {
-      setChunkingResumeId(null);
+      setChunkingCoverLetterId(null);
     }
   };
 
   const handleSaveChunks = async (approvedChunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[]) => {
     try {
       // Check if we're replacing existing chunks (re-parsing)
-      const existingChunks = await getChunksBySourceDoc(chunkReviewModal.resumeId);
+      const existingChunks = await getChunksBySourceDoc(chunkReviewModal.coverLetterId);
 
       if (existingChunks.length > 0) {
         // Delete existing chunks first
-        await deleteChunksBySourceDoc(chunkReviewModal.resumeId);
+        await deleteChunksBySourceDoc(chunkReviewModal.coverLetterId);
       }
 
       // Convert to full Chunk objects
       const chunks: Chunk[] = approvedChunks.map((chunk, index) => ({
         ...chunk,
         id: crypto.randomUUID(),
-        sourceDocId: chunkReviewModal.resumeId,
+        sourceDocId: chunkReviewModal.coverLetterId,
         createdAt: new Date().toISOString(),
         approved: true,
-        parsedBy: chunkReviewModal.parsedBy
+        parsedBy: chunkReviewModal.parsedBy,
+        sourceDocType: 'cover_letter'
       }));
 
       await saveChunks(chunks);
 
       // Update chunk count
-      setResumeChunkCounts(prev => ({
+      setCoverLetterChunkCounts(prev => ({
         ...prev,
-        [chunkReviewModal.resumeId]: chunks.length
+        [chunkReviewModal.coverLetterId]: chunks.length
       }));
 
-      alert(`✅ Successfully saved ${chunks.length} chunks!`);
+      alert(`✅ Successfully saved ${chunks.length} chunks with semantic relationships!`);
 
     } catch (error) {
       console.error('Error saving chunks:', error);
@@ -168,30 +158,30 @@ export default function ResumeTable({
     setChunkReviewModal({
       isOpen: false,
       chunks: [],
-      resumeId: '',
-      resumeName: '',
-      parsedBy: 'rules'
+      coverLetterId: '',
+      coverLetterName: '',
+      parsedBy: 'ai'
     });
   };
 
-  const parseText = async (resume: Resume) => {
-    setParsingResumeId(resume.id);
+  const parseText = async (coverLetter: CoverLetter) => {
+    setParsingCoverLetterId(coverLetter.id);
     try {
-      const textContent = await extractTextFromDocument(resume);
+      const textContent = await extractTextFromDocument(coverLetter);
 
-      const updatedResume = {
-        ...resume,
+      const updatedCoverLetter = {
+        ...coverLetter,
         textContent
       };
 
       // Save to IndexedDB
-      await saveResume(updatedResume);
+      await saveCoverLetter(updatedCoverLetter);
 
       // Update state
       setState(prev => ({
         ...prev,
-        resumes: prev.resumes.map(r =>
-          r.id === resume.id ? updatedResume : r
+        coverLetters: prev.coverLetters.map(c =>
+          c.id === coverLetter.id ? updatedCoverLetter : c
         )
       }));
 
@@ -205,16 +195,16 @@ export default function ResumeTable({
           const manualText = prompt(`📝 Manual Text Input\n\nPlease:\n1. Open your Word document\n2. Select all text (Cmd+A)\n3. Copy the text (Cmd+C)\n4. Paste it below:`);
 
           if (manualText && manualText.trim().length > 0) {
-            const updatedResumeWithManualText = {
-              ...resume,
+            const updatedCoverLetterWithManualText = {
+              ...coverLetter,
               textContent: manualText.trim()
             };
 
-            await saveResume(updatedResumeWithManualText);
+            await saveCoverLetter(updatedCoverLetterWithManualText);
             setState(prev => ({
               ...prev,
-              resumes: prev.resumes.map(r =>
-                r.id === resume.id ? updatedResumeWithManualText : r
+              coverLetters: prev.coverLetters.map(c =>
+                c.id === coverLetter.id ? updatedCoverLetterWithManualText : c
               )
             }));
 
@@ -226,34 +216,34 @@ export default function ResumeTable({
       console.error('Error parsing text:', error);
       alert('Error extracting text from Word document');
     } finally {
-      setParsingResumeId(null);
+      setParsingCoverLetterId(null);
     }
   };
 
-  const showTextPreview = (resume: Resume) => {
-    onShowPreview(resume.textContent || 'No text content available');
+  const showTextPreview = (coverLetter: CoverLetter) => {
+    onShowPreview(coverLetter.textContent || 'No text content available');
   };
 
-  const deleteResume = async (resumeId: string) => {
-    if (confirm('Are you sure you want to delete this resume?')) {
+  const deleteCoverLetterHandler = async (coverLetterId: string) => {
+    if (confirm('Are you sure you want to delete this cover letter?')) {
       try {
-        await deleteResumeFromStorage(resumeId);
+        await deleteCoverLetter(coverLetterId);
         setState(prev => ({
           ...prev,
-          resumes: prev.resumes.filter(resume => resume.id !== resumeId)
+          coverLetters: prev.coverLetters.filter(cl => cl.id !== coverLetterId)
         }));
       } catch (error) {
-        console.error('Error deleting resume:', error);
-        alert('Error deleting resume');
+        console.error('Error deleting cover letter:', error);
+        alert('Error deleting cover letter');
       }
     }
   };
 
-  const openResume = (resume: Resume) => {
-    console.log('=== OPENING RESUME ===');
-    console.log('Resume name:', resume.name);
-    console.log('File data length:', resume.fileData.length);
-    console.log('File type:', resume.fileType);
+  const openCoverLetter = (coverLetter: CoverLetter) => {
+    console.log('=== OPENING COVER LETTER ===');
+    console.log('Cover letter name:', coverLetter.name);
+    console.log('File data length:', coverLetter.fileData.length);
+    console.log('File type:', coverLetter.fileType);
 
     // Word documents cannot be displayed in browser - offer download instead
     alert('Word documents cannot be previewed in the browser. The file will be downloaded for viewing.');
@@ -261,7 +251,7 @@ export default function ResumeTable({
     try {
       // Download Word document
       console.log('Downloading Word document...');
-      const base64Data = resume.fileData.split(',')[1];
+      const base64Data = coverLetter.fileData.split(',')[1];
       const binaryData = atob(base64Data);
       const uint8Array = new Uint8Array(binaryData.length);
 
@@ -277,7 +267,7 @@ export default function ResumeTable({
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = resume.fileName;
+      link.download = coverLetter.fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -294,25 +284,27 @@ export default function ResumeTable({
     }
   };
 
-  // Filter resumes based on search term
-  const filteredResumes = resumes.filter(resume => {
+  // Filter cover letters based on search term
+  const filteredCoverLetters = coverLetters.filter(coverLetter => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
-      resume.name.toLowerCase().includes(term) ||
-      resume.fileName.toLowerCase().includes(term) ||
-      (resume.textContent && resume.textContent.toLowerCase().includes(term))
+      coverLetter.name.toLowerCase().includes(term) ||
+      coverLetter.fileName.toLowerCase().includes(term) ||
+      (coverLetter.textContent && coverLetter.textContent.toLowerCase().includes(term)) ||
+      (coverLetter.targetCompany && coverLetter.targetCompany.toLowerCase().includes(term)) ||
+      (coverLetter.targetPosition && coverLetter.targetPosition.toLowerCase().includes(term))
     );
   });
 
   return (
     <section className="page-card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h3>Manage Resumes</h3>
-        {resumes.length > 0 && (
+        <h3>Manage Cover Letters</h3>
+        {coverLetters.length > 0 && (
           <input
             type="text"
-            placeholder="Search resumes..."
+            placeholder="Search cover letters..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -325,16 +317,17 @@ export default function ResumeTable({
         )}
       </div>
 
-      {resumes.length === 0 ? (
+      {coverLetters.length === 0 ? (
         <div style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
-          <p>No resumes uploaded yet.</p>
-          <p>Click "Select Word Resumes" above to get started.</p>
+          <p>No cover letters uploaded yet.</p>
+          <p>Click "Select Cover Letters" above to get started.</p>
         </div>
       ) : (
         <table className="table">
           <thead>
             <tr>
               <th>Name</th>
+              <th>Target</th>
               <th>Type</th>
               <th>File Size</th>
               <th>Upload Date</th>
@@ -343,35 +336,54 @@ export default function ResumeTable({
             </tr>
           </thead>
           <tbody>
-            {filteredResumes.map((resume) => (
-              <tr key={resume.id}>
+            {filteredCoverLetters.map((coverLetter) => (
+              <tr key={coverLetter.id}>
                 <td>
-                  <strong>{resume.name}</strong>
+                  <strong>{coverLetter.name}</strong>
                   <br />
                   <span style={{ fontSize: "0.8rem", color: "#666" }}>
-                    {resume.fileName}
+                    {coverLetter.fileName}
                   </span>
+                </td>
+                <td>
+                  <div style={{ fontSize: "0.8rem" }}>
+                    {coverLetter.targetCompany && (
+                      <div style={{ fontWeight: "600", color: "#374151" }}>
+                        {coverLetter.targetCompany}
+                      </div>
+                    )}
+                    {coverLetter.targetPosition && (
+                      <div style={{ color: "#6b7280" }}>
+                        {coverLetter.targetPosition}
+                      </div>
+                    )}
+                    {!coverLetter.targetCompany && !coverLetter.targetPosition && (
+                      <span style={{ color: "#9ca3af", fontStyle: "italic" }}>
+                        Not specified
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td>
                   <span style={{
                     fontSize: "0.75rem",
                     padding: "0.25rem 0.5rem",
                     borderRadius: "12px",
-                    backgroundColor: "#2563eb",
+                    backgroundColor: "#7c3aed",
                     color: "white",
                     fontWeight: "600",
                     textTransform: "uppercase"
                   }}>
-                    DOCX
+                    COVER LETTER
                   </span>
                 </td>
-                <td>{formatFileSize(resume.fileSize)}</td>
-                <td>{formatDate(resume.uploadDate)}</td>
+                <td>{formatFileSize(coverLetter.fileSize)}</td>
+                <td>{formatDate(coverLetter.uploadDate)}</td>
                 <td>
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                     {/* Text Status */}
                     <div>
-                      {resume.textContent && resume.textContent.trim().length > 0 ? (
+                      {coverLetter.textContent && coverLetter.textContent.trim().length > 0 ? (
                         <span style={{ color: "#22c55e", fontWeight: "600", fontSize: "0.8rem" }}>
                           Text extracted ✓
                         </span>
@@ -380,18 +392,18 @@ export default function ResumeTable({
                           No text extracted ✗
                         </span>
                       )}
-                      {resume.textContent && (
+                      {coverLetter.textContent && (
                         <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "1px" }}>
-                          {resume.textContent.length} characters
+                          {coverLetter.textContent.length} characters
                         </div>
                       )}
                     </div>
 
                     {/* Chunk Status */}
                     <div>
-                      {resumeChunkCounts[resume.id] > 0 ? (
+                      {coverLetterChunkCounts[coverLetter.id] > 0 ? (
                         <span style={{ color: "#8b5cf6", fontWeight: "600", fontSize: "0.8rem" }}>
-                          {resumeChunkCounts[resume.id]} chunks parsed ✓
+                          {coverLetterChunkCounts[coverLetter.id]} chunks parsed ✓
                         </span>
                       ) : (
                         <span style={{ color: "#6b7280", fontWeight: "600", fontSize: "0.8rem" }}>
@@ -406,31 +418,31 @@ export default function ResumeTable({
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => openResume(resume)}
+                      onClick={() => openCoverLetter(coverLetter)}
                     >
                       Download
                     </button>
-                    {(!resume.textContent || resume.textContent.trim().length === 0) ? (
+                    {(!coverLetter.textContent || coverLetter.textContent.trim().length === 0) ? (
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => parseText(resume)}
-                        disabled={parsingResumeId === resume.id}
+                        onClick={() => parseText(coverLetter)}
+                        disabled={parsingCoverLetterId === coverLetter.id}
                         style={{
                           fontSize: "0.8rem",
                           padding: "0.4rem 0.6rem",
-                          backgroundColor: parsingResumeId === resume.id ? "#f0f0f0" : "#3b82f6",
-                          color: parsingResumeId === resume.id ? "#666" : "white",
+                          backgroundColor: parsingCoverLetterId === coverLetter.id ? "#f0f0f0" : "#3b82f6",
+                          color: parsingCoverLetterId === coverLetter.id ? "#666" : "white",
                           border: "none"
                         }}
                       >
-                        {parsingResumeId === resume.id ? 'Parsing...' : 'Parse Text'}
+                        {parsingCoverLetterId === coverLetter.id ? 'Parsing...' : 'Parse Text'}
                       </button>
                     ) : (
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => showTextPreview(resume)}
+                        onClick={() => showTextPreview(coverLetter)}
                         style={{
                           fontSize: "0.8rem",
                           padding: "0.4rem 0.6rem",
@@ -443,38 +455,41 @@ export default function ResumeTable({
                       </button>
                     )}
 
-                    {/* Parse into Chunks buttons - only show if text is extracted */}
-                    {resume.textContent && resume.textContent.trim().length > 0 && (
-                      <div style={{ display: "flex", gap: "0.25rem" }}>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => parseIntoChunks(resume, false)}
-                          disabled={chunkingResumeId === resume.id}
-                          style={{
-                            fontSize: "0.75rem",
-                            padding: "0.3rem 0.5rem",
-                            backgroundColor: chunkingResumeId === resume.id ? "#f0f0f0" : "#22c55e",
-                            color: chunkingResumeId === resume.id ? "#666" : "white",
-                            border: "none"
-                          }}
-                          title="Fast rule-based parsing - no AI required"
-                        >
-                          {chunkingResumeId === resume.id ? 'Parsing...' : (resumeChunkCounts[resume.id] > 0 ? 'Re-parse' : 'Parse Chunks')}
-                        </button>
-                      </div>
+                    {/* Parse into Chunks button - only show if text is extracted */}
+                    {coverLetter.textContent && coverLetter.textContent.trim().length > 0 && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => parseIntoChunks(coverLetter)}
+                        disabled={chunkingCoverLetterId === coverLetter.id}
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "0.3rem 0.5rem",
+                          backgroundColor: chunkingCoverLetterId === coverLetter.id ? "#f0f0f0" : "#8b5cf6",
+                          color: chunkingCoverLetterId === coverLetter.id ? "#666" : "white",
+                          border: "none"
+                        }}
+                        title="AI-powered semantic relationship parsing"
+                      >
+                        {chunkingCoverLetterId === coverLetter.id ? (
+                          <ProgressSpinner message="AI Parsing..." size="small" />
+                        ) : (
+                          coverLetterChunkCounts[coverLetter.id] > 0 ? 'Re-parse (AI)' : 'AI Parse'
+                        )}
+                      </button>
                     )}
 
                     <button
                       type="button"
                       className="secondary"
                       onClick={() => {
-                        console.log('=== WORD DOCUMENT INFO ===');
-                        console.log('=== WORD DOCUMENT VALIDATION ===');
-                        console.log('File type:', resume.fileType);
-                        console.log('File size:', resume.fileSize);
-                        console.log('Has text content:', !!resume.textContent);
-                        alert(`Word Document Info:\nType: ${resume.fileType}\nSize: ${formatFileSize(resume.fileSize)}\nText extracted: ${resume.textContent ? 'Yes' : 'No'}`);
+                        console.log('=== COVER LETTER INFO ===');
+                        console.log('File type:', coverLetter.fileType);
+                        console.log('File size:', coverLetter.fileSize);
+                        console.log('Has text content:', !!coverLetter.textContent);
+                        console.log('Target company:', coverLetter.targetCompany);
+                        console.log('Target position:', coverLetter.targetPosition);
+                        alert(`Cover Letter Info:\nType: ${coverLetter.fileType}\nSize: ${formatFileSize(coverLetter.fileSize)}\nText extracted: ${coverLetter.textContent ? 'Yes' : 'No'}\nTarget: ${coverLetter.targetCompany || 'Not specified'} - ${coverLetter.targetPosition || 'Not specified'}`);
                       }}
                       style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }}
                     >
@@ -483,7 +498,7 @@ export default function ResumeTable({
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => deleteResume(resume.id)}
+                      onClick={() => deleteCoverLetterHandler(coverLetter.id)}
                       style={{ color: "#d73a49" }}
                     >
                       Delete
@@ -502,7 +517,7 @@ export default function ResumeTable({
         onClose={handleCloseChunkModal}
         chunks={chunkReviewModal.chunks}
         onSave={handleSaveChunks}
-        documentName={chunkReviewModal.resumeName}
+        documentName={chunkReviewModal.coverLetterName}
       />
     </section>
   );

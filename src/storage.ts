@@ -1,8 +1,9 @@
-import { AppState, Resume, Chunk } from "./types";
+import { AppState, Resume, CoverLetter, Chunk } from "./types";
 
 const DB_NAME = "ResumeTrackerDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const RESUME_STORE = "resumes";
+const COVER_LETTER_STORE = "coverLetters";
 const PDF_STORE = "pdfs";
 const CHUNKS_STORE = "chunks";
 
@@ -16,6 +17,18 @@ interface ResumeMetadata {
   textContent?: string;
 }
 
+interface CoverLetterMetadata {
+  id: string;
+  name: string;
+  fileName: string;
+  fileSize: number;
+  uploadDate: string;
+  fileType: 'docx';
+  textContent?: string;
+  targetCompany?: string;
+  targetPosition?: string;
+}
+
 interface FileData {
   id: string;
   data: ArrayBuffer;
@@ -23,6 +36,7 @@ interface FileData {
 
 const emptyState: AppState = {
   resumes: [],
+  coverLetters: [],
 };
 
 class IndexedDBStorage {
@@ -47,6 +61,13 @@ class IndexedDBStorage {
         if (!db.objectStoreNames.contains(RESUME_STORE)) {
           const resumeStore = db.createObjectStore(RESUME_STORE, { keyPath: "id" });
           resumeStore.createIndex("uploadDate", "uploadDate", { unique: false });
+        }
+
+        // Create cover letter metadata store
+        if (!db.objectStoreNames.contains(COVER_LETTER_STORE)) {
+          const coverLetterStore = db.createObjectStore(COVER_LETTER_STORE, { keyPath: "id" });
+          coverLetterStore.createIndex("uploadDate", "uploadDate", { unique: false });
+          coverLetterStore.createIndex("targetCompany", "targetCompany", { unique: false });
         }
 
         // Create PDF data store
@@ -171,6 +192,139 @@ class IndexedDBStorage {
     return resumes.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
   }
 
+  async saveCoverLetter(coverLetter: CoverLetter): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    console.log('Saving cover letter:', coverLetter.name, 'File data length:', coverLetter.fileData.length, 'Type:', coverLetter.fileType);
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([COVER_LETTER_STORE, PDF_STORE], "readwrite");
+      
+      transaction.oncomplete = () => {
+        console.log('Cover letter saved successfully:', coverLetter.name);
+        resolve();
+      };
+      
+      transaction.onerror = () => {
+        console.error('Transaction failed for cover letter:', coverLetter.name, transaction.error);
+        reject(transaction.error);
+      };
+      
+      try {
+        // Convert base64 to ArrayBuffer for efficient storage
+        const fileBuffer = this.base64ToArrayBuffer(coverLetter.fileData);
+        console.log('Converted to ArrayBuffer, size:', fileBuffer.byteLength);
+        
+        // Save metadata without file data
+        const metadata: CoverLetterMetadata = {
+          id: coverLetter.id,
+          name: coverLetter.name,
+          fileName: coverLetter.fileName,
+          fileSize: coverLetter.fileSize,
+          uploadDate: coverLetter.uploadDate,
+          fileType: coverLetter.fileType,
+          textContent: coverLetter.textContent,
+          targetCompany: coverLetter.targetCompany,
+          targetPosition: coverLetter.targetPosition,
+        };
+
+        // Save file data separately (using same PDF store for now)
+        const fileData: FileData = {
+          id: coverLetter.id,
+          data: fileBuffer,
+        };
+
+        const coverLetterStore = transaction.objectStore(COVER_LETTER_STORE);
+        const fileStore = transaction.objectStore(PDF_STORE);
+
+        coverLetterStore.put(metadata);
+        fileStore.put(fileData);
+        
+      } catch (error) {
+        console.error('Error preparing data for cover letter:', coverLetter.name, error);
+        reject(error);
+      }
+    });
+  }
+
+  async loadCoverLetters(): Promise<CoverLetter[]> {
+    await this.init();
+    if (!this.db) return [];
+
+    const transaction = this.db.transaction([COVER_LETTER_STORE, PDF_STORE], "readonly");
+    const coverLetterStore = transaction.objectStore(COVER_LETTER_STORE);
+    const fileStore = transaction.objectStore(PDF_STORE);
+
+    const metadataRequest = coverLetterStore.getAll();
+    const metadata = await this.promisifyRequest<CoverLetterMetadata[]>(metadataRequest);
+
+    console.log('Loading cover letters, found metadata for:', metadata.length, 'cover letters');
+
+    const coverLetters: CoverLetter[] = [];
+    
+    for (const meta of metadata) {
+      try {
+        const fileRequest = fileStore.get(meta.id);
+        const storedFileData = await this.promisifyRequest<FileData>(fileRequest);
+        
+        if (storedFileData && storedFileData.data && storedFileData.data.byteLength > 0) {
+          console.log('Found file data for:', meta.name, 'size:', storedFileData.data.byteLength, 'type:', meta.fileType || 'docx');
+          const base64Data = this.arrayBufferToBase64(storedFileData.data);
+          console.log('Converted to base64, length:', base64Data.length);
+          
+          // Validate the cover letter has required fields
+          if (meta.id && meta.name && meta.fileName && meta.uploadDate) {
+            coverLetters.push({
+              ...meta,
+              fileType: meta.fileType || 'docx',
+              fileData: base64Data,
+            });
+          } else {
+            console.warn('Cover letter metadata is incomplete for:', meta.name || meta.id, 'skipping...');
+          }
+        } else {
+          console.warn('No file data found for cover letter:', meta.name, 'ID:', meta.id, 'removing metadata...');
+          // Clean up orphaned metadata
+          const cleanupTransaction = this.db!.transaction([COVER_LETTER_STORE], "readwrite");
+          const cleanupStore = cleanupTransaction.objectStore(COVER_LETTER_STORE);
+          cleanupStore.delete(meta.id);
+        }
+      } catch (error) {
+        console.error('Error loading cover letter:', meta.name || meta.id, error);
+        // Continue with other cover letters
+      }
+    }
+
+    console.log('Loaded', coverLetters.length, 'complete cover letters');
+    return coverLetters.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+  }
+
+  async deleteCoverLetter(id: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([COVER_LETTER_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
+    const coverLetterStore = transaction.objectStore(COVER_LETTER_STORE);
+    const pdfStore = transaction.objectStore(PDF_STORE);
+    const chunkStore = transaction.objectStore(CHUNKS_STORE);
+
+    // Delete all chunks associated with this cover letter
+    const chunksIndex = chunkStore.index("sourceDocId");
+    const chunkKeysRequest = chunksIndex.getAllKeys(id);
+    const chunkKeys = await this.promisifyRequest<string[]>(chunkKeysRequest);
+    
+    const deleteChunkPromises = chunkKeys.map(chunkId => 
+      this.promisifyRequest(chunkStore.delete(chunkId))
+    );
+
+    await Promise.all([
+      this.promisifyRequest(coverLetterStore.delete(id)),
+      this.promisifyRequest(pdfStore.delete(id)),
+      ...deleteChunkPromises
+    ]);
+  }
+
   async deleteResume(id: string): Promise<void> {
     await this.init();
     if (!this.db) throw new Error("Database not initialized");
@@ -200,13 +354,15 @@ class IndexedDBStorage {
     await this.init();
     if (!this.db) return;
 
-    const transaction = this.db.transaction([RESUME_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
+    const transaction = this.db.transaction([RESUME_STORE, COVER_LETTER_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
     const resumeStore = transaction.objectStore(RESUME_STORE);
+    const coverLetterStore = transaction.objectStore(COVER_LETTER_STORE);
     const pdfStore = transaction.objectStore(PDF_STORE);
     const chunkStore = transaction.objectStore(CHUNKS_STORE);
 
     await Promise.all([
       this.promisifyRequest(resumeStore.clear()),
+      this.promisifyRequest(coverLetterStore.clear()),
       this.promisifyRequest(pdfStore.clear()),
       this.promisifyRequest(chunkStore.clear()),
     ]);
@@ -430,7 +586,8 @@ export async function loadState(): Promise<AppState> {
     await migrateFromLocalStorage();
     
     const resumes = await storage.loadResumes();
-    return { resumes };
+    const coverLetters = await storage.loadCoverLetters();
+    return { resumes, coverLetters };
   } catch (error) {
     console.error("Failed to load state from IndexedDB", error);
     return emptyState;
@@ -443,22 +600,45 @@ export async function saveState(state: AppState): Promise<void> {
   }
 
   try {
-    // Get current resumes from IndexedDB to compare
-    const currentResumes = await storage.loadResumes();
-    const currentIds = new Set(currentResumes.map(r => r.id));
-    const newIds = new Set(state.resumes.map(r => r.id));
+    // Get current documents from IndexedDB to compare
+    const [currentResumes, currentCoverLetters] = await Promise.all([
+      storage.loadResumes(),
+      storage.loadCoverLetters()
+    ]);
+    
+    // Handle resumes
+    const currentResumeIds = new Set(currentResumes.map(r => r.id));
+    const newResumeIds = new Set(state.resumes.map(r => r.id));
     
     // Delete resumes that are no longer in the state
     for (const currentResume of currentResumes) {
-      if (!newIds.has(currentResume.id)) {
+      if (!newResumeIds.has(currentResume.id)) {
         await storage.deleteResume(currentResume.id);
       }
     }
     
     // Save new or updated resumes
     for (const resume of state.resumes) {
-      if (!currentIds.has(resume.id)) {
+      if (!currentResumeIds.has(resume.id)) {
         await storage.saveResume(resume);
+      }
+    }
+
+    // Handle cover letters
+    const currentCoverLetterIds = new Set(currentCoverLetters.map(c => c.id));
+    const newCoverLetterIds = new Set(state.coverLetters.map(c => c.id));
+    
+    // Delete cover letters that are no longer in the state
+    for (const currentCoverLetter of currentCoverLetters) {
+      if (!newCoverLetterIds.has(currentCoverLetter.id)) {
+        await storage.deleteCoverLetter(currentCoverLetter.id);
+      }
+    }
+    
+    // Save new or updated cover letters
+    for (const coverLetter of state.coverLetters) {
+      if (!currentCoverLetterIds.has(coverLetter.id)) {
+        await storage.saveCoverLetter(coverLetter);
       }
     }
   } catch (error) {
@@ -487,6 +667,31 @@ export async function deleteResume(id: string): Promise<void> {
     await storage.deleteResume(id);
   } catch (error) {
     console.error("Failed to delete resume from IndexedDB", error);
+  }
+}
+
+// Cover Letter storage functions
+export async function saveCoverLetter(coverLetter: CoverLetter): Promise<void> {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    await storage.saveCoverLetter(coverLetter);
+  } catch (error) {
+    console.error("Failed to save cover letter to IndexedDB", error);
+  }
+}
+
+export async function deleteCoverLetter(id: string): Promise<void> {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    await storage.deleteCoverLetter(id);
+  } catch (error) {
+    console.error("Failed to delete cover letter from IndexedDB", error);
   }
 }
 
