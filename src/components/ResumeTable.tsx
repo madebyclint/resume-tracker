@@ -132,7 +132,7 @@ export default function ResumeTable({
     try {
       // Check if we're replacing existing chunks (re-parsing)
       const existingChunks = await getChunksBySourceDoc(chunkReviewModal.resumeId);
-      
+
       if (existingChunks.length > 0) {
         // Delete existing chunks first
         await deleteChunksBySourceDoc(chunkReviewModal.resumeId);
