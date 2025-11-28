@@ -812,7 +812,7 @@ const JobDescriptionsPage: React.FC = () => {
                       )}
                     </button>
                   </div>
-                  
+
                   <div className="generation-options">
                     <div className="generation-toggle">
                       <label className="toggle-label">
@@ -823,18 +823,18 @@ const JobDescriptionsPage: React.FC = () => {
                           className="toggle-checkbox"
                         />
                         <span className="toggle-text">
-                          📄 Use Full Text Generation for Resume 
+                          📄 Use Full Text Generation for Resume
                           <span className="toggle-badge">{useFullTextForResume ? 'ON' : 'OFF'}</span>
                         </span>
                       </label>
                       <div className="toggle-description">
-                        {useFullTextForResume ? 
-                          'Generates from complete resume text for better context and flow' : 
+                        {useFullTextForResume ?
+                          'Generates from complete resume text for better context and flow' :
                           'Generates from relevant content chunks (original method)'
                         }
                       </div>
                     </div>
-                    
+
                     <div className="generation-toggle">
                       <label className="toggle-label">
                         <input
@@ -849,8 +849,8 @@ const JobDescriptionsPage: React.FC = () => {
                         </span>
                       </label>
                       <div className="toggle-description">
-                        {useFullTextForCoverLetter ? 
-                          'Generates from complete resume text for better context and flow' : 
+                        {useFullTextForCoverLetter ?
+                          'Generates from complete resume text for better context and flow' :
                           'Generates from relevant content chunks (original method)'
                         }
                       </div>
