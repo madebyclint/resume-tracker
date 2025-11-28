@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription } from '../types';
-import { parseJobDescription } from '../utils/aiService';
-import { saveJobDescription, deleteJobDescription } from '../storage';
+import { parseJobDescription, generateTailoredResume, generateTailoredCoverLetter, isAIConfigured } from '../utils/aiService';
+import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
+import { findRelevantResumeChunks, findRelevantCoverLetterChunks } from '../utils/chunkMatcher';
+import GeneratedContentModal from '../components/GeneratedContentModal';
 import './JobDescriptionsPage.css';
 
 // Remove the local interface since we're using the one from documentMatcher
@@ -21,6 +23,15 @@ const JobDescriptionsPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
+
+  // Generation modal states
+  const [showGeneratedModal, setShowGeneratedModal] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState('');
+  const [generatedTitle, setGeneratedTitle] = useState('');
+  const [generatedDefaultName, setGeneratedDefaultName] = useState('');
+  const [generationType, setGenerationType] = useState<'resume' | 'cover_letter'>('resume');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
@@ -231,6 +242,128 @@ const JobDescriptionsPage: React.FC = () => {
   // Calculate potential document matches using sophisticated matching
   const getDocumentMatches = (jobDescription: JobDescription): DocumentMatch[] => {
     return calculateDocumentMatches(jobDescription, state.resumes, state.coverLetters);
+  };
+
+  // Generate tailored resume
+  const handleGenerateResume = async (jobDescription: JobDescription) => {
+    if (!isAIConfigured()) {
+      alert('AI service is not configured. Please set up your OpenAI API key in the .env file.');
+      return;
+    }
+
+    setGenerationType('resume');
+    setGeneratedTitle('Generated Resume');
+    setGeneratedDefaultName(`Resume - ${jobDescription.company} - ${jobDescription.title}`);
+    setGeneratedContent('');
+    setGenerationError(null);
+    setIsGenerating(true);
+    setShowGeneratedModal(true);
+
+    try {
+      // Find relevant chunks
+      const relevantChunks = await findRelevantResumeChunks(jobDescription, 0.1, 15);
+
+      if (relevantChunks.length === 0) {
+        throw new Error('No relevant resume chunks found. Please ensure you have uploaded and processed some resumes.');
+      }
+
+      // Generate resume using AI
+      const result = await generateTailoredResume(
+        jobDescription,
+        relevantChunks,
+        jobDescription.additionalContext
+      );
+
+      if (!result.success || !result.content) {
+        throw new Error(result.error || 'Failed to generate resume');
+      }
+
+      setGeneratedContent(result.content);
+    } catch (error) {
+      console.error('Error generating resume:', error);
+      setGenerationError(error instanceof Error ? error.message : 'Unknown error occurred');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Generate tailored cover letter
+  const handleGenerateCoverLetter = async (jobDescription: JobDescription) => {
+    if (!isAIConfigured()) {
+      alert('AI service is not configured. Please set up your OpenAI API key in the .env file.');
+      return;
+    }
+
+    setGenerationType('cover_letter');
+    setGeneratedTitle('Generated Cover Letter');
+    setGeneratedDefaultName(`Cover Letter - ${jobDescription.company} - ${jobDescription.title}`);
+    setGeneratedContent('');
+    setGenerationError(null);
+    setIsGenerating(true);
+    setShowGeneratedModal(true);
+
+    try {
+      // Find relevant chunks
+      const relevantChunks = await findRelevantCoverLetterChunks(jobDescription, 0.1, 15);
+
+      if (relevantChunks.length === 0) {
+        throw new Error('No relevant chunks found. Please ensure you have uploaded and processed some documents.');
+      }
+
+      // Generate cover letter using AI
+      const result = await generateTailoredCoverLetter(
+        jobDescription,
+        relevantChunks,
+        jobDescription.additionalContext
+      );
+
+      if (!result.success || !result.content) {
+        throw new Error(result.error || 'Failed to generate cover letter');
+      }
+
+      setGeneratedContent(result.content);
+    } catch (error) {
+      console.error('Error generating cover letter:', error);
+      setGenerationError(error instanceof Error ? error.message : 'Unknown error occurred');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Save generated content
+  const handleSaveGenerated = async (name: string, content: string) => {
+    if (!selectedJob) return;
+
+    try {
+      if (generationType === 'resume') {
+        const newResume = await saveGeneratedResume(name, content, selectedJob);
+        setState(prev => ({
+          ...prev,
+          resumes: [...prev.resumes, newResume],
+          jobDescriptions: prev.jobDescriptions.map(jd =>
+            jd.id === selectedJob.id
+              ? { ...jd, linkedResumeIds: [...jd.linkedResumeIds, newResume.id] }
+              : jd
+          )
+        }));
+      } else {
+        const newCoverLetter = await saveGeneratedCoverLetter(name, content, selectedJob);
+        setState(prev => ({
+          ...prev,
+          coverLetters: [...prev.coverLetters, newCoverLetter],
+          jobDescriptions: prev.jobDescriptions.map(jd =>
+            jd.id === selectedJob.id
+              ? { ...jd, linkedCoverLetterIds: [...jd.linkedCoverLetterIds, newCoverLetter.id] }
+              : jd
+          )
+        }));
+      }
+
+      alert(`${generationType === 'resume' ? 'Resume' : 'Cover letter'} saved successfully!`);
+    } catch (error) {
+      console.error('Error saving generated content:', error);
+      throw error;
+    }
   };
 
   const selectedJob = selectedJobId ? state.jobDescriptions.find(jd => jd.id === selectedJobId) : null;
@@ -461,6 +594,29 @@ const JobDescriptionsPage: React.FC = () => {
                   </div>
                 )}
 
+                <div className="generation-section">
+                  <h3>AI Document Generation</h3>
+                  <div className="generation-buttons">
+                    <button
+                      className="generate-button generate-resume"
+                      onClick={() => handleGenerateResume(selectedJob)}
+                      disabled={isGenerating}
+                    >
+                      🤖 Generate Resume
+                    </button>
+                    <button
+                      className="generate-button generate-cover-letter"
+                      onClick={() => handleGenerateCoverLetter(selectedJob)}
+                      disabled={isGenerating}
+                    >
+                      🤖 Generate Cover Letter
+                    </button>
+                  </div>
+                  <p className="generation-description">
+                    Generate tailored documents using AI based on this job description and your existing content chunks.
+                  </p>
+                </div>
+
                 <div className="resume-matching-section">
                   <h3>Document Matching</h3>
                   {documentMatches.length > 0 ? (
@@ -524,6 +680,17 @@ const JobDescriptionsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <GeneratedContentModal
+        isOpen={showGeneratedModal}
+        onClose={() => setShowGeneratedModal(false)}
+        onSave={handleSaveGenerated}
+        title={generatedTitle}
+        content={generatedContent}
+        isLoading={isGenerating}
+        error={generationError || undefined}
+        defaultName={generatedDefaultName}
+      />
     </div>
   );
 };

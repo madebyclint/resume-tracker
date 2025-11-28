@@ -1090,3 +1090,88 @@ export async function migrateChunkTypesAndTags(): Promise<{ updated: number; tot
     throw error;
   }
 }
+
+/**
+ * Save a generated resume as a new document
+ */
+export async function saveGeneratedResume(
+  name: string,
+  content: string,
+  jobDescription: JobDescription
+): Promise<Resume> {
+  // Create a simple docx-like structure with the content
+  // For now, we'll save as text content with a .docx extension suggestion
+  const resumeId = crypto.randomUUID();
+  const fileName = `${name.replace(/[^a-zA-Z0-9 -]/g, '')}.docx`;
+  
+  // Convert content to base64 (simple text encoding for now)
+  const base64Content = btoa(unescape(encodeURIComponent(content)));
+  
+  const newResume: Resume = {
+    id: resumeId,
+    name: name,
+    fileName: fileName,
+    fileSize: content.length,
+    uploadDate: new Date().toISOString(),
+    fileData: base64Content,
+    fileType: 'docx',
+    textContent: content,
+    lastChunkUpdate: new Date().toISOString(),
+    chunkCount: 0
+  };
+
+  await saveResume(newResume);
+  
+  // Link to the job description
+  const updatedJobDescription: JobDescription = {
+    ...jobDescription,
+    linkedResumeIds: [...jobDescription.linkedResumeIds, resumeId]
+  };
+  
+  await saveJobDescription(updatedJobDescription);
+  
+  return newResume;
+}
+
+/**
+ * Save a generated cover letter as a new document
+ */
+export async function saveGeneratedCoverLetter(
+  name: string,
+  content: string,
+  jobDescription: JobDescription
+): Promise<CoverLetter> {
+  // Create a simple docx-like structure with the content
+  const coverLetterId = crypto.randomUUID();
+  const fileName = `${name.replace(/[^a-zA-Z0-9 -]/g, '')}.docx`;
+  
+  // Convert content to base64 (simple text encoding for now)
+  const base64Content = btoa(unescape(encodeURIComponent(content)));
+  
+  const newCoverLetter: CoverLetter = {
+    id: coverLetterId,
+    name: name,
+    fileName: fileName,
+    fileSize: content.length,
+    uploadDate: new Date().toISOString(),
+    fileData: base64Content,
+    fileType: 'docx',
+    textContent: content,
+    lastChunkUpdate: new Date().toISOString(),
+    chunkCount: 0,
+    targetCompany: jobDescription.company,
+    targetPosition: jobDescription.title
+  };
+
+  await saveCoverLetter(newCoverLetter);
+  
+  // Link to the job description
+  const updatedJobDescription: JobDescription = {
+    ...jobDescription,
+    linkedCoverLetterIds: [...jobDescription.linkedCoverLetterIds, coverLetterId]
+  };
+  
+  await saveJobDescription(updatedJobDescription);
+  
+  return newCoverLetter;
+}
