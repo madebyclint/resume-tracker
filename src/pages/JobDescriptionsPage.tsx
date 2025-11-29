@@ -5,6 +5,9 @@ import { parseJobDescription, generateTailoredResume, generateTailoredCoverLette
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
 import { findRelevantResumeChunks, findRelevantCoverLetterChunks } from '../utils/chunkMatcher';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import GeneratedContentModal from '../components/GeneratedContentModal';
 import './JobDescriptionsPage.css';
 
@@ -12,6 +15,7 @@ import './JobDescriptionsPage.css';
 
 const JobDescriptionsPage: React.FC = () => {
   const { state, setState } = useAppState();
+  const [activeTab, setActiveTab] = useState<'job-descriptions' | 'resume-formatter'>('job-descriptions');
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -38,6 +42,17 @@ const JobDescriptionsPage: React.FC = () => {
   // Full text generation toggles
   const [useFullTextForResume, setUseFullTextForResume] = useState(true);
   const [useFullTextForCoverLetter, setUseFullTextForCoverLetter] = useState(true);
+
+  // Resume formatter state
+  const [resumeInputText, setResumeInputText] = useState('');
+  const [formattedHTML, setFormattedHTML] = useState('');
+  const [validationResults, setValidationResults] = useState<Array<{ type: 'pass' | 'warning' | 'error', message: string }>>([]);
+
+
+  // Save resume modal state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveFileName, setSaveFileName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
@@ -463,21 +478,265 @@ const JobDescriptionsPage: React.FC = () => {
     }
   };
 
+  // Resume validation function
+  const validateResume = (text: string) => {
+    const results: Array<{ type: 'pass' | 'warning' | 'error', message: string }> = [];
+
+    if (!text.trim()) {
+      setValidationResults([]);
+      return;
+    }
+
+    // ATS Checks
+    const hasName = /^#\s+/.test(text) || text.includes('# ');
+    if (hasName) {
+      results.push({ type: 'pass', message: '✓ Contains header with name' });
+    } else {
+      results.push({ type: 'warning', message: '⚠️ Consider adding name as main header (# Your Name)' });
+    }
+
+    const hasContact = /(@|\.|phone|email|linkedin|github)/i.test(text);
+    if (hasContact) {
+      results.push({ type: 'pass', message: '✓ Contains contact information' });
+    } else {
+      results.push({ type: 'warning', message: '⚠️ Add contact information (email, phone, LinkedIn)' });
+    }
+
+    const hasExperience = /(experience|work|job|position|role)/i.test(text);
+    if (hasExperience) {
+      results.push({ type: 'pass', message: '✓ Contains work experience section' });
+    } else {
+      results.push({ type: 'warning', message: '⚠️ Consider adding work experience section' });
+    }
+
+    // ASCII Safety Checks
+    const nonAsciiChars = text.match(/[^\x00-\x7F]/g);
+    if (!nonAsciiChars) {
+      results.push({ type: 'pass', message: '✓ ASCII-safe (no special characters that could break ATS)' });
+    } else {
+      const uniqueChars = [...new Set(nonAsciiChars)].join('');
+      results.push({ type: 'warning', message: `⚠️ Contains non-ASCII characters: ${uniqueChars} - may cause ATS issues` });
+    }
+
+    // Grammar & Spelling Checks (basic)
+    const commonErrors = [
+      { pattern: /\bi\s/g, message: 'Use "I" instead of "i"' },
+      { pattern: /\s{2,}/g, message: 'Multiple spaces detected' },
+      { pattern: /[.!?]{2,}/g, message: 'Multiple punctuation marks' },
+      { pattern: /^[a-z]/gm, message: 'Lines should start with capital letters' }
+    ];
+
+    let grammarIssues = 0;
+    commonErrors.forEach(error => {
+      const matches = text.match(error.pattern);
+      if (matches && matches.length > 2) { // Only flag if multiple instances
+        grammarIssues++;
+      }
+    });
+
+    if (grammarIssues === 0) {
+      results.push({ type: 'pass', message: '✓ No obvious grammar issues detected' });
+    } else {
+      results.push({ type: 'warning', message: `⚠️ ${grammarIssues} potential grammar issues - review spacing and capitalization` });
+    }
+
+    // Length check
+    const wordCount = text.trim().split(/\s+/).length;
+    if (wordCount >= 100 && wordCount <= 800) {
+      results.push({ type: 'pass', message: `✓ Good length (${wordCount} words)` });
+    } else if (wordCount < 100) {
+      results.push({ type: 'warning', message: `⚠️ Resume might be too short (${wordCount} words)` });
+    } else {
+      results.push({ type: 'warning', message: `⚠️ Resume might be too long (${wordCount} words) - consider condensing` });
+    }
+
+    // Bullet points check
+    const hasBullets = /^\s*[-*+]\s/gm.test(text);
+    if (hasBullets) {
+      results.push({ type: 'pass', message: '✓ Uses bullet points for better readability' });
+    } else {
+      results.push({ type: 'warning', message: '⚠️ Consider using bullet points (- or *) for achievements' });
+    }
+
+    // Dates format check
+    const hasDateFormat = /(19|20)\d{2}|\d{4}\s*-\s*(19|20)\d{2}|present|current/i.test(text);
+    if (hasDateFormat) {
+      results.push({ type: 'pass', message: '✓ Contains properly formatted dates' });
+    } else {
+      results.push({ type: 'warning', message: '⚠️ Add dates to work experience (e.g., 2020-2024)' });
+    }
+
+    setValidationResults(results);
+  };
+
+  const handleClearResume = () => {
+    setResumeInputText('');
+    setFormattedHTML('');
+    setValidationResults([]);
+  };
+
+  const handleCopyHTML = async () => {
+    if (!formattedHTML) {
+      alert('No formatted resume to copy');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(formattedHTML);
+      alert('Markdown copied to clipboard!');
+    } catch (error) {
+      console.error('Failed to copy markdown:', error);
+      alert('Failed to copy markdown. Please try again.');
+    }
+  };
+
+  const handlePrintResume = () => {
+    if (!formattedHTML) {
+      alert('No formatted resume to print');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow pop-ups to print the resume');
+      return;
+    }
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Resume</title>
+        <style>
+          body { 
+            font-family: 'Times New Roman', Times, serif; 
+            line-height: 1.6; 
+            margin: 1in; 
+            color: #333;
+          }
+          .formatted-resume { line-height: 1.6; color: #333; }
+          .resume-header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+          .resume-name { font-size: 24px; font-weight: bold; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 1px; }
+          .resume-contact { font-size: 14px; color: #666; }
+          .resume-section { margin-bottom: 20px; }
+          .section-title { font-size: 16px; font-weight: bold; text-transform: uppercase; color: #333; border-bottom: 1px solid #333; margin-bottom: 10px; padding-bottom: 2px; letter-spacing: 0.5px; }
+          .experience-item, .education-item { margin-bottom: 15px; }
+          .item-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+          .job-title, .degree-title { font-weight: bold; font-size: 15px; }
+          .company-name, .school-name { font-style: italic; color: #555; }
+          .date-range { font-size: 13px; color: #666; }
+          .description { margin: 5px 0; padding-left: 15px; }
+          .skills-list { display: flex; flex-wrap: wrap; gap: 8px; }
+          .skill-item { background: #f8f9fa; border: 1px solid #dee2e6; padding: 4px 8px; border-radius: 4px; font-size: 13px; }
+          @media print {
+            body { margin: 0.5in; }
+            .resume-header { page-break-after: avoid; }
+          }
+        </style>
+      </head>
+      <body>
+        ${formattedHTML}
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  const handleSaveResume = () => {
+    if (!formattedHTML) {
+      alert('No formatted resume to save');
+      return;
+    }
+    // Generate a simple filename suggestion
+    const today = new Date().toISOString().split('T')[0];
+    setSaveFileName(`Resume_${today}`);
+    setShowSaveModal(true);
+  };
+
+  const handleConfirmSave = async () => {
+    if (!saveFileName.trim() || !formattedHTML) {
+      alert('Please enter a filename');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // Convert HTML to a simple text format for storage
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = formattedHTML;
+      const textContent = tempDiv.textContent || tempDiv.innerText || '';
+
+      // Create a new resume entry
+      const newResume = {
+        id: crypto.randomUUID(),
+        name: saveFileName.trim(),
+        fileName: `${saveFileName.trim()}.html`,
+        fileData: btoa(formattedHTML), // Base64 encode the HTML
+        fileSize: formattedHTML.length,
+        uploadDate: new Date().toISOString(),
+        fileType: 'docx' as const, // Required by type, even though we're storing HTML
+        textContent: textContent,
+        lastChunkUpdate: new Date().toISOString(),
+        chunkCount: 0
+      };
+
+      // Save to storage using the existing storage functions
+      const { saveResume } = await import('../storage');
+      await saveResume(newResume);
+
+      // Update state
+      setState(prev => ({
+        ...prev,
+        resumes: [...prev.resumes, newResume]
+      }));
+
+      alert('Resume saved successfully!');
+      setShowSaveModal(false);
+      setSaveFileName('');
+    } catch (error) {
+      console.error('Error saving resume:', error);
+      alert('Failed to save resume. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
+
   const selectedJob = selectedJobId ? state.jobDescriptions.find(jd => jd.id === selectedJobId) : null;
   const documentMatches = selectedJob ? getDocumentMatches(selectedJob) : [];
 
   return (
     <div className="job-descriptions-page">
       <div className="page-header">
-        <h1>Job Descriptions</h1>
-        <button
-          className="add-job-button"
-          onClick={() => setShowAddForm(true)}
-          disabled={showAddForm}
-        >
-          + Add Job Description
-        </button>
-      </div>
+        <div className="tab-navigation">
+          <button
+            className={`tab-button ${activeTab === 'job-descriptions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('job-descriptions')}
+          >
+            Job Descriptions
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'resume-formatter' ? 'active' : ''}`}
+            onClick={() => setActiveTab('resume-formatter')}
+          >
+            Resume Formatter
+          </button>
+        </div>
+        {activeTab === 'job-descriptions' && (
+          <button
+            className="add-job-button"
+            onClick={() => setShowAddForm(true)}
+            disabled={showAddForm}
+          >
+            + Add Job Description
+          </button >
+        )}
+      </div >
 
       {showAddForm && (
         <div className="add-job-form">
@@ -561,372 +820,534 @@ const JobDescriptionsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="job-descriptions-content">
-        {state.jobDescriptions.length === 0 ? (
-          <div className="empty-state">
-            <p>No job descriptions yet. Add one to get started!</p>
-          </div>
-        ) : (
-          <div className="jobs-layout">
-            <div className="jobs-list">
-              <h2>Your Job Descriptions ({state.jobDescriptions.length})</h2>
-              {state.jobDescriptions.map(job => (
-                <div
-                  key={job.id}
-                  className={`job-card ${selectedJobId === job.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedJobId(job.id)}
-                >
-                  <div className="job-header">
-                    <h3>{job.title}</h3>
-                    <span className={`status-badge status-${job.applicationStatus}`}>
-                      {job.applicationStatus?.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <p className="job-company">{job.company}</p>
-                  <p className="job-date">Added {new Date(job.uploadDate).toLocaleDateString()}</p>
-                  <div className="job-stats">
-                    <span>{job.keywords.length} keywords</span>
-                    <span>{job.linkedResumeIds.length} resumes</span>
-                    <span>{job.linkedCoverLetterIds.length} cover letters</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {selectedJob && (
-              <div className="job-details">
-                <div className="job-details-header">
-                  <h2>{selectedJob.title}</h2>
-                  <div className="job-actions">
-                    <button
-                      className="edit-button"
-                      onClick={() => handleEditJobDescription(selectedJob.id)}
-                      disabled={showAddForm}
+      {
+        activeTab === 'job-descriptions' && (
+          <div className="job-descriptions-content">
+            {state.jobDescriptions.length === 0 ? (
+              <div className="empty-state">
+                <p>No job descriptions yet. Add one to get started!</p>
+              </div>
+            ) : (
+              <div className="jobs-layout">
+                <div className="jobs-list">
+                  <h2>Your Job Descriptions ({state.jobDescriptions.length})</h2>
+                  {state.jobDescriptions.map(job => (
+                    <div
+                      key={job.id}
+                      className={`job-card ${selectedJobId === job.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedJobId(job.id)}
                     >
-                      Edit
-                    </button>
-                    <button
-                      className="delete-button"
-                      onClick={() => handleDeleteJobDescription(selectedJob.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                      <div className="job-header">
+                        <h3>{job.title}</h3>
+                        <span className={`status-badge status-${job.applicationStatus}`}>
+                          {job.applicationStatus?.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="job-company">{job.company}</p>
+                      <p className="job-date">Added {new Date(job.uploadDate).toLocaleDateString()}</p>
+                      <div className="job-stats">
+                        <span>{job.keywords.length} keywords</span>
+                        <span>{job.linkedResumeIds.length} resumes</span>
+                        <span>{job.linkedCoverLetterIds.length} cover letters</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="status-selector">
-                  <label>Application Status:</label>
-                  <select
-                    value={selectedJob.applicationStatus || 'not_applied'}
-                    onChange={(e) => handleStatusChange(selectedJob.id, e.target.value as JobDescription['applicationStatus'])}
-                  >
-                    <option value="not_applied">Not Applied</option>
-                    <option value="applied">Applied</option>
-                    <option value="interviewing">Interviewing</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="offered">Offered</option>
-                  </select>
-                </div>
+                {selectedJob && (
+                  <div className="job-details">
+                    <div className="job-details-header">
+                      <h2>{selectedJob.title}</h2>
+                      <div className="job-actions">
+                        <button
+                          className="edit-button"
+                          onClick={() => handleEditJobDescription(selectedJob.id)}
+                          disabled={showAddForm}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="delete-button"
+                          onClick={() => handleDeleteJobDescription(selectedJob.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
 
-                <div className="job-info-section">
-                  <h3>Extracted Information</h3>
-                  <div className="info-grid">
-                    <div className="info-item">
-                      <strong>Role:</strong> {selectedJob.extractedInfo.role || 'Not extracted'}
-                    </div>
-                    <div className="info-item">
-                      <strong>Department:</strong> {selectedJob.extractedInfo.department || 'Not specified'}
-                    </div>
-                    <div className="info-item">
-                      <strong>Location:</strong> {selectedJob.extractedInfo.location || 'Not specified'}
-                    </div>
-                    <div className="info-item">
-                      <strong>Experience Level:</strong> {selectedJob.extractedInfo.experienceLevel || 'Not specified'}
-                    </div>
-                  </div>
-
-                  {selectedJob.url && (
-                    <div className="job-url-section">
-                      <strong>Job Listing:</strong>
-                      <a
-                        href={selectedJob.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="job-url-link"
+                    <div className="status-selector">
+                      <label>Application Status:</label>
+                      <select
+                        value={selectedJob.applicationStatus || 'not_applied'}
+                        onChange={(e) => handleStatusChange(selectedJob.id, e.target.value as JobDescription['applicationStatus'])}
                       >
-                        View Original Posting ↗
-                      </a>
+                        <option value="not_applied">Not Applied</option>
+                        <option value="applied">Applied</option>
+                        <option value="interviewing">Interviewing</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="offered">Offered</option>
+                      </select>
                     </div>
-                  )}
 
-                  {selectedJob.extractedInfo.requiredSkills.length > 0 && (
-                    <div className="skills-section">
-                      <strong>Required Skills:</strong>
-                      <div className="skills-list">
-                        {selectedJob.extractedInfo.requiredSkills.map((skill, idx) => (
-                          <span key={idx} className="skill-tag required">{skill}</span>
-                        ))}
+                    <div className="job-info-section">
+                      <h3>Extracted Information</h3>
+                      <div className="info-grid">
+                        <div className="info-item">
+                          <strong>Role:</strong> {selectedJob.extractedInfo.role || 'Not extracted'}
+                        </div>
+                        <div className="info-item">
+                          <strong>Department:</strong> {selectedJob.extractedInfo.department || 'Not specified'}
+                        </div>
+                        <div className="info-item">
+                          <strong>Location:</strong> {selectedJob.extractedInfo.location || 'Not specified'}
+                        </div>
+                        <div className="info-item">
+                          <strong>Experience Level:</strong> {selectedJob.extractedInfo.experienceLevel || 'Not specified'}
+                        </div>
                       </div>
-                    </div>
-                  )}
 
-                  {selectedJob.extractedInfo.preferredSkills.length > 0 && (
-                    <div className="skills-section">
-                      <strong>Preferred Skills:</strong>
-                      <div className="skills-list">
-                        {selectedJob.extractedInfo.preferredSkills.map((skill, idx) => (
-                          <span key={idx} className="skill-tag preferred">{skill}</span>
-                        ))}
+                      {selectedJob.url && (
+                        <div className="job-url-section">
+                          <strong>Job Listing:</strong>
+                          <a
+                            href={selectedJob.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="job-url-link"
+                          >
+                            View Original Posting ↗
+                          </a>
+                        </div>
+                      )}
+
+                      {selectedJob.extractedInfo.requiredSkills.length > 0 && (
+                        <div className="skills-section">
+                          <strong>Required Skills:</strong>
+                          <div className="skills-list">
+                            {selectedJob.extractedInfo.requiredSkills.map((skill, idx) => (
+                              <span key={idx} className="skill-tag required">{skill}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedJob.extractedInfo.preferredSkills.length > 0 && (
+                        <div className="skills-section">
+                          <strong>Preferred Skills:</strong>
+                          <div className="skills-list">
+                            {selectedJob.extractedInfo.preferredSkills.map((skill, idx) => (
+                              <span key={idx} className="skill-tag preferred">{skill}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Linked Documents Section */}
+                    <div className="linked-documents-section">
+                      <h3>Linked Documents</h3>
+
+                      {/* Linked Resumes */}
+                      {selectedJob.linkedResumeIds.length > 0 && (
+                        <div className="linked-category">
+                          <h4>📄 Resumes ({selectedJob.linkedResumeIds.length})</h4>
+                          <div className="linked-documents-list">
+                            {selectedJob.linkedResumeIds.map((resumeId) => {
+                              const resume = state.resumes.find((r: any) => r.id === resumeId);
+                              return resume ? (
+                                <div key={resumeId} className="linked-document-item">
+                                  <div className="document-info">
+                                    <span className="document-title">{resume.name || resume.fileName}</span>
+                                    <span className="document-date">
+                                      {new Date(resume.uploadDate).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <div className="document-actions">
+                                    <button
+                                      className="view-button"
+                                      onClick={() => {
+                                        console.log('View resume:', resume.name);
+                                      }}
+                                    >
+                                      View
+                                    </button>
+                                    <button
+                                      className="unlink-button"
+                                      onClick={() => handleLinkResume(selectedJob.id, resumeId)}
+                                      title="Unlink from this job"
+                                    >
+                                      🔗
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Linked Cover Letters */}
+                      {selectedJob.linkedCoverLetterIds.length > 0 && (
+                        <div className="linked-category">
+                          <h4>📝 Cover Letters ({selectedJob.linkedCoverLetterIds.length})</h4>
+                          <div className="linked-documents-list">
+                            {selectedJob.linkedCoverLetterIds.map((coverLetterId) => {
+                              const coverLetter = state.coverLetters.find((cl: any) => cl.id === coverLetterId);
+                              return coverLetter ? (
+                                <div key={coverLetterId} className="linked-document-item">
+                                  <div className="document-info">
+                                    <span className="document-title">{coverLetter.name || coverLetter.fileName}</span>
+                                    <span className="document-date">
+                                      {new Date(coverLetter.uploadDate).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                  <div className="document-actions">
+                                    <button
+                                      className="view-button"
+                                      onClick={() => {
+                                        console.log('View cover letter:', coverLetter.name);
+                                      }}
+                                    >
+                                      View
+                                    </button>
+                                    <button
+                                      className="unlink-button"
+                                      onClick={() => handleLinkCoverLetter(selectedJob.id, coverLetterId)}
+                                      title="Unlink from this job"
+                                    >
+                                      🔗
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0 && (
+                        <p className="no-linked-documents">
+                          No documents linked to this job yet. Generate new documents or link existing ones from the matching results below.
+                        </p>
+                      )}
+                    </div>
+
+                    {selectedJob.additionalContext && (
+                      <div className="additional-context-section">
+                        <h3>Additional Context</h3>
+                        <div className="context-content">
+                          <p>{selectedJob.additionalContext}</p>
+                        </div>
                       </div>
+                    )}
+
+                    <div className="generation-section">
+                      <h3>AI Document Generation</h3>
+                      <div className="generation-buttons">
+                        <button
+                          className="generate-button generate-resume"
+                          onClick={() => handleGenerateResume(selectedJob)}
+                          disabled={isGeneratingResume || isGeneratingCoverLetter}
+                        >
+                          {isGeneratingResume ? (
+                            <>
+                              <div className="button-spinner"></div>
+                              Generating Resume...
+                            </>
+                          ) : (
+                            <>🤖 Generate Resume</>
+                          )}
+                        </button>
+                        <button
+                          className="generate-button generate-cover-letter"
+                          onClick={() => handleGenerateCoverLetter(selectedJob)}
+                          disabled={isGeneratingResume || isGeneratingCoverLetter}
+                        >
+                          {isGeneratingCoverLetter ? (
+                            <>
+                              <div className="button-spinner"></div>
+                              Generating Cover Letter...
+                            </>
+                          ) : (
+                            <>🤖 Generate Cover Letter</>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="generation-options">
+                        <div className="generation-toggle">
+                          <label className="toggle-label">
+                            <input
+                              type="checkbox"
+                              checked={useFullTextForResume}
+                              onChange={(e) => setUseFullTextForResume(e.target.checked)}
+                              className="toggle-checkbox"
+                            />
+                            <span className="toggle-text">
+                              📄 Use Full Text Generation for Resume
+                              <span className="toggle-badge">{useFullTextForResume ? 'ON' : 'OFF'}</span>
+                            </span>
+                          </label>
+                          <div className="toggle-description">
+                            {useFullTextForResume ?
+                              'Generates from complete resume text for better context and flow' :
+                              'Generates from relevant content chunks (original method)'
+                            }
+                          </div>
+                        </div>
+
+                        <div className="generation-toggle">
+                          <label className="toggle-label">
+                            <input
+                              type="checkbox"
+                              checked={useFullTextForCoverLetter}
+                              onChange={(e) => setUseFullTextForCoverLetter(e.target.checked)}
+                              className="toggle-checkbox"
+                            />
+                            <span className="toggle-text">
+                              📄 Use Full Text Generation for Cover Letter
+                              <span className="toggle-badge">{useFullTextForCoverLetter ? 'ON' : 'OFF'}</span>
+                            </span>
+                          </label>
+                          <div className="toggle-description">
+                            {useFullTextForCoverLetter ?
+                              'Generates from complete resume text for better context and flow' :
+                              'Generates from relevant content chunks (original method)'
+                            }
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="generation-description">
+                        Generate tailored documents using AI based on this job description and your existing content.
+                        <br />
+                        <strong>💾 Generated documents will be saved to your Resume/Cover Letter library and automatically linked to this job.</strong>
+                      </p>
                     </div>
-                  )}
-                </div>
 
-                {/* Linked Documents Section */}
-                <div className="linked-documents-section">
-                  <h3>Linked Documents</h3>
-
-                  {/* Linked Resumes */}
-                  {selectedJob.linkedResumeIds.length > 0 && (
-                    <div className="linked-category">
-                      <h4>📄 Resumes ({selectedJob.linkedResumeIds.length})</h4>
-                      <div className="linked-documents-list">
-                        {selectedJob.linkedResumeIds.map((resumeId) => {
-                          const resume = state.resumes.find((r: any) => r.id === resumeId);
-                          return resume ? (
-                            <div key={resumeId} className="linked-document-item">
-                              <div className="document-info">
-                                <span className="document-title">{resume.name || resume.fileName}</span>
-                                <span className="document-date">
-                                  {new Date(resume.uploadDate).toLocaleDateString()}
+                    <div className="resume-matching-section">
+                      <h3>Document Matching</h3>
+                      {documentMatches.length > 0 ? (
+                        <div className="resume-matches">
+                          {documentMatches.map((match: DocumentMatch) => (
+                            <div key={match.documentId} className="resume-match">
+                              <div className="match-header">
+                                <span className="resume-name">
+                                  {match.documentName}
+                                  <span className="document-type-badge">
+                                    {match.documentType === 'resume' ? '📄' : '📝'}
+                                  </span>
                                 </span>
-                              </div>
-                              <div className="document-actions">
+                                <span className="match-score">
+                                  {Math.round(match.matchScore * 100)}% match
+                                </span>
                                 <button
-                                  className="view-button"
+                                  className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
+                                    (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
+                                    ? 'linked' : ''
+                                    }`}
                                   onClick={() => {
-                                    console.log('View resume:', resume.name);
+                                    if (match.documentType === 'resume') {
+                                      handleLinkResume(selectedJob.id, match.documentId);
+                                    } else {
+                                      handleLinkCoverLetter(selectedJob.id, match.documentId);
+                                    }
                                   }}
                                 >
-                                  View
-                                </button>
-                                <button
-                                  className="unlink-button"
-                                  onClick={() => handleLinkResume(selectedJob.id, resumeId)}
-                                  title="Unlink from this job"
-                                >
-                                  🔗
+                                  {((match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
+                                    (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId)))
+                                    ? 'Unlink' : 'Link'}
                                 </button>
                               </div>
+                              <div className="matched-keywords">
+                                <strong>Matched keywords:</strong> {match.matchedKeywords.join(', ')}
+                              </div>
+                              {match.skillMatches.length > 0 && (
+                                <div className="skill-matches">
+                                  <strong>Skill matches:</strong> {match.skillMatches.join(', ')}
+                                </div>
+                              )}
                             </div>
-                          ) : null;
-                        })}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="no-matches">No matching documents found based on keywords and skills.</p>
+                      )}
                     </div>
-                  )}
 
-                  {/* Linked Cover Letters */}
-                  {selectedJob.linkedCoverLetterIds.length > 0 && (
-                    <div className="linked-category">
-                      <h4>📝 Cover Letters ({selectedJob.linkedCoverLetterIds.length})</h4>
-                      <div className="linked-documents-list">
-                        {selectedJob.linkedCoverLetterIds.map((coverLetterId) => {
-                          const coverLetter = state.coverLetters.find((cl: any) => cl.id === coverLetterId);
-                          return coverLetter ? (
-                            <div key={coverLetterId} className="linked-document-item">
-                              <div className="document-info">
-                                <span className="document-title">{coverLetter.name || coverLetter.fileName}</span>
-                                <span className="document-date">
-                                  {new Date(coverLetter.uploadDate).toLocaleDateString()}
-                                </span>
-                              </div>
-                              <div className="document-actions">
-                                <button
-                                  className="view-button"
-                                  onClick={() => {
-                                    console.log('View cover letter:', coverLetter.name);
-                                  }}
-                                >
-                                  View
-                                </button>
-                                <button
-                                  className="unlink-button"
-                                  onClick={() => handleLinkCoverLetter(selectedJob.id, coverLetterId)}
-                                  title="Unlink from this job"
-                                >
-                                  🔗
-                                </button>
-                              </div>
-                            </div>
-                          ) : null;
-                        })}
+                    <div className="keywords-section">
+                      <h3>Keywords ({selectedJob.keywords.length})</h3>
+                      <div className="keywords-list">
+                        {selectedJob.keywords.map((keyword, idx) => (
+                          <span key={idx} className="keyword-tag">{keyword}</span>
+                        ))}
                       </div>
-                    </div>
-                  )}
-
-                  {selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0 && (
-                    <p className="no-linked-documents">
-                      No documents linked to this job yet. Generate new documents or link existing ones from the matching results below.
-                    </p>
-                  )}
-                </div>
-
-                {selectedJob.additionalContext && (
-                  <div className="additional-context-section">
-                    <h3>Additional Context</h3>
-                    <div className="context-content">
-                      <p>{selectedJob.additionalContext}</p>
                     </div>
                   </div>
                 )}
-
-                <div className="generation-section">
-                  <h3>AI Document Generation</h3>
-                  <div className="generation-buttons">
-                    <button
-                      className="generate-button generate-resume"
-                      onClick={() => handleGenerateResume(selectedJob)}
-                      disabled={isGeneratingResume || isGeneratingCoverLetter}
-                    >
-                      {isGeneratingResume ? (
-                        <>
-                          <div className="button-spinner"></div>
-                          Generating Resume...
-                        </>
-                      ) : (
-                        <>🤖 Generate Resume</>
-                      )}
-                    </button>
-                    <button
-                      className="generate-button generate-cover-letter"
-                      onClick={() => handleGenerateCoverLetter(selectedJob)}
-                      disabled={isGeneratingResume || isGeneratingCoverLetter}
-                    >
-                      {isGeneratingCoverLetter ? (
-                        <>
-                          <div className="button-spinner"></div>
-                          Generating Cover Letter...
-                        </>
-                      ) : (
-                        <>🤖 Generate Cover Letter</>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="generation-options">
-                    <div className="generation-toggle">
-                      <label className="toggle-label">
-                        <input
-                          type="checkbox"
-                          checked={useFullTextForResume}
-                          onChange={(e) => setUseFullTextForResume(e.target.checked)}
-                          className="toggle-checkbox"
-                        />
-                        <span className="toggle-text">
-                          📄 Use Full Text Generation for Resume
-                          <span className="toggle-badge">{useFullTextForResume ? 'ON' : 'OFF'}</span>
-                        </span>
-                      </label>
-                      <div className="toggle-description">
-                        {useFullTextForResume ?
-                          'Generates from complete resume text for better context and flow' :
-                          'Generates from relevant content chunks (original method)'
-                        }
-                      </div>
-                    </div>
-
-                    <div className="generation-toggle">
-                      <label className="toggle-label">
-                        <input
-                          type="checkbox"
-                          checked={useFullTextForCoverLetter}
-                          onChange={(e) => setUseFullTextForCoverLetter(e.target.checked)}
-                          className="toggle-checkbox"
-                        />
-                        <span className="toggle-text">
-                          📄 Use Full Text Generation for Cover Letter
-                          <span className="toggle-badge">{useFullTextForCoverLetter ? 'ON' : 'OFF'}</span>
-                        </span>
-                      </label>
-                      <div className="toggle-description">
-                        {useFullTextForCoverLetter ?
-                          'Generates from complete resume text for better context and flow' :
-                          'Generates from relevant content chunks (original method)'
-                        }
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="generation-description">
-                    Generate tailored documents using AI based on this job description and your existing content.
-                    <br />
-                    <strong>💾 Generated documents will be saved to your Resume/Cover Letter library and automatically linked to this job.</strong>
-                  </p>
-                </div>
-
-                <div className="resume-matching-section">
-                  <h3>Document Matching</h3>
-                  {documentMatches.length > 0 ? (
-                    <div className="resume-matches">
-                      {documentMatches.map((match: DocumentMatch) => (
-                        <div key={match.documentId} className="resume-match">
-                          <div className="match-header">
-                            <span className="resume-name">
-                              {match.documentName}
-                              <span className="document-type-badge">
-                                {match.documentType === 'resume' ? '📄' : '📝'}
-                              </span>
-                            </span>
-                            <span className="match-score">
-                              {Math.round(match.matchScore * 100)}% match
-                            </span>
-                            <button
-                              className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
-                                ? 'linked' : ''
-                                }`}
-                              onClick={() => {
-                                if (match.documentType === 'resume') {
-                                  handleLinkResume(selectedJob.id, match.documentId);
-                                } else {
-                                  handleLinkCoverLetter(selectedJob.id, match.documentId);
-                                }
-                              }}
-                            >
-                              {((match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId)))
-                                ? 'Unlink' : 'Link'}
-                            </button>
-                          </div>
-                          <div className="matched-keywords">
-                            <strong>Matched keywords:</strong> {match.matchedKeywords.join(', ')}
-                          </div>
-                          {match.skillMatches.length > 0 && (
-                            <div className="skill-matches">
-                              <strong>Skill matches:</strong> {match.skillMatches.join(', ')}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="no-matches">No matching documents found based on keywords and skills.</p>
-                  )}
-                </div>
-
-                <div className="keywords-section">
-                  <h3>Keywords ({selectedJob.keywords.length})</h3>
-                  <div className="keywords-list">
-                    {selectedJob.keywords.map((keyword, idx) => (
-                      <span key={idx} className="keyword-tag">{keyword}</span>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
           </div>
-        )}
-      </div>
+        )
+      }
+
+      {
+        activeTab === 'resume-formatter' && (
+          <div className="resume-formatter-content">
+            <div className="formatter-header">
+              <h2>Resume Formatter</h2>
+              <p>Paste your raw resume text below and get a clean, ATS-friendly formatted output</p>
+            </div>
+
+            <div className="formatter-layout">
+              <div className="input-section">
+                <h3>Input Resume Text</h3>
+                <textarea
+                  className="resume-input"
+                  placeholder="Paste your raw resume markdown here..."
+                  value={resumeInputText}
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    setResumeInputText(newValue);
+
+                    // Auto-format markdown and generate filename
+                    if (newValue.trim()) {
+                      setFormattedHTML(newValue);
+                      const today = new Date().toISOString().split('T')[0];
+                      setSaveFileName(`Resume_${today}`);
+
+                      // Run validation
+                      validateResume(newValue);
+                    } else {
+                      setFormattedHTML('');
+                      setValidationResults([]);
+                    }
+                  }}
+                  rows={20}
+                  spellCheck={true}
+                />
+                <div className="formatter-controls">
+                  <button
+                    className="clear-button"
+                    onClick={handleClearResume}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="output-section">
+                <h3>Formatted Output</h3>
+                <div className="output-controls">
+                  <button
+                    className="save-button"
+                    onClick={handleSaveResume}
+                    disabled={!formattedHTML}
+                  >
+                    💾 Save Resume
+                  </button>
+                  <button
+                    className="copy-button"
+                    onClick={handleCopyHTML}
+                    disabled={!formattedHTML}
+                  >
+                    Copy HTML
+                  </button>
+                  <button
+                    className="print-button"
+                    onClick={handlePrintResume}
+                    disabled={!formattedHTML}
+                  >
+                    Print
+                  </button>
+                </div>
+                <div className="formatted-output">
+                  {formattedHTML ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkBreaks]}
+                      components={{
+                        h2: ({ ...props }) => <h2 style={{ margin: '1.25em 0 .5em 0' }} {...props} />,
+                        p: ({ ...props }) => <p style={{ margin: '.5em 0' }} {...props} />
+                      }}
+                    >
+                      {formattedHTML}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="placeholder-text">Formatted resume will appear here...</p>
+                  )}
+                </div>
+
+                <div className="checks-section">
+                  <h4>Resume Validation</h4>
+                  <div className="check-results">
+                    {validationResults.length > 0 ? (
+                      validationResults.map((result, index) => (
+                        <div key={index} className={`check-item ${result.type}`}>
+                          <span className="check-message">{result.message}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="no-validation">
+                        <p>Start typing to see ATS, grammar, and formatting validation...</p>
+                        <div className="markdown-tips">
+                          <p><strong>Quick Tips:</strong></p>
+                          <ul>
+                            <li><code># Your Name</code> for main heading</li>
+                            <li><code>## Section Title</code> for sections</li>
+                            <li><code>**Bold Text**</code> for emphasis</li>
+                            <li><code>- Bullet point</code> for lists</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Save Resume Modal */}
+      {
+        showSaveModal && (
+          <div className="modal-overlay">
+            <div className="modal-content save-modal">
+              <h3>Save Formatted Resume</h3>
+              <div className="form-group">
+                <label htmlFor="resume-name">Resume Name</label>
+                <input
+                  id="resume-name"
+                  type="text"
+                  value={saveFileName}
+                  onChange={(e) => setSaveFileName(e.target.value)}
+                  placeholder="Enter a name for your resume"
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="modal-actions">
+                <button
+                  className="cancel-button"
+                  onClick={() => {
+                    setShowSaveModal(false);
+                    setSaveFileName('');
+                  }}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="save-button"
+                  onClick={handleConfirmSave}
+                  disabled={isSaving || !saveFileName.trim()}
+                >
+                  {isSaving ? 'Saving...' : 'Save Resume'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
       <GeneratedContentModal
         isOpen={showGeneratedModal}
@@ -938,7 +1359,7 @@ const JobDescriptionsPage: React.FC = () => {
         error={generationError || undefined}
         defaultName={generatedDefaultName}
       />
-    </div>
+    </div >
   );
 };
 
