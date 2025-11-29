@@ -1027,6 +1027,7 @@
   font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', sans-serif;
   font-size: 14px;
   line-height: 1.6;
+  height: 450px; /* Match textarea height exactly: 20 rows × 21px + 30px padding */
 }
 
 /* Override ReactMarkdown default styles */
@@ -1049,14 +1050,35 @@
 }
 
 /* Additional specificity for nested ReactMarkdown elements */
-.formatted-output div h2 {
-  margin: 1.25em 0 .5em 0 !important;
+.formatted-output h1 {
+  margin: 1em 0 0 0 !important;
+  font-size: large !important;
 }
 
-.formatted-output div p {
+.formatted-output h2 {
+  margin: 1.5em 0 .5em 0 !important;
+  font-size: 1.25em !important;
+  line-height: 1 !important;
+}
+
+.formatted-output h3 {
+  margin: 1.2em 0 0 0 !important;
+  font-size: 1.1em !important;
+  line-height: 1.3 !important;
+}
+
+.formatted-output p {
   margin-block-start: .5em !important;
   margin-top: .5em !important;
   margin-bottom: .5em !important;
+}
+
+.formatted-output ul {
+  margin: 0 0 1em .5em !important;
+}
+
+.formatted-output li {
+  margin: 0 0 .5em 0 !important;
 }
 
 .placeholder-text {
@@ -1071,6 +1093,7 @@
 .markdown-with-lines {
   display: flex;
   height: 100%;
+  overflow: hidden;
 }
 
 .line-numbers {
@@ -1096,8 +1119,8 @@
 
 .markdown-content {
   flex: 1;
-  padding: 0 20px;
-  overflow-y: auto;
+  padding: 20px;
+  overflow-y: visible;
 }
 
 /* Line numbers for textarea input */

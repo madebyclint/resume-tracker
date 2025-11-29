@@ -1355,11 +1355,6 @@ const JobDescriptionsPage: React.FC = () => {
                 <div className="formatted-output">
                   {formattedHTML ? (
                     <div className="markdown-with-lines">
-                      <div className="line-numbers">
-                        {formattedHTML.split('\n').map((_, index) => (
-                          <div key={index} className="line-number">{index + 1}</div>
-                        ))}
-                      </div>
                       <div className="markdown-content">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm, remarkBreaks]}
