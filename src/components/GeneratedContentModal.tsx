@@ -60,15 +60,7 @@ const GeneratedContentModal: React.FC<GeneratedContentModalProps> = ({
     }
   };
 
-  const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(editedContent);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-    }
-  };
+
 
   const isHtmlContent = editedContent.trim().startsWith('<!DOCTYPE html') || editedContent.trim().startsWith('<html');
 
@@ -132,12 +124,6 @@ const GeneratedContentModal: React.FC<GeneratedContentModalProps> = ({
                     className={`mode-button ${viewMode === 'edit' ? 'active' : ''}`}
                   >
                     Edit HTML
-                  </button>
-                  <button
-                    onClick={handlePrint}
-                    className="print-button"
-                  >
-                    🖨️ Print
                   </button>
                 </div>
               )}

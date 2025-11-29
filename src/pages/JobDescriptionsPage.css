@@ -1001,8 +1001,6 @@
   margin-bottom: 15px;
 }
 
-.copy-button,
-.print-button,
 .preview-button {
   background: #28a745;
   color: white;
@@ -1017,14 +1015,10 @@
   gap: 5px;
 }
 
-.copy-button:hover,
-.print-button:hover,
 .preview-button:hover {
   background: #1e7e34;
 }
 
-.copy-button:disabled,
-.print-button:disabled,
 .preview-button:disabled {
   background: #6c757d;
   cursor: not-allowed;

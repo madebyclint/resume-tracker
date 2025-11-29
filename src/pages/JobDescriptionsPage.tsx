@@ -634,73 +634,7 @@ const JobDescriptionsPage: React.FC = () => {
     setValidationResults([]);
   };
 
-  const handleCopyOutput = async () => {
-    if (!formattedHTML) {
-      alert('No formatted resume to copy');
-      return;
-    }
 
-    try {
-      await navigator.clipboard.writeText(formattedHTML);
-      alert('Content copied to clipboard!');
-    } catch (error) {
-      console.error('Failed to copy content:', error);
-      alert('Failed to copy content. Please try again.');
-    }
-  }; const handlePrintResume = () => {
-    if (!formattedHTML) {
-      alert('No formatted resume to print');
-      return;
-    }
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow pop-ups to print the resume');
-      return;
-    }
-
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Resume</title>
-        <style>
-          body { 
-            font-family: 'Times New Roman', Times, serif; 
-            line-height: 1.6; 
-            margin: 1in; 
-            color: #333;
-          }
-          .formatted-resume { line-height: 1.6; color: #333; }
-          .resume-header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #333; padding-bottom: 15px; }
-          .resume-name { font-size: 24px; font-weight: bold; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 1px; }
-          .resume-contact { font-size: 14px; color: #666; }
-          .resume-section { margin-bottom: 20px; }
-          .section-title { font-size: 16px; font-weight: bold; text-transform: uppercase; color: #333; border-bottom: 1px solid #333; margin-bottom: 10px; padding-bottom: 2px; letter-spacing: 0.5px; }
-          .experience-item, .education-item { margin-bottom: 15px; }
-          .item-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
-          .job-title, .degree-title { font-weight: bold; font-size: 15px; }
-          .company-name, .school-name { font-style: italic; color: #555; }
-          .date-range { font-size: 13px; color: #666; }
-          .description { margin: 5px 0; padding-left: 15px; }
-          .skills-list { display: flex; flex-wrap: wrap; gap: 8px; }
-          .skill-item { background: #f8f9fa; border: 1px solid #dee2e6; padding: 4px 8px; border-radius: 4px; font-size: 13px; }
-          @media print {
-            body { margin: 0.5in; }
-            .resume-header { page-break-after: avoid; }
-          }
-        </style>
-      </head>
-      <body>
-        ${formattedHTML}
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.print();
-  };
 
   const handlePreviewResume = () => {
     if (!formattedHTML) {
@@ -1318,20 +1252,6 @@ const JobDescriptionsPage: React.FC = () => {
                 disabled={!formattedHTML}
               >
                 💾 Save Resume
-              </button>
-              <button
-                className="copy-button"
-                onClick={handleCopyOutput}
-                disabled={!formattedHTML}
-              >
-                Copy Output
-              </button>
-              <button
-                className="print-button"
-                onClick={handlePrintResume}
-                disabled={!formattedHTML}
-              >
-                Print
               </button>
               <button
                 className="preview-button"
