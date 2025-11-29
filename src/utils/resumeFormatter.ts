@@ -460,6 +460,71 @@ export function performATSChecks(parsedResume: ParsedResume, rawText: string): A
   return checks;
 }
 
+export function formatAsRTF(parsedResume: ParsedResume): string {
+  let rtf = '{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}';
+  
+  // Header
+  rtf += `\\f0\\fs28\\b ${escapeRtf(parsedResume.header.name)}\\b0\\par`;
+  rtf += '\\fs20\\par'; // Add space
+  
+  if (parsedResume.header.phone || parsedResume.header.email || parsedResume.header.location) {
+    const contactItems = [
+      parsedResume.header.phone,
+      parsedResume.header.email,
+      parsedResume.header.location,
+      parsedResume.header.linkedin,
+      parsedResume.header.website
+    ].filter(Boolean);
+    rtf += `\\fs18 ${escapeRtf(contactItems.join(' • '))}\\par`;
+  }
+  rtf += '\\par'; // Add space after header
+  
+  // Sections
+  for (const section of parsedResume.sections) {
+    rtf += `\\fs20\\b ${escapeRtf(section.title)}\\b0\\par`;
+    rtf += '\\par';
+    
+    if (section.type === 'skills' && section.items) {
+      const skills = section.items.map(skill => skill.title).join(', ');
+      rtf += `\\fs18 ${escapeRtf(skills)}\\par`;
+    } else if (section.items) {
+      for (const item of section.items) {
+        rtf += `\\fs18\\b ${escapeRtf(item.title)}\\b0`;
+        if (item.subtitle || item.location || item.dateRange) {
+          const details = [item.subtitle, item.location, item.dateRange].filter(Boolean);
+          rtf += ` - ${escapeRtf(details.join(' | '))}`;
+        }
+        rtf += '\\par';
+        
+        if (item.description && item.description.length > 0) {
+          for (const desc of item.description) {
+            rtf += `\\fs18 • ${escapeRtf(desc)}\\par`;
+          }
+        }
+        rtf += '\\par';
+      }
+    } else if (section.content) {
+      const paragraphs = section.content.split('\n').filter(p => p.trim());
+      for (const paragraph of paragraphs) {
+        rtf += `\\fs18 ${escapeRtf(paragraph)}\\par`;
+      }
+    }
+    rtf += '\\par';
+  }
+  
+  rtf += '}';
+  return rtf;
+}
+
+function escapeRtf(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/\{/g, '\\{')
+    .replace(/\}/g, '\\}')
+    .replace(/\n/g, '\\par ')
+    .replace(/\r/g, '');
+}
+
 function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;

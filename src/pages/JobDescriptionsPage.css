@@ -1025,60 +1025,46 @@
   background: white;
   overflow: hidden;
   font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', sans-serif;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 11pt;
+  line-height: 1.5;
   height: 450px; /* Match textarea height exactly: 20 rows × 21px + 30px padding */
 }
 
-/* Override ReactMarkdown default styles */
-.formatted-output h2,
-.formatted-output.markdown-body h2 {
-  margin: 1.25em 0 .5em 0 !important;
-}
-
-.formatted-output h3,
-.formatted-output.markdown-body h3 {
-  margin:0 !important;
-  line-height: 1 !important
-}
-
-.formatted-output p,
-.formatted-output.markdown-body p {
-  margin-block-start: .5em !important;
-  margin-top: .5em !important;
-  margin-bottom: .5em !important;
-}
-
 /* Additional specificity for nested ReactMarkdown elements */
+.formatted-output hr {
+  margin-block-start: 1em;
+  margin-block-end: 1em;
+}
+
 .formatted-output h1 {
-  margin: 1em 0 0 0 !important;
-  font-size: large !important;
+  margin: 1em 0 0 0;
+  font-size: 16pt;
 }
 
 .formatted-output h2 {
-  margin: 1.5em 0 .5em 0 !important;
-  font-size: 1.25em !important;
-  line-height: 1 !important;
+  margin: 2em 0 .5em 0 !important;
+  font-size: 12pt;
+  line-height: 1;
 }
 
 .formatted-output h3 {
-  margin: 1.2em 0 0 0 !important;
-  font-size: 1.1em !important;
-  line-height: 1.3 !important;
+  margin: 1.2em 0 0 0;
+  font-size: 1.1em;
+  line-height: 1.3;
 }
 
 .formatted-output p {
-  margin-block-start: .5em !important;
-  margin-top: .5em !important;
-  margin-bottom: .5em !important;
+  margin-block-start: .5em;
+  margin-top: .5em;
+  margin-bottom: .5em;
 }
 
 .formatted-output ul {
-  margin: 0 0 1em .5em !important;
+  margin: 0 0 1em 0;
 }
 
 .formatted-output li {
-  margin: 0 0 .5em 0 !important;
+  margin: 0 0 .25em 0;
 }
 
 .placeholder-text {

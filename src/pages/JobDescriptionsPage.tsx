@@ -5,6 +5,7 @@ import { parseJobDescription, generateTailoredResume, generateTailoredCoverLette
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
 import { findRelevantResumeChunks, findRelevantCoverLetterChunks } from '../utils/chunkMatcher';
+
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -632,7 +633,7 @@ const JobDescriptionsPage: React.FC = () => {
     setValidationResults([]);
   };
 
-  const handleCopyHTML = async () => {
+  const handleCopyOutput = async () => {
     if (!formattedHTML) {
       alert('No formatted resume to copy');
       return;
@@ -640,14 +641,12 @@ const JobDescriptionsPage: React.FC = () => {
 
     try {
       await navigator.clipboard.writeText(formattedHTML);
-      alert('Markdown copied to clipboard!');
+      alert('Content copied to clipboard!');
     } catch (error) {
-      console.error('Failed to copy markdown:', error);
-      alert('Failed to copy markdown. Please try again.');
+      console.error('Failed to copy content:', error);
+      alert('Failed to copy content. Please try again.');
     }
-  };
-
-  const handlePrintResume = () => {
+  }; const handlePrintResume = () => {
     if (!formattedHTML) {
       alert('No formatted resume to print');
       return;
@@ -1265,10 +1264,10 @@ const JobDescriptionsPage: React.FC = () => {
               </button>
               <button
                 className="copy-button"
-                onClick={handleCopyHTML}
+                onClick={handleCopyOutput}
                 disabled={!formattedHTML}
               >
-                Copy HTML
+                Copy Output
               </button>
               <button
                 className="print-button"
