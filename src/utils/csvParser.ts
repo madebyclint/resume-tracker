@@ -81,9 +81,9 @@ export function parseCSV(csvText: string): CSVParseResult {
         continue;
       }
 
-      // Skip if company is empty (main identifier)
-      if (!cells[3]?.trim()) {
-        continue; // Skip empty company entries silently
+      // Skip if both company and discipline are empty (need at least one identifier)
+      if (!cells[3]?.trim() && !cells[5]?.trim()) {
+        continue; // Skip entries with no company or role
       }
 
       const jobApp: CSVJobApplication = {
@@ -170,10 +170,13 @@ export function convertToJobDescriptions(csvData: CSVJobApplication[]): JobDescr
     // Create a job description from the CSV data
     const rawText = createJobDescriptionText(job);
     
+    const applicationDate = parseApplicationDate(job.date);
+    const status = mapStatus(job.status);
+    
     const jobDescription: JobDescription = {
       id: crypto.randomUUID(),
       title: job.discipline || 'Unknown Position',
-      company: job.company,
+      company: job.company || 'Unknown Company',
       url: job.contactLink || undefined,
       rawText,
       additionalContext: createAdditionalContext(job),
@@ -189,9 +192,28 @@ export function convertToJobDescriptions(csvData: CSVJobApplication[]): JobDescr
       uploadDate: new Date().toISOString(),
       linkedResumeIds: [],
       linkedCoverLetterIds: [],
-      applicationStatus: mapStatus(job.status),
-      applicationDate: parseApplicationDate(job.date),
-      notes: createNotes(job)
+      
+      // CRM fields
+      applicationStatus: status,
+      applicationDate,
+      submissionDate: applicationDate,
+      lastActivityDate: applicationDate || new Date().toISOString(),
+      source: job.source || undefined,
+      contactPerson: extractContactPerson(job.contactLink),
+      secondaryContact: job.secondContactLink || undefined,
+      priority: job.impact === 'Yes' ? 'high' : job.impact === 'Yes??' ? 'medium' : 'low',
+      notes: createNotes(job),
+      
+      // Status history
+      statusHistory: applicationDate ? [{
+        status,
+        date: applicationDate,
+        notes: `Imported from CSV - ${job.source || 'Unknown source'}`
+      }] : undefined,
+      
+      // Computed fields
+      daysSinceApplication: applicationDate ? calculateDaysSince(applicationDate) : undefined,
+      daysInCurrentStatus: applicationDate ? calculateDaysSince(applicationDate) : undefined
     };
 
     return jobDescription;
@@ -351,4 +373,43 @@ function createNotes(job: CSVJobApplication): string {
   }
 
   return notes.join('\n');
+}
+
+/**
+ * Extract contact person from contact link
+ */
+function extractContactPerson(contactLink: string): string | undefined {
+  if (!contactLink) return undefined;
+  
+  // Try to extract names from LinkedIn URLs or contact info
+  if (contactLink.includes('linkedin.com')) {
+    // Extract name from LinkedIn URL or text
+    const nameMatch = contactLink.match(/\/in\/([^\/\?]+)/);
+    if (nameMatch) {
+      return nameMatch[1].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+  }
+  
+  // Look for names in the contact string (simple heuristic)
+  const namePattern = /([A-Z][a-z]+ [A-Z][a-z]+)/;
+  const match = contactLink.match(namePattern);
+  if (match) {
+    return match[1];
+  }
+  
+  return undefined;
+}
+
+/**
+ * Calculate days since a date
+ */
+function calculateDaysSince(dateStr: string): number {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  } catch {
+    return 0;
+  }
 }

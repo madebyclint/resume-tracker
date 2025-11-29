@@ -643,6 +643,12 @@
   margin-bottom: 8px;
 }
 
+.match-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .resume-name {
   font-weight: 500;
   color: #333;
@@ -678,6 +684,24 @@
 
 .link-button.linked:hover {
   background: #1e7e34;
+}
+
+.match-actions .preview-button {
+  background: #17a2b8;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.match-actions .preview-button:hover {
+  background: #138496;
 }
 
 .matched-keywords {

@@ -49,9 +49,31 @@ export interface JobDescription {
   uploadDate: string;
   linkedResumeIds: string[]; // manually connected resumes
   linkedCoverLetterIds: string[]; // manually connected cover letters
-  applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered';
-  applicationDate?: string;
+  
+  // CRM-like tracking fields
+  applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn';
+  applicationDate?: string; // when application was submitted
+  submissionDate?: string; // alias for applicationDate for clarity
+  lastActivityDate?: string; // last time status changed or any activity occurred
+  source?: string; // where the job was found (LinkedIn, Indeed, referral, etc.)
+  contactPerson?: string; // recruiter or contact person
+  secondaryContact?: string; // additional contact
+  priority?: 'low' | 'medium' | 'high'; // how interested you are
+  followUpDate?: string; // when to follow up next
+  interviewDates?: string[]; // array of interview dates
+  salaryDiscussed?: string; // salary range discussed
   notes?: string;
+  
+  // Timeline tracking
+  statusHistory?: Array<{
+    status: JobDescription['applicationStatus'];
+    date: string;
+    notes?: string;
+  }>;
+  
+  // Quick stats
+  daysSinceApplication?: number; // computed field
+  daysInCurrentStatus?: number; // computed field
 }
 
 // Union type for documents

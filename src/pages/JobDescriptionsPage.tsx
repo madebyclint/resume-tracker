@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
-import { JobDescription } from '../types';
+import { JobDescription, Resume, CoverLetter } from '../types';
 import { parseJobDescription, generateTailoredResume, generateTailoredCoverLetter, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured } from '../utils/aiService';
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
@@ -13,6 +13,8 @@ import remarkBreaks from 'remark-breaks';
 import GeneratedContentModal from '../components/GeneratedContentModal';
 import ValidationMessage from '../components/ValidationMessage';
 import CSVImportModal from '../components/CSVImportModal';
+import JobManagementTable from '../components/JobManagementTable';
+import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import './JobDescriptionsPage.css';
 
 // Remove the local interface since we're using the one from documentMatcher
@@ -60,6 +62,12 @@ const JobDescriptionsPage: React.FC = () => {
 
   // CSV import modal state
   const [showCSVImportModal, setShowCSVImportModal] = useState(false);
+
+  // Document preview modal state
+  const [showDocumentPreviewModal, setShowDocumentPreviewModal] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<Resume | CoverLetter | null>(null);
+  const [previewDocumentIsLinked, setPreviewDocumentIsLinked] = useState(false);
+  const [previewDocumentOnLink, setPreviewDocumentOnLink] = useState<(() => void) | null>(null);
 
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
@@ -247,10 +255,20 @@ const JobDescriptionsPage: React.FC = () => {
     const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
     if (!jobDescription) return;
 
+    const now = new Date().toISOString();
     const updatedJobDescription: JobDescription = {
       ...jobDescription,
       applicationStatus: status,
-      applicationDate: status === 'applied' ? new Date().toISOString() : jobDescription.applicationDate
+      applicationDate: status === 'applied' && !jobDescription.applicationDate ? now : jobDescription.applicationDate,
+      lastActivityDate: now,
+      statusHistory: [
+        ...(jobDescription.statusHistory || []),
+        {
+          status,
+          date: now,
+          notes: `Status changed to ${status}`
+        }
+      ]
     };
 
     try {
@@ -504,6 +522,21 @@ const JobDescriptionsPage: React.FC = () => {
       console.error('Error importing CSV:', error);
       alert(`Failed to import job descriptions: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  };
+
+  // Document preview handlers
+  const handlePreviewDocument = (document: Resume | CoverLetter, isLinked: boolean, onLink: () => void) => {
+    setPreviewDocument(document);
+    setPreviewDocumentIsLinked(isLinked);
+    setPreviewDocumentOnLink(() => onLink);
+    setShowDocumentPreviewModal(true);
+  };
+
+  const handleCloseDocumentPreview = () => {
+    setShowDocumentPreviewModal(false);
+    setPreviewDocument(null);
+    setPreviewDocumentIsLinked(false);
+    setPreviewDocumentOnLink(null);
   };
 
   // Resume validation function
@@ -911,30 +944,14 @@ const JobDescriptionsPage: React.FC = () => {
               </div>
             ) : (
               <div className="jobs-layout">
-                <div className="jobs-list">
-                  <h2>Your Job Descriptions ({state.jobDescriptions.length})</h2>
-                  {state.jobDescriptions.map(job => (
-                    <div
-                      key={job.id}
-                      className={`job-card ${selectedJobId === job.id ? 'selected' : ''}`}
-                      onClick={() => setSelectedJobId(job.id)}
-                    >
-                      <div className="job-header">
-                        <h3>{job.title}</h3>
-                        <span className={`status-badge status-${job.applicationStatus}`}>
-                          {job.applicationStatus?.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <p className="job-company">{job.company}</p>
-                      <p className="job-date">Added {new Date(job.uploadDate).toLocaleDateString()}</p>
-                      <div className="job-stats">
-                        <span>{job.keywords.length} keywords</span>
-                        <span>{job.linkedResumeIds.length} resumes</span>
-                        <span>{job.linkedCoverLetterIds.length} cover letters</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <JobManagementTable
+                  jobs={state.jobDescriptions}
+                  onEdit={handleEditJobDescription}
+                  onDelete={handleDeleteJobDescription}
+                  onStatusChange={handleStatusChange}
+                  onSelect={setSelectedJobId}
+                  selectedJobId={selectedJobId}
+                />
 
                 {selectedJob && (
                   <div className="job-details">
@@ -1123,7 +1140,7 @@ const JobDescriptionsPage: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="generation-section">
+                    {/* <div className="generation-section">
                       <h3>AI Document Generation</h3>
                       <div className="generation-buttons">
                         <button
@@ -1205,7 +1222,7 @@ const JobDescriptionsPage: React.FC = () => {
                         <br />
                         <strong>💾 Generated documents will be saved to your Resume/Cover Letter library and automatically linked to this job.</strong>
                       </p>
-                    </div>
+                    </div> */}
 
                     <div className="resume-matching-section">
                       <h3>Document Matching</h3>
@@ -1223,23 +1240,52 @@ const JobDescriptionsPage: React.FC = () => {
                                 <span className="match-score">
                                   {Math.round(match.matchScore * 100)}% match
                                 </span>
-                                <button
-                                  className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                    (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
-                                    ? 'linked' : ''
-                                    }`}
-                                  onClick={() => {
-                                    if (match.documentType === 'resume') {
-                                      handleLinkResume(selectedJob.id, match.documentId);
-                                    } else {
-                                      handleLinkCoverLetter(selectedJob.id, match.documentId);
-                                    }
-                                  }}
-                                >
-                                  {((match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                    (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId)))
-                                    ? 'Unlink' : 'Link'}
-                                </button>
+                                <div className="match-actions">
+                                  <button
+                                    className="preview-button"
+                                    onClick={() => {
+                                      const document = match.documentType === 'resume'
+                                        ? state.resumes.find(r => r.id === match.documentId)
+                                        : state.coverLetters.find(cl => cl.id === match.documentId);
+
+                                      if (document) {
+                                        const isLinked = match.documentType === 'resume'
+                                          ? selectedJob.linkedResumeIds.includes(match.documentId)
+                                          : selectedJob.linkedCoverLetterIds.includes(match.documentId);
+
+                                        const onLink = () => {
+                                          if (match.documentType === 'resume') {
+                                            handleLinkResume(selectedJob.id, match.documentId);
+                                          } else {
+                                            handleLinkCoverLetter(selectedJob.id, match.documentId);
+                                          }
+                                        };
+
+                                        handlePreviewDocument(document, isLinked, onLink);
+                                      }
+                                    }}
+                                    title="Preview document content"
+                                  >
+                                    👁️ Preview
+                                  </button>
+                                  <button
+                                    className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
+                                      (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
+                                      ? 'linked' : ''
+                                      }`}
+                                    onClick={() => {
+                                      if (match.documentType === 'resume') {
+                                        handleLinkResume(selectedJob.id, match.documentId);
+                                      } else {
+                                        handleLinkCoverLetter(selectedJob.id, match.documentId);
+                                      }
+                                    }}
+                                  >
+                                    {((match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
+                                      (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId)))
+                                      ? 'Unlink' : 'Link'}
+                                  </button>
+                                </div>
                               </div>
                               <div className="matched-keywords">
                                 <strong>Matched keywords:</strong> {match.matchedKeywords.join(', ')}
@@ -1485,6 +1531,14 @@ const JobDescriptionsPage: React.FC = () => {
         isOpen={showCSVImportModal}
         onClose={() => setShowCSVImportModal(false)}
         onImport={handleCSVImport}
+      />
+
+      <DocumentPreviewModal
+        isOpen={showDocumentPreviewModal}
+        onClose={handleCloseDocumentPreview}
+        document={previewDocument}
+        onLink={previewDocumentOnLink || undefined}
+        isLinked={previewDocumentIsLinked}
       />
     </div >
   );
