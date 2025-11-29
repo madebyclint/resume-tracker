@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import GeneratedContentModal from '../components/GeneratedContentModal';
+import ValidationMessage from '../components/ValidationMessage';
 import './JobDescriptionsPage.css';
 
 // Remove the local interface since we're using the one from documentMatcher
@@ -532,7 +533,7 @@ const JobDescriptionsPage: React.FC = () => {
           return `"${char}"${suggestion}`;
         });
 
-        nonAsciiIssues.push(`Line ${lineIndex + 1}: ${charDetails.join(', ')}`);
+        nonAsciiIssues.push(`Line <a href="#line-${lineIndex + 1}">${lineIndex + 1}</a>: ${charDetails.join(', ')}`);
       }
     });
 
@@ -558,7 +559,7 @@ const JobDescriptionsPage: React.FC = () => {
     lines.forEach((line, lineIndex) => {
       const multipleSpaces = line.match(/\s{2,}/g);
       if (multipleSpaces) {
-        grammarIssues.push(`Line ${lineIndex + 1}: Multiple spaces detected (${multipleSpaces.length} occurrence${multipleSpaces.length > 1 ? 's' : ''})`);
+        grammarIssues.push(`Line <a href="#line-${lineIndex + 1}">${lineIndex + 1}</a>: Multiple spaces detected (${multipleSpaces.length} occurrence${multipleSpaces.length > 1 ? 's' : ''})`);
       }
     });
 
@@ -567,7 +568,7 @@ const JobDescriptionsPage: React.FC = () => {
       const multiplePunct = line.match(/[.!?]{2,}/g);
       if (multiplePunct) {
         multiplePunct.forEach(punct => {
-          grammarIssues.push(`Line ${lineIndex + 1}: Multiple punctuation "${punct}" - use single punctuation`);
+          grammarIssues.push(`Line <a href="#line-${lineIndex + 1}">${lineIndex + 1}</a>: Multiple punctuation "${punct}" - use single punctuation`);
         });
       }
     });
@@ -576,7 +577,7 @@ const JobDescriptionsPage: React.FC = () => {
     lines.forEach((line, lineIndex) => {
       const trimmed = line.trim();
       if (trimmed && !trimmed.match(/^[#*\-+>|`\d]/) && trimmed.match(/^[a-z]/)) {
-        grammarIssues.push(`Line ${lineIndex + 1}: "${trimmed.substring(0, 20)}${trimmed.length > 20 ? '...' : ''}" should start with capital letter`);
+        grammarIssues.push(`Line <a href="#line-${lineIndex + 1}">${lineIndex + 1}</a>: "${trimmed.substring(0, 20)}${trimmed.length > 20 ? '...' : ''}" should start with capital letter`);
       }
     });
 
@@ -584,7 +585,7 @@ const JobDescriptionsPage: React.FC = () => {
     lines.forEach((line, lineIndex) => {
       const trimmed = line.trim();
       if (trimmed.length > 10 && !trimmed.match(/^[#*\-+>|`]/) && !trimmed.match(/[.!?:;]$/) && !trimmed.match(/\d{4}$/) && trimmed.split(' ').length > 4) {
-        grammarIssues.push(`Line ${lineIndex + 1}: Sentence may be missing punctuation at end`);
+        grammarIssues.push(`Line <a href="#line-${lineIndex + 1}">${lineIndex + 1}</a>: Sentence may be missing punctuation at end`);
       }
     });
 
@@ -1254,34 +1255,91 @@ const JobDescriptionsPage: React.FC = () => {
               <h2>Resume Formatter</h2>
               <p>Paste your raw resume text below and get a clean, ATS-friendly formatted output</p>
             </div>
+            <div className="output-controls">
+              <button
+                className="save-button"
+                onClick={handleSaveResume}
+                disabled={!formattedHTML}
+              >
+                💾 Save Resume
+              </button>
+              <button
+                className="copy-button"
+                onClick={handleCopyHTML}
+                disabled={!formattedHTML}
+              >
+                Copy HTML
+              </button>
+              <button
+                className="print-button"
+                onClick={handlePrintResume}
+                disabled={!formattedHTML}
+              >
+                Print
+              </button>
+            </div>
+            <div className="checks-section">
+              <h4>Resume Validation</h4>
+              <div className="check-results">
+                {validationResults.length > 0 ? (
+                  validationResults.map((result, index) => (
+                    <div key={index} className={`check-item ${result.type}`}>
+                      <span className="check-message">
+                        <ValidationMessage message={result.message} />
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="no-validation">
+                    <p>Start typing to see ATS, grammar, and formatting validation...</p>
+                    <div className="markdown-tips">
+                      <p><strong>Quick Tips:</strong></p>
+                      <ul>
+                        <li><code># Your Name</code> for main heading</li>
+                        <li><code>## Section Title</code> for sections</li>
+                        <li><code>**Bold Text**</code> for emphasis</li>
+                        <li><code>- Bullet point</code> for lists</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="formatter-layout">
               <div className="input-section">
                 <h3>Input Resume Text</h3>
-                <textarea
-                  className="resume-input"
-                  placeholder="Paste your raw resume markdown here..."
-                  value={resumeInputText}
-                  onChange={(e) => {
-                    const newValue = e.target.value;
-                    setResumeInputText(newValue);
+                <div className="textarea-with-lines">
+                  <div className="line-numbers">
+                    {(resumeInputText || ' ').split('\n').map((_, index) => (
+                      <div key={index} className="line-number" id={`line-${index + 1}`}>{index + 1}</div>
+                    ))}
+                  </div>
+                  <textarea
+                    className="resume-input"
+                    placeholder="Paste your raw resume markdown here..."
+                    value={resumeInputText}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      setResumeInputText(newValue);
 
-                    // Auto-format markdown and generate filename
-                    if (newValue.trim()) {
-                      setFormattedHTML(newValue);
-                      const today = new Date().toISOString().split('T')[0];
-                      setSaveFileName(`Resume_${today}`);
+                      // Auto-format markdown and generate filename
+                      if (newValue.trim()) {
+                        setFormattedHTML(newValue);
+                        const today = new Date().toISOString().split('T')[0];
+                        setSaveFileName(`Resume_${today}`);
 
-                      // Run validation
-                      validateResume(newValue);
-                    } else {
-                      setFormattedHTML('');
-                      setValidationResults([]);
-                    }
-                  }}
-                  rows={20}
-                  spellCheck={true}
-                />
+                        // Run validation
+                        validateResume(newValue);
+                      } else {
+                        setFormattedHTML('');
+                        setValidationResults([]);
+                      }
+                    }}
+                    rows={20}
+                    spellCheck={true}
+                  />
+                </div>
                 <div className="formatter-controls">
                   <button
                     className="clear-button"
@@ -1294,69 +1352,29 @@ const JobDescriptionsPage: React.FC = () => {
 
               <div className="output-section">
                 <h3>Formatted Output</h3>
-                <div className="output-controls">
-                  <button
-                    className="save-button"
-                    onClick={handleSaveResume}
-                    disabled={!formattedHTML}
-                  >
-                    💾 Save Resume
-                  </button>
-                  <button
-                    className="copy-button"
-                    onClick={handleCopyHTML}
-                    disabled={!formattedHTML}
-                  >
-                    Copy HTML
-                  </button>
-                  <button
-                    className="print-button"
-                    onClick={handlePrintResume}
-                    disabled={!formattedHTML}
-                  >
-                    Print
-                  </button>
-                </div>
                 <div className="formatted-output">
                   {formattedHTML ? (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm, remarkBreaks]}
-                      components={{
-                        h2: ({ ...props }) => <h2 style={{ margin: '1.25em 0 .5em 0' }} {...props} />,
-                        p: ({ ...props }) => <p style={{ margin: '.5em 0' }} {...props} />
-                      }}
-                    >
-                      {formattedHTML}
-                    </ReactMarkdown>
+                    <div className="markdown-with-lines">
+                      <div className="line-numbers">
+                        {formattedHTML.split('\n').map((_, index) => (
+                          <div key={index} className="line-number">{index + 1}</div>
+                        ))}
+                      </div>
+                      <div className="markdown-content">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkBreaks]}
+                          components={{
+                            h2: ({ ...props }) => <h2 style={{ margin: '1.25em 0 .5em 0' }} {...props} />,
+                            p: ({ ...props }) => <p style={{ margin: '.5em 0' }} {...props} />
+                          }}
+                        >
+                          {formattedHTML}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
                   ) : (
                     <p className="placeholder-text">Formatted resume will appear here...</p>
                   )}
-                </div>
-
-                <div className="checks-section">
-                  <h4>Resume Validation</h4>
-                  <div className="check-results">
-                    {validationResults.length > 0 ? (
-                      validationResults.map((result, index) => (
-                        <div key={index} className={`check-item ${result.type}`}>
-                          <span className="check-message">{result.message}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="no-validation">
-                        <p>Start typing to see ATS, grammar, and formatting validation...</p>
-                        <div className="markdown-tips">
-                          <p><strong>Quick Tips:</strong></p>
-                          <ul>
-                            <li><code># Your Name</code> for main heading</li>
-                            <li><code>## Section Title</code> for sections</li>
-                            <li><code>**Bold Text**</code> for emphasis</li>
-                            <li><code>- Bullet point</code> for lists</li>
-                          </ul>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>

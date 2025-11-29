@@ -2,6 +2,7 @@
   padding: 20px;
   height: 100vh;
   overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .page-header {
@@ -901,7 +902,7 @@
 }
 
 .formatter-header {
-  margin-bottom: 30px;
+  margin-bottom: .5em;
 }
 
 .formatter-header h2 {
@@ -1021,9 +1022,8 @@
   flex: 1;
   border: 2px solid #e9ecef;
   border-radius: 8px;
-  padding: 20px;
   background: white;
-  overflow-y: auto;
+  overflow: hidden;
   font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', sans-serif;
   font-size: 14px;
   line-height: 1.6;
@@ -1064,6 +1064,96 @@
   font-style: italic;
   text-align: center;
   margin: 50px 0;
+  padding: 20px;
+}
+
+/* Line numbers for markdown preview */
+.markdown-with-lines {
+  display: flex;
+  height: 100%;
+}
+
+.line-numbers {
+  background: #f8f9fa;
+  border-right: 1px solid #e9ecef;
+  padding: 20px 8px 20px 12px;
+  min-width: 45px;
+  text-align: right;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #6c757d;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.line-number {
+  height: 22.4px; /* Match line height of content */
+  display: flex;
+  align-items: flex-start;
+  padding-top: 1px;
+}
+
+.markdown-content {
+  flex: 1;
+  padding: 0 20px;
+  overflow-y: auto;
+}
+
+/* Line numbers for textarea input */
+.textarea-with-lines {
+  display: flex;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.textarea-with-lines:focus-within {
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.textarea-with-lines .line-numbers {
+  background: #f8f9fa;
+  border-right: 1px solid #e9ecef;
+  padding: 15px 8px 15px 12px;
+  min-width: 45px;
+  text-align: right;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6c757d;
+  user-select: none;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.textarea-with-lines .line-number {
+  height: 21px; /* Match textarea line height */
+  display: flex;
+  align-items: flex-start;
+  padding-top: 1px;
+  transition: background-color 0.3s ease;
+}
+
+.textarea-with-lines .line-number:target {
+  background-color: #fff3cd;
+  border-left: 3px solid #ffc107;
+  padding-left: 9px;
+}
+
+.textarea-with-lines .resume-input {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+  padding: 15px 15px 15px 10px;
+  line-height: 1.5;
+}
+
+.textarea-with-lines .resume-input:focus {
+  border: none;
+  box-shadow: none;
 }
 
 .checks-section {
@@ -1209,6 +1299,20 @@
   font-size: 13px;
   line-height: 1.4;
   word-wrap: break-word;
+}
+
+.check-message a,
+.check-message .line-link {
+  color: #007bff;
+  text-decoration: underline;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.check-message a:hover,
+.check-message .line-link:hover {
+  color: #0056b3;
+  text-decoration: none;
 }
 
 /* Validation Styles */
