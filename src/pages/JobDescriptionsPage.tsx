@@ -727,7 +727,7 @@ const JobDescriptionsPage: React.FC = () => {
 
     const previewContent = `
       <!DOCTYPE html>
-      <html>
+      <html style="height: 100%; overflow: auto;">
       <head>
         <meta charset="utf-8">
         <title>Resume Preview</title>
@@ -741,6 +741,9 @@ const JobDescriptionsPage: React.FC = () => {
             margin: 0;
             padding: 20px;
             background: white;
+            height: auto;
+            min-height: 100%;
+            overflow: auto;
           }
         </style>
       </head>
@@ -1426,7 +1429,7 @@ const JobDescriptionsPage: React.FC = () => {
 
                     const iframeSrcDoc = `
                       <!DOCTYPE html>
-                      <html>
+                      <html style="height: 100%; overflow: auto;">
                       <head>
                         <meta charset="utf-8">
                         <title>Resume Preview</title>
@@ -1440,6 +1443,9 @@ const JobDescriptionsPage: React.FC = () => {
                             margin: 0;
                             padding: 20px;
                             background: white;
+                            height: auto;
+                            min-height: 100%;
+                            overflow: auto;
                           }
                         </style>
                       </head>
