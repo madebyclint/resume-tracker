@@ -1206,7 +1206,9 @@
 
 .check-message {
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-wrap: break-word;
 }
 
 /* Validation Styles */

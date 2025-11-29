@@ -509,35 +509,91 @@ const JobDescriptionsPage: React.FC = () => {
       results.push({ type: 'warning', message: '⚠️ Consider adding work experience section' });
     }
 
-    // ASCII Safety Checks
-    const nonAsciiChars = text.match(/[^\x00-\x7F]/g);
-    if (!nonAsciiChars) {
-      results.push({ type: 'pass', message: '✓ ASCII-safe (no special characters that could break ATS)' });
-    } else {
-      const uniqueChars = [...new Set(nonAsciiChars)].join('');
-      results.push({ type: 'warning', message: `⚠️ Contains non-ASCII characters: ${uniqueChars} - may cause ATS issues` });
-    }
+    // ASCII Safety Checks with specific character locations
+    const lines = text.split('\n');
+    const nonAsciiIssues: string[] = [];
 
-    // Grammar & Spelling Checks (basic)
-    const commonErrors = [
-      { pattern: /\bi\s/g, message: 'Use "I" instead of "i"' },
-      { pattern: /\s{2,}/g, message: 'Multiple spaces detected' },
-      { pattern: /[.!?]{2,}/g, message: 'Multiple punctuation marks' },
-      { pattern: /^[a-z]/gm, message: 'Lines should start with capital letters' }
-    ];
+    lines.forEach((line, lineIndex) => {
+      const nonAsciiMatches = line.match(/[^\x00-\x7F]/g);
+      if (nonAsciiMatches) {
+        const charDetails = nonAsciiMatches.map(char => {
+          const charCode = char.charCodeAt(0);
+          let suggestion = '';
 
-    let grammarIssues = 0;
-    commonErrors.forEach(error => {
-      const matches = text.match(error.pattern);
-      if (matches && matches.length > 2) { // Only flag if multiple instances
-        grammarIssues++;
+          // Common character replacements
+          if (char === '—') suggestion = ' (use regular dash -)';
+          else if (char === '–') suggestion = ' (use regular dash -)';
+          else if (char === '"' || char === '"') suggestion = ' (use straight quotes ")';
+          else if (char === '\u2018' || char === '\u2019') suggestion = " (use straight apostrophe ')";
+          else if (char === '•') suggestion = ' (use regular dash - for bullets)';
+          else if (char === '→') suggestion = ' (remove or use ->)';
+          else suggestion = ` (Unicode ${charCode})`;
+
+          return `"${char}"${suggestion}`;
+        });
+
+        nonAsciiIssues.push(`Line ${lineIndex + 1}: ${charDetails.join(', ')}`);
       }
     });
 
-    if (grammarIssues === 0) {
-      results.push({ type: 'pass', message: '✓ No obvious grammar issues detected' });
+    if (nonAsciiIssues.length === 0) {
+      results.push({ type: 'pass', message: '✓ ASCII-safe (no special characters that could break ATS)' });
     } else {
-      results.push({ type: 'warning', message: `⚠️ ${grammarIssues} potential grammar issues - review spacing and capitalization` });
+      nonAsciiIssues.forEach(issue => {
+        results.push({ type: 'warning', message: `⚠️ Non-ASCII character found: ${issue}` });
+      });
+    }
+
+    // Detailed Grammar & Spelling Checks
+    const grammarIssues: string[] = [];
+
+    // Check for lowercase "i" 
+    const lowercaseI = text.match(/\bi\s/g);
+    if (lowercaseI && lowercaseI.length > 0) {
+      const count = lowercaseI.length;
+      grammarIssues.push(`Found ${count} instance${count > 1 ? 's' : ''} of lowercase "i" - should be "I"`);
+    }
+
+    // Check for multiple spaces
+    lines.forEach((line, lineIndex) => {
+      const multipleSpaces = line.match(/\s{2,}/g);
+      if (multipleSpaces) {
+        grammarIssues.push(`Line ${lineIndex + 1}: Multiple spaces detected (${multipleSpaces.length} occurrence${multipleSpaces.length > 1 ? 's' : ''})`);
+      }
+    });
+
+    // Check for multiple punctuation
+    lines.forEach((line, lineIndex) => {
+      const multiplePunct = line.match(/[.!?]{2,}/g);
+      if (multiplePunct) {
+        multiplePunct.forEach(punct => {
+          grammarIssues.push(`Line ${lineIndex + 1}: Multiple punctuation "${punct}" - use single punctuation`);
+        });
+      }
+    });
+
+    // Check for lines starting with lowercase (excluding markdown syntax)
+    lines.forEach((line, lineIndex) => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.match(/^[#*\-+>|`\d]/) && trimmed.match(/^[a-z]/)) {
+        grammarIssues.push(`Line ${lineIndex + 1}: "${trimmed.substring(0, 20)}${trimmed.length > 20 ? '...' : ''}" should start with capital letter`);
+      }
+    });
+
+    // Check for missing periods at end of sentences
+    lines.forEach((line, lineIndex) => {
+      const trimmed = line.trim();
+      if (trimmed.length > 10 && !trimmed.match(/^[#*\-+>|`]/) && !trimmed.match(/[.!?:;]$/) && !trimmed.match(/\d{4}$/) && trimmed.split(' ').length > 4) {
+        grammarIssues.push(`Line ${lineIndex + 1}: Sentence may be missing punctuation at end`);
+      }
+    });
+
+    if (grammarIssues.length === 0) {
+      results.push({ type: 'pass', message: '✓ No grammar issues detected' });
+    } else {
+      grammarIssues.forEach(issue => {
+        results.push({ type: 'warning', message: `⚠️ Grammar: ${issue}` });
+      });
     }
 
     // Length check
