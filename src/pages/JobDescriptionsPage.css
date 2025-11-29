@@ -1002,7 +1002,8 @@
 }
 
 .copy-button,
-.print-button {
+.print-button,
+.preview-button {
   background: #28a745;
   color: white;
   border: none;
@@ -1011,11 +1012,22 @@
   cursor: pointer;
   font-size: 13px;
   transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .copy-button:hover,
-.print-button:hover {
+.print-button:hover,
+.preview-button:hover {
   background: #1e7e34;
+}
+
+.copy-button:disabled,
+.print-button:disabled,
+.preview-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
 }
 
 .formatted-output {

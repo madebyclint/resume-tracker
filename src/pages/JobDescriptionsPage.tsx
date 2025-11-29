@@ -702,6 +702,59 @@ const JobDescriptionsPage: React.FC = () => {
     printWindow.print();
   };
 
+  const handlePreviewResume = () => {
+    if (!formattedHTML) {
+      alert('No formatted resume to preview');
+      return;
+    }
+
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      alert('Please allow pop-ups to preview the resume');
+      return;
+    }
+
+    // Use the exact same logic as the iframe
+    const markdownComponent = (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+      >
+        {formattedHTML}
+      </ReactMarkdown>
+    );
+
+    const renderedHTML = ReactDOMServer.renderToStaticMarkup(markdownComponent);
+
+    const previewContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Resume Preview</title>
+        <link rel="stylesheet" href="/src/pages/JobDescriptionsPage.css">
+        <style>
+          body {
+            font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            background: white;
+          }
+        </style>
+      </head>
+      <body class="formatted-output">
+        ${renderedHTML}
+      </body>
+      </html>
+    `;
+
+    previewWindow.document.write(previewContent);
+    previewWindow.document.close();
+    previewWindow.focus();
+  };
+
   const handleSaveResume = () => {
     if (!formattedHTML) {
       alert('No formatted resume to save');
@@ -1276,6 +1329,13 @@ const JobDescriptionsPage: React.FC = () => {
                 disabled={!formattedHTML}
               >
                 Print
+              </button>
+              <button
+                className="preview-button"
+                onClick={handlePreviewResume}
+                disabled={!formattedHTML}
+              >
+                🔍 Preview
               </button>
             </div>
             <div className="checks-section">
