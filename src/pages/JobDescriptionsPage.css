@@ -57,6 +57,12 @@
   position: relative;
 }
 
+.job-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .add-job-button {
   background: #007bff;
   color: white;
@@ -73,6 +79,29 @@
 }
 
 .add-job-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.import-csv-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.import-csv-button:hover:not(:disabled) {
+  background: #1e7e34;
+}
+
+.import-csv-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

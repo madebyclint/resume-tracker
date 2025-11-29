@@ -12,6 +12,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import GeneratedContentModal from '../components/GeneratedContentModal';
 import ValidationMessage from '../components/ValidationMessage';
+import CSVImportModal from '../components/CSVImportModal';
 import './JobDescriptionsPage.css';
 
 // Remove the local interface since we're using the one from documentMatcher
@@ -56,6 +57,9 @@ const JobDescriptionsPage: React.FC = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveFileName, setSaveFileName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // CSV import modal state
+  const [showCSVImportModal, setShowCSVImportModal] = useState(false);
 
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
@@ -481,6 +485,27 @@ const JobDescriptionsPage: React.FC = () => {
     }
   };
 
+  // CSV import handler
+  const handleCSVImport = async (jobDescriptions: JobDescription[]) => {
+    try {
+      // Save all job descriptions to storage
+      for (const jobDesc of jobDescriptions) {
+        await saveJobDescription(jobDesc);
+      }
+
+      // Update state with new job descriptions
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: [...prev.jobDescriptions, ...jobDescriptions]
+      }));
+
+      alert(`Successfully imported ${jobDescriptions.length} job description${jobDescriptions.length === 1 ? '' : 's'}!`);
+    } catch (error) {
+      console.error('Error importing CSV:', error);
+      alert(`Failed to import job descriptions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   // Resume validation function
   const validateResume = (text: string) => {
     const results: Array<{ type: 'pass' | 'warning' | 'error', message: string }> = [];
@@ -775,13 +800,23 @@ const JobDescriptionsPage: React.FC = () => {
           </button>
         </div>
         {activeTab === 'job-descriptions' && (
-          <button
-            className="add-job-button"
-            onClick={() => setShowAddForm(true)}
-            disabled={showAddForm}
-          >
-            + Add Job Description
-          </button >
+          <div className="job-actions">
+            <button
+              className="add-job-button"
+              onClick={() => setShowAddForm(true)}
+              disabled={showAddForm}
+            >
+              + Add Job Description
+            </button>
+            <button
+              className="import-csv-button"
+              onClick={() => setShowCSVImportModal(true)}
+              disabled={showAddForm}
+              title="Import job applications from CSV file"
+            >
+              📄 Import CSV
+            </button>
+          </div>
         )}
       </div >
 
@@ -1444,6 +1479,12 @@ const JobDescriptionsPage: React.FC = () => {
         isLoading={isGenerating}
         error={generationError || undefined}
         defaultName={generatedDefaultName}
+      />
+
+      <CSVImportModal
+        isOpen={showCSVImportModal}
+        onClose={() => setShowCSVImportModal(false)}
+        onImport={handleCSVImport}
       />
     </div >
   );

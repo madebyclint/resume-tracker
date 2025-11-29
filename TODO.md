@@ -1,0 +1,4 @@
+- Add linting
+- Add unit tests
+- Add type check
+- Add best practices like breaking down long components
