@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription } from '../types';
 import { parseJobDescription, generateTailoredResume, generateTailoredCoverLetter, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured } from '../utils/aiService';
@@ -1352,21 +1353,52 @@ const JobDescriptionsPage: React.FC = () => {
               <div className="output-section">
                 <h3>Formatted Output</h3>
                 <div className="formatted-output">
-                  {formattedHTML ? (
-                    <div className="markdown-with-lines">
-                      <div className="markdown-content">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm, remarkBreaks]}
-                          components={{
-                            h2: ({ ...props }) => <h2 style={{ margin: '1.25em 0 .5em 0' }} {...props} />,
-                            p: ({ ...props }) => <p style={{ margin: '.5em 0' }} {...props} />
-                          }}
-                        >
-                          {formattedHTML}
-                        </ReactMarkdown>
+                  {formattedHTML ? (() => {
+                    const markdownComponent = (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
+                      >
+                        {formattedHTML}
+                      </ReactMarkdown>
+                    );
+
+                    const renderedHTML = ReactDOMServer.renderToStaticMarkup(markdownComponent);
+
+                    const iframeSrcDoc = `
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <meta charset="utf-8">
+                        <title>Resume Preview</title>
+                        <link rel="stylesheet" href="/src/pages/JobDescriptionsPage.css">
+                        <style>
+                          body {
+                            font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', sans-serif;
+                            font-size: 11pt;
+                            line-height: 1.5;
+                            color: #333;
+                            margin: 0;
+                            padding: 20px;
+                            background: white;
+                          }
+                        </style>
+                      </head>
+                      <body class="formatted-output">
+                        ${renderedHTML}
+                      </body>
+                      </html>
+                    `;
+
+                    return (
+                      <div className="markdown-with-lines">
+                        <iframe
+                          className="markdown-iframe"
+                          srcDoc={iframeSrcDoc}
+                          title="Resume Preview"
+                        />
                       </div>
-                    </div>
-                  ) : (
+                    );
+                  })() : (
                     <p className="placeholder-text">Formatted resume will appear here...</p>
                   )}
                 </div>
