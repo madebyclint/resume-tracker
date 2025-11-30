@@ -169,6 +169,99 @@ ${job.rawText}`;
     }
   };
 
+  // Copy Excel-formatted row for spreadsheet
+  const handleCopyExcelRow = async (job: JobDescription) => {
+    try {
+      // Format the data similar to the spreadsheet structure shown in the attachment
+      const today = new Date().toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: '2-digit'
+      }).replace(/\//g, '/');
+
+      const formattedDate = job.applicationDate
+        ? new Date(job.applicationDate).toLocaleDateString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: '2-digit'
+        }).replace(/\//g, '/')
+        : today;
+
+      // Create tab-separated values that can be pasted into Excel
+      const excelRow = [
+        formattedDate, // Date
+        job.sequentialId || job.id, // ID
+        job.source || job.extractedInfo?.jobUrl || 'Manual Entry', // Source
+        job.company, // Company
+        job.priority || 'No', // Impact (using priority as a proxy)
+        job.title || job.extractedInfo?.role || 'Unknown Position', // Discipline/Role
+        job.applicationStatus ?
+          job.applicationStatus.charAt(0).toUpperCase() + job.applicationStatus.slice(1).replace('_', ' ')
+          : 'Not Applied', // Status
+        job.extractedInfo?.jobUrl || job.url || 'N/A', // Contact/Link
+        job.secondaryContact || job.contactPerson || '' // Second Contact/Link
+      ].join('\t');
+
+      await navigator.clipboard.writeText(excelRow);
+
+      // Show brief success feedback
+      const button = document.activeElement as HTMLButtonElement;
+      if (button) {
+        const originalText = button.innerHTML;
+        button.innerHTML = '✅';
+        setTimeout(() => {
+          button.innerHTML = originalText;
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Failed to copy Excel row:', error);
+      alert('Failed to copy to clipboard');
+    }
+  };
+
+  // Copy filename suggestion following the format: fname-lname-month-year-companynospace-initialsofrole-[resume|coverletter]
+  const handleCopyFilename = async (job: JobDescription, type: 'resume' | 'coverletter' = 'resume') => {
+    try {
+      const now = new Date();
+      const month = now.toLocaleString('default', { month: 'long' });
+      const year = now.getFullYear();
+
+      // Extract role initials from job title
+      const roleWords = (job.title || job.extractedInfo?.role || 'General')
+        .split(/\s+/)
+        .filter(word => word.length > 0)
+        .map(word => word.replace(/[^A-Za-z]/g, '')) // Remove non-alphabetic characters
+        .filter(word => word.length > 0);
+
+      const roleInitials = roleWords.map(word => word.charAt(0).toUpperCase()).join('');
+
+      // Clean company name (remove spaces and special characters)
+      const companyClean = job.company
+        .replace(/\s+/g, '') // Remove spaces
+        .replace(/[^A-Za-z0-9]/g, '') // Remove special characters
+        .replace(/^[^A-Za-z]+/, '') // Remove leading non-alphabetic characters
+        .substring(0, 20); // Limit length
+
+      // Format: fname-lname-month-year-companynospace-initialsofrole-[resume|coverletter]
+      const filename = `clint-bush-${month}-${year}-${companyClean}-${roleInitials}-${type}`;
+
+      await navigator.clipboard.writeText(filename);
+
+      // Show brief success feedback
+      const button = document.activeElement as HTMLButtonElement;
+      if (button) {
+        const originalText = button.innerHTML;
+        button.innerHTML = '✅';
+        setTimeout(() => {
+          button.innerHTML = originalText;
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Failed to copy filename:', error);
+      alert('Failed to copy to clipboard');
+    }
+  };
+
   const [sortField, setSortField] = useState<SortField>('sequentialId');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -461,6 +554,26 @@ ${job.rawText}`;
                           title="Copy job description text"
                         >
                           📋
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyExcelRow(job as JobDescription);
+                          }}
+                          className="action-btn copy-excel-btn"
+                          title="Copy row for Excel (tab-separated)"
+                        >
+                          📊
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyFilename(job as JobDescription, 'resume');
+                          }}
+                          className="action-btn copy-filename-btn"
+                          title="Copy filename suggestion for resume"
+                        >
+                          📝
                         </button>
                         <button
                           onClick={(e) => {
