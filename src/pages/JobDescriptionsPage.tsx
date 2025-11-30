@@ -216,7 +216,6 @@ const JobDescriptionsPage: React.FC = () => {
 
   // Auto-parse job description text to extract title, company, etc.
 
-
   // Re-parse existing job description with AI
   const handleReparse = async () => {
     if (!formData.rawText.trim()) {
@@ -341,6 +340,8 @@ const JobDescriptionsPage: React.FC = () => {
 
       const finalTitle = formData.title.trim();
       const finalCompany = formData.company.trim();
+
+
 
       if (isEditing && existingJob) {
         // Update existing job description
@@ -1443,6 +1444,7 @@ AI will automatically fill in the job title and company name fields above!"
                     📊 {lastParseUsage.promptTokens}↗ {lastParseUsage.completionTokens}↘ • 💰 {estimateCost(lastParseUsage)}
                   </small>
                 )}
+
                 <button
                   type="button"
                   onClick={handleReparse}
