@@ -1510,6 +1510,30 @@
   cursor: not-allowed;
 }
 
+/* Validate Button */
+.validate-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.validate-button:hover:not(:disabled) {
+  background: #218838;
+}
+
+.validate-button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
 /* Save Modal */
 .modal-overlay {
   position: fixed;

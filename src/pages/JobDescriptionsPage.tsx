@@ -542,6 +542,135 @@ const JobDescriptionsPage: React.FC = () => {
     setPreviewDocumentOnLink(null);
   };
 
+  // Markdown Resume Generation Prompt Validator
+  const validateMarkdownResumePrompt = (text: string) => {
+    const results: Array<{ type: 'pass' | 'warning' | 'error', message: string }> = [];
+
+    if (!text.trim()) {
+      return results;
+    }
+
+    // Check for Markdown format (should have # headers)
+    const hasMarkdownHeaders = /^#\s+/m.test(text);
+    if (hasMarkdownHeaders) {
+      results.push({ type: 'pass', message: '✓ Uses Markdown header format' });
+    } else {
+      results.push({ type: 'error', message: '❌ Must use Markdown format with # headers' });
+    }
+
+    // Check for only ONE divider line
+    const dividerLines = text.match(/^[-=_*]{3,}$/gm);
+    if (dividerLines) {
+      if (dividerLines.length === 1) {
+        results.push({ type: 'pass', message: '✓ Contains exactly one divider line' });
+      } else {
+        results.push({ type: 'error', message: `❌ Found ${dividerLines.length} divider lines - should be exactly ONE` });
+      }
+    } else {
+      results.push({ type: 'error', message: '❌ Missing divider line after header' });
+    }
+
+    // Check divider placement (should be after header)
+    const lines = text.split('\n');
+    let headerFound = false;
+    let dividerAfterHeader = false;
+    let dividerLineNumber = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      // Find first header
+      if (!headerFound && line.match(/^#\s+/)) {
+        headerFound = true;
+        continue;
+      }
+
+      // Check if divider comes right after header section
+      if (headerFound && line.match(/^[-=_*]{3,}$/)) {
+        dividerLineNumber = i + 1;
+        // Allow some contact info lines between header and divider
+        const headerEndIndex = i;
+        const headerSection = lines.slice(0, headerEndIndex).join('\n');
+
+        // Header section should contain contact info patterns
+        if (/(@|\.|phone|email|linkedin|github)/i.test(headerSection)) {
+          dividerAfterHeader = true;
+        }
+        break;
+      }
+    }
+
+    if (dividerAfterHeader) {
+      results.push({ type: 'pass', message: `✓ Divider correctly placed after header (line ${dividerLineNumber})` });
+    } else if (dividerLines && dividerLines.length > 0) {
+      results.push({ type: 'error', message: '❌ Divider must be placed immediately after header section' });
+    }
+
+    // Check for header with bullet separators in contact info
+    const headerSection = text.split(/^[-=_*]{3,}$/m)[0];
+    const hasBulletSeparators = /•|\|/.test(headerSection);
+    if (hasBulletSeparators) {
+      results.push({ type: 'pass', message: '✓ Header uses bullet separators for contact info' });
+    } else {
+      results.push({ type: 'warning', message: '⚠️ Consider using bullet separators (• or |) in header contact info' });
+    }
+
+    // Check Skills section has bullet points with bold labels
+    const skillsSection = text.match(/## Skills.*?(?=##|\n\n|$)/is);
+    if (skillsSection) {
+      const skillsContent = skillsSection[0];
+      const hasBoldLabels = /\*\*[^*]+\*\*/.test(skillsContent);
+      const hasBulletPoints = /^\s*[-*+]\s/m.test(skillsContent);
+
+      if (hasBoldLabels && hasBulletPoints) {
+        results.push({ type: 'pass', message: '✓ Skills section uses bullet points with bold category labels' });
+      } else if (!hasBoldLabels) {
+        results.push({ type: 'error', message: '❌ Skills section missing bold category labels (**Category:**)' });
+      } else if (!hasBulletPoints) {
+        results.push({ type: 'error', message: '❌ Skills section missing bullet points' });
+      }
+    } else {
+      results.push({ type: 'warning', message: '⚠️ No Skills section found' });
+    }
+
+    // Check for ASCII-safe content (no em dashes, Unicode, fancy characters)
+    const nonAsciiChars = text.match(/[^\x00-\x7F]/g);
+    if (!nonAsciiChars) {
+      results.push({ type: 'pass', message: '✓ Fully ASCII-safe (no Unicode characters)' });
+    } else {
+      const uniqueChars = [...new Set(nonAsciiChars)];
+      const charDetails = uniqueChars.map(char => {
+        const charCode = char.charCodeAt(0);
+        let suggestion = '';
+
+        if (char === '—' || char === '–') suggestion = ' (use regular dash -)';
+        else if (char === '"' || char === '"') suggestion = ' (use straight quotes ")';
+        else if (char === '\u2018' || char === '\u2019') suggestion = " (use straight apostrophe ')";
+        else if (char === '•') suggestion = ' (use regular dash - for bullets)';
+        else suggestion = ` (Unicode ${charCode})`;
+
+        return `"${char}"${suggestion}`;
+      });
+
+      results.push({ type: 'error', message: `❌ Non-ASCII characters found: ${charDetails.join(', ')}` });
+    }
+
+    // Check for additional dividers or horizontal rules elsewhere
+    const bodyAfterDivider = text.split(/^[-=_*]{3,}$/m)[1];
+    if (bodyAfterDivider) {
+      const additionalDividers = bodyAfterDivider.match(/^[-=_*]{3,}$/gm);
+      if (additionalDividers && additionalDividers.length > 0) {
+        results.push({ type: 'error', message: `❌ Found ${additionalDividers.length} additional divider(s) in body - remove all dividers except the one after header` });
+      } else {
+        results.push({ type: 'pass', message: '✓ No additional dividers found in document body' });
+      }
+    }
+
+    return results;
+  };
+
+
+
   // Resume validation function
   const validateResume = (text: string) => {
     const results: Array<{ type: 'pass' | 'warning' | 'error', message: string }> = [];
@@ -684,6 +813,13 @@ const JobDescriptionsPage: React.FC = () => {
       results.push({ type: 'pass', message: '✓ Contains properly formatted dates' });
     } else {
       results.push({ type: 'warning', message: '⚠️ Add dates to work experience (e.g., 2020-2024)' });
+    }
+
+    // Add Markdown Generation Prompt validation
+    const markdownPromptResults = validateMarkdownResumePrompt(text);
+    if (markdownPromptResults.length > 0) {
+      results.push({ type: 'pass', message: '--- Markdown Generation Prompt Requirements ---' });
+      results.push(...markdownPromptResults);
     }
 
     setValidationResults(results);
@@ -1397,6 +1533,24 @@ const JobDescriptionsPage: React.FC = () => {
               >
                 🔍 Preview
               </button>
+              <button
+                className="validate-button"
+                onClick={() => {
+                  if (resumeInputText.trim()) {
+                    const promptResults = validateMarkdownResumePrompt(resumeInputText);
+                    setValidationResults([
+                      { type: 'pass' as const, message: '✅ Markdown Generation Prompt Validation' },
+                      ...promptResults
+                    ]);
+                  } else {
+                    setValidationResults([{ type: 'error' as const, message: '❌ No text to validate' }]);
+                  }
+                }}
+                disabled={!resumeInputText.trim()}
+                title="Check resume against Markdown generation prompt requirements"
+              >
+                ✓ Prompt Check
+              </button>
             </div>
             <div className="checks-section">
               <h4>Resume Validation</h4>
@@ -1411,7 +1565,7 @@ const JobDescriptionsPage: React.FC = () => {
                   ))
                 ) : (
                   <div className="no-validation">
-                    <p>Start typing to see ATS, grammar, and formatting validation...</p>
+                    <p>Start typing to see ATS, grammar, formatting, and Markdown generation prompt validation...</p>
                     <div className="markdown-tips">
                       <p><strong>Quick Tips:</strong></p>
                       <ul>
@@ -1419,6 +1573,13 @@ const JobDescriptionsPage: React.FC = () => {
                         <li><code>## Section Title</code> for sections</li>
                         <li><code>**Bold Text**</code> for emphasis</li>
                         <li><code>- Bullet point</code> for lists</li>
+                      </ul>
+                      <p><strong>Prompt Requirements:</strong></p>
+                      <ul>
+                        <li>Exactly ONE divider line after header (---)</li>
+                        <li>Header with bullet separators (• or |)</li>
+                        <li>Skills with bold categories and bullets</li>
+                        <li>ASCII-safe characters only</li>
                       </ul>
                     </div>
                   </div>
