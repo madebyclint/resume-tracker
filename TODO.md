@@ -6,3 +6,6 @@
 - Make JD section first
 - Save resume from formatter
 - Split formatter out into own section not part of JD
+- Not seeing search for resume linking
+- Sort by sequential job id so i can see date applied/uploaded
+- Add job search

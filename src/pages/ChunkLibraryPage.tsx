@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Chunk, Resume, CoverLetter, ChunkType, Document, isResume, isCoverLetter } from '../types';
-import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks, exportChunksAsJSON, exportAllDataAsJSON, migrateChunkTypesAndTags } from '../storage';
+import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks, exportChunksAsJSON, exportAllDataAsJSON, migrateChunkTypesAndTags, importAllDataFromJSON, ImportResult } from '../storage';
 import { getChunkTypeLabel } from '../utils/aiService';
 
 interface ChunkLibraryPageProps {
@@ -25,6 +25,9 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
   const [searchTerm, setSearchTerm] = useState('');
   const [editingChunk, setEditingChunk] = useState<Chunk | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'sourceDoc', direction: 'asc' });
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Combine all documents for filtering
   const allDocuments: Document[] = [...resumes, ...coverLetters];
@@ -238,6 +241,54 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
     }
   };
 
+  const handleImportData = async (file: File, replaceExisting: boolean = false) => {
+    setIsImporting(true);
+    try {
+      const fileContent = await file.text();
+      const result: ImportResult = await importAllDataFromJSON(fileContent, {
+        replaceExisting,
+        skipDuplicates: true
+      });
+
+      if (result.success || result.importedCounts.resumes > 0 || result.importedCounts.coverLetters > 0 ||
+        result.importedCounts.chunks > 0 || result.importedCounts.jobDescriptions > 0) {
+
+        let message = '✅ Import completed!\n\n';
+        message += `Imported:\n`;
+        message += `• ${result.importedCounts.resumes} resumes\n`;
+        message += `• ${result.importedCounts.coverLetters} cover letters\n`;
+        message += `• ${result.importedCounts.chunks} chunks\n`;
+        message += `• ${result.importedCounts.jobDescriptions} job descriptions\n`;
+
+        if (result.warnings.length > 0) {
+          message += `\nWarnings:\n• ${result.warnings.join('\n• ')}`;
+        }
+
+        if (result.errors.length > 0) {
+          message += `\nErrors:\n• ${result.errors.join('\n• ')}`;
+        }
+
+        alert(message);
+
+        // Reload data to reflect changes
+        loadAllChunks();
+
+        // Dispatch event to reload other components
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('dataImported'));
+        }
+      } else {
+        alert(`❌ Import failed:\n${result.errors.join('\n')}`);
+      }
+    } catch (error) {
+      console.error('Failed to import data:', error);
+      alert(`❌ Failed to import data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsImporting(false);
+      setShowImportModal(false);
+    }
+  };
+
   const handleCancelEdit = () => {
     setEditingChunk(null);
   };
@@ -294,9 +345,25 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
                   fontSize: '0.875rem',
                   fontWeight: '600'
                 }}
-                title="Export all data (resumes + chunks) as JSON backup file"
+                title="Export all data (resumes, cover letters, chunks, job descriptions) as JSON backup file"
               >
                 📦 Export All Data
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#8b5cf6',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: '600'
+                }}
+                title="Import backup data from JSON file"
+              >
+                📤 Import Data
               </button>
               <button
                 onClick={handleMigrateChunks}
@@ -785,6 +852,144 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
                   Save Changes
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Data Modal */}
+      {showImportModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => setShowImportModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '2rem',
+              minWidth: '500px',
+              maxWidth: '600px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: '1.5rem' }}>Import Backup Data</h3>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <p style={{ marginBottom: '1rem', color: '#666' }}>
+                Select a JSON backup file to import resumes, cover letters, chunks, and job descriptions.
+              </p>
+
+              <div style={{
+                border: '2px dashed #ccc',
+                borderRadius: '8px',
+                padding: '2rem',
+                textAlign: 'center',
+                backgroundColor: '#fafafa'
+              }}>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".json"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleImportData(file, false);
+                    }
+                  }}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    border: 'none',
+                    borderRadius: '6px',
+                    backgroundColor: '#8b5cf6',
+                    color: 'white',
+                    cursor: isImporting ? 'not-allowed' : 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    opacity: isImporting ? 0.7 : 1
+                  }}
+                >
+                  {isImporting ? 'Importing...' : 'Choose Backup File'}
+                </button>
+                <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#666' }}>
+                  Supports .json backup files
+                </p>
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: '#fff3cd',
+              border: '1px solid #ffeaa7',
+              padding: '1rem',
+              borderRadius: '4px',
+              fontSize: '0.875rem',
+              marginBottom: '1.5rem'
+            }}>
+              <strong>⚠️ Important:</strong> Always export your current data first using "📦 Export All Data"
+              before importing or clearing data! This will add imported data to your existing data.
+              Duplicates will be skipped based on unique IDs. Files without actual document data
+              (marked as [FILE_DATA_EXCLUDED]) will be skipped.
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowImportModal(false)}
+                disabled={isImporting}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  backgroundColor: 'white',
+                  cursor: isImporting ? 'not-allowed' : 'pointer',
+                  opacity: isImporting ? 0.7 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.json';
+                  input.onchange = (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0];
+                    if (file) {
+                      if (confirm('⚠️ WARNING: This will PERMANENTLY DELETE all existing data and replace it with imported data!\n\nHave you exported your current data first using "📦 Export All Data"?\n\nThis action CANNOT be undone! Continue?')) {
+                        handleImportData(file, true);
+                      }
+                    }
+                  };
+                  input.click();
+                }}
+                disabled={isImporting}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  cursor: isImporting ? 'not-allowed' : 'pointer',
+                  opacity: isImporting ? 0.7 : 1
+                }}
+              >
+                Replace All Data
+              </button>
             </div>
           </div>
         </div>

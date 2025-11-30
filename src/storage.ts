@@ -875,10 +875,24 @@ export async function debugIndexedDB(): Promise<void> {
 }
 
 // Utility function for clearing all data (for debugging)
+// WARNING: Always export data first using exportAllDataAsJSON() before clearing!
 export async function clearAllData(): Promise<void> {
+  if (typeof window !== 'undefined') {
+    const confirmed = confirm(
+      '⚠️ WARNING: This will permanently delete ALL data!\n\n' +
+      'Have you exported your data first using "📦 Export All Data"?\n\n' +
+      'This action cannot be undone. Continue?'
+    );
+    if (!confirmed) {
+      console.log('Data clearing cancelled by user');
+      return;
+    }
+  }
+  
   try {
     await storage.clear();
     console.log('All data cleared from IndexedDB');
+    console.warn('💡 Remember: You can restore data using the Import feature if you exported it first!');
   } catch (error) {
     console.error('Error clearing IndexedDB:', error);
   }
@@ -987,22 +1001,32 @@ export async function deleteJobDescription(id: string): Promise<void> {
 // Export all data as JSON for backup purposes
 export async function exportAllDataAsJSON(): Promise<string> {
   try {
-    const [resumes, chunks] = await Promise.all([
+    const [resumes, coverLetters, chunks, jobDescriptions] = await Promise.all([
       storage.loadResumes(),
-      storage.getAllChunks()
+      storage.loadCoverLetters(),
+      storage.getAllChunks(),
+      storage.loadJobDescriptions()
     ]);
 
     const exportData = {
       exportedAt: new Date().toISOString(),
-      version: '1.0',
+      version: '1.1', // Bumped version to indicate new data structure
       resumes: resumes.map(resume => ({
         ...resume,
         // Don't include the actual file data in backup to keep size manageable
         fileData: '[FILE_DATA_EXCLUDED]',
       })),
+      coverLetters: coverLetters.map(coverLetter => ({
+        ...coverLetter,
+        // Don't include the actual file data in backup to keep size manageable
+        fileData: '[FILE_DATA_EXCLUDED]',
+      })),
       chunks,
+      jobDescriptions,
       totalResumes: resumes.length,
-      totalChunks: chunks.length
+      totalCoverLetters: coverLetters.length,
+      totalChunks: chunks.length,
+      totalJobDescriptions: jobDescriptions.length
     };
 
     return JSON.stringify(exportData, null, 2);
@@ -1032,6 +1056,158 @@ export async function exportChunksAsJSON(): Promise<string> {
   } catch (error) {
     console.error("Failed to export chunks from IndexedDB", error);
     throw error;
+  }
+}
+
+// Import interface for backup restoration
+export interface ImportResult {
+  success: boolean;
+  importedCounts: {
+    resumes: number;
+    coverLetters: number;
+    chunks: number;
+    jobDescriptions: number;
+  };
+  errors: string[];
+  warnings: string[];
+}
+
+// Import all data from JSON backup
+export async function importAllDataFromJSON(jsonString: string, options: {
+  replaceExisting?: boolean;
+  skipDuplicates?: boolean;
+} = {}): Promise<ImportResult> {
+  const result: ImportResult = {
+    success: false,
+    importedCounts: { resumes: 0, coverLetters: 0, chunks: 0, jobDescriptions: 0 },
+    errors: [],
+    warnings: []
+  };
+
+  try {
+    const importData = JSON.parse(jsonString);
+    
+    // Validate import data structure
+    if (!importData.version) {
+      result.errors.push("Invalid backup file: missing version information");
+      return result;
+    }
+
+    const { replaceExisting = false, skipDuplicates = true } = options;
+
+    // If replacing existing data, clear all data first
+    if (replaceExisting) {
+      if (!confirm('This will replace ALL existing data. Are you sure you want to continue?')) {
+        result.errors.push("Import cancelled by user");
+        return result;
+      }
+      await clearAllData();
+    }
+
+    // Get existing data for duplicate checking
+    let existingResumeIds: Set<string> = new Set();
+    let existingCoverLetterIds: Set<string> = new Set();
+    let existingChunkIds: Set<string> = new Set();
+    let existingJobIds: Set<string> = new Set();
+
+    if (skipDuplicates && !replaceExisting) {
+      const [resumes, coverLetters, chunks, jobDescriptions] = await Promise.all([
+        storage.loadResumes(),
+        storage.loadCoverLetters(), 
+        storage.getAllChunks(),
+        storage.loadJobDescriptions()
+      ]);
+      
+      existingResumeIds = new Set(resumes.map(r => r.id));
+      existingCoverLetterIds = new Set(coverLetters.map(cl => cl.id));
+      existingChunkIds = new Set(chunks.map(c => c.id));
+      existingJobIds = new Set(jobDescriptions.map(j => j.id));
+    }
+
+    // Import resumes
+    if (importData.resumes && Array.isArray(importData.resumes)) {
+      for (const resume of importData.resumes) {
+        if (skipDuplicates && existingResumeIds.has(resume.id)) {
+          result.warnings.push(`Skipped duplicate resume: ${resume.name}`);
+          continue;
+        }
+        
+        if (resume.fileData === '[FILE_DATA_EXCLUDED]') {
+          result.warnings.push(`Resume ${resume.name} skipped - no file data in backup`);
+          continue;
+        }
+
+        try {
+          await storage.saveResume(resume);
+          result.importedCounts.resumes++;
+        } catch (error) {
+          result.errors.push(`Failed to import resume ${resume.name}: ${error}`);
+        }
+      }
+    }
+
+    // Import cover letters  
+    if (importData.coverLetters && Array.isArray(importData.coverLetters)) {
+      for (const coverLetter of importData.coverLetters) {
+        if (skipDuplicates && existingCoverLetterIds.has(coverLetter.id)) {
+          result.warnings.push(`Skipped duplicate cover letter: ${coverLetter.name}`);
+          continue;
+        }
+        
+        if (coverLetter.fileData === '[FILE_DATA_EXCLUDED]') {
+          result.warnings.push(`Cover letter ${coverLetter.name} skipped - no file data in backup`);
+          continue;
+        }
+
+        try {
+          await storage.saveCoverLetter(coverLetter);
+          result.importedCounts.coverLetters++;
+        } catch (error) {
+          result.errors.push(`Failed to import cover letter ${coverLetter.name}: ${error}`);
+        }
+      }
+    }
+
+    // Import chunks
+    if (importData.chunks && Array.isArray(importData.chunks)) {
+      for (const chunk of importData.chunks) {
+        if (skipDuplicates && existingChunkIds.has(chunk.id)) {
+          result.warnings.push(`Skipped duplicate chunk: ${chunk.id}`);
+          continue;
+        }
+
+        try {
+          await storage.saveChunk(chunk);
+          result.importedCounts.chunks++;
+        } catch (error) {
+          result.errors.push(`Failed to import chunk ${chunk.id}: ${error}`);
+        }
+      }
+    }
+
+    // Import job descriptions
+    if (importData.jobDescriptions && Array.isArray(importData.jobDescriptions)) {
+      for (const jobDescription of importData.jobDescriptions) {
+        if (skipDuplicates && existingJobIds.has(jobDescription.id)) {
+          result.warnings.push(`Skipped duplicate job: ${jobDescription.title} at ${jobDescription.company}`);
+          continue;
+        }
+
+        try {
+          await storage.saveJobDescription(jobDescription);
+          result.importedCounts.jobDescriptions++;
+        } catch (error) {
+          result.errors.push(`Failed to import job description ${jobDescription.title}: ${error}`);
+        }
+      }
+    }
+
+    result.success = result.errors.length === 0;
+    return result;
+
+  } catch (error) {
+    result.errors.push(`Failed to parse or import data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    return result;
   }
 }
 
