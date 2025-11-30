@@ -31,16 +31,39 @@ export interface JobDescription {
   sequentialId?: number; // Sequential tracking number (e.g., Job #1, Job #2)
   title: string;
   company: string;
+  
+  // New direct fields for editing
+  role?: string; // Job role/title (separate from title for flexibility)
+  location?: string; // Job location
+  workArrangement?: 'hybrid' | 'remote' | 'office' | ''; // Work arrangement
+  source1?: {
+    type: 'url' | 'text';
+    content: string;
+  };
+  source2?: {
+    type: 'url' | 'text';
+    content: string;
+  };
+  salaryMin?: number; // Minimum salary
+  salaryMax?: number; // Maximum salary
+  salaryRange?: string; // Combined salary range for display/AI extraction
+  contact?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+  
   url?: string; // URL of the original job listing
   rawText: string; // original pasted job description
   additionalContext?: string; // optional additional context for resume/cover letter generation
   extractedInfo: {
     role?: string;
     company?: string;
-    department?: string;
     location?: string;
+    workArrangement?: string;
     salaryRange?: string;
-    experienceLevel?: string;
+    jobUrl?: string;
+    applicationId?: string;
     requiredSkills: string[];
     preferredSkills: string[];
     responsibilities: string[];

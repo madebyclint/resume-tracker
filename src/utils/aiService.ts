@@ -265,10 +265,11 @@ CRITICAL RULES:
 Extract the following information:
 - role: Exact job title as stated (or empty string if unclear)
 - company: Exact company name if mentioned (or empty string)
-- department: Department/team name only if explicitly mentioned
 - location: Location as stated, including remote options
+- workArrangement: Work type if mentioned - look for keywords like "remote", "hybrid", "office", "on-site", "work from home", "WFH", "workplace type", or phrases like "workplace type is Hybrid" - return exactly "remote", "hybrid", or "office"
 - salaryRange: Salary range only if explicitly mentioned with numbers
-- experienceLevel: Experience level only if explicitly stated (e.g., "5+ years", "Senior level")
+- jobUrl: Any URLs found in the text (LinkedIn, company careers page, etc.)
+- applicationId: Look for "Application ID:" followed by numbers or text, extract the ID value
 - requiredSkills: Array of skills/technologies explicitly listed as "required" or "must have"
 - preferredSkills: Array of skills/technologies listed as "preferred", "nice to have", or "bonus"
 - responsibilities: Key responsibilities as explicitly stated (limit to 5-8 main points)
@@ -281,10 +282,11 @@ Return ONLY a valid JSON object with this structure:
   "extractedInfo": {
     "role": "Senior Software Engineer",
     "company": "TechCorp",
-    "department": "Engineering",
     "location": "San Francisco, CA / Remote",
+    "workArrangement": "hybrid",
     "salaryRange": "$120k - $180k",
-    "experienceLevel": "Senior (5+ years)",
+    "jobUrl": "https://www.linkedin.com/jobs/view/4296167250",
+    "applicationId": "APP-2024-001",
     "requiredSkills": ["JavaScript", "React", "Node.js", "SQL"],
     "preferredSkills": ["TypeScript", "AWS", "Docker"],
     "responsibilities": ["Build scalable web applications", "Mentor junior developers"],
@@ -711,11 +713,24 @@ export async function parseCoverLetterIntoChunks(text: string): Promise<ChunkPar
 }
 
 // Parse job description text and extract structured information
-export async function parseJobDescription(text: string): Promise<{
+export async function parseJobDescription(
+  text: string, 
+  additionalContext?: {
+    applicationDate?: string;
+    applicationId?: number;
+    impactFocus?: string;
+    impactLevel?: string;
+  }
+): Promise<{
   extractedInfo: JobDescription['extractedInfo'];
   keywords: string[];
   success: boolean;
   error?: string;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }> {
   const config = getAIConfig();
   
@@ -763,7 +778,16 @@ export async function parseJobDescription(text: string): Promise<{
           },
           {
             role: 'user',
-            content: `Please extract structured information from this job description:\n\n${text}`
+            content: `Please extract structured information from this job description:
+
+${additionalContext ? `ADDITIONAL CONTEXT:
+Application Date: ${additionalContext.applicationDate || 'Not specified'}
+Application ID: ${additionalContext.applicationId ? `#${additionalContext.applicationId}` : 'Not assigned'}
+Impact Focus: ${additionalContext.impactFocus || 'Not specified'}
+Impact Level: ${additionalContext.impactLevel || 'Not specified'}
+
+` : ''}JOB DESCRIPTION TEXT:
+${text}`
           }
         ],
         temperature: 0.1, // Low temperature for consistent parsing
@@ -854,7 +878,12 @@ export async function parseJobDescription(text: string): Promise<{
       return {
         extractedInfo: parsed.extractedInfo,
         keywords: parsed.keywords,
-        success: true
+        success: true,
+        usage: data.usage ? {
+          promptTokens: data.usage.prompt_tokens,
+          completionTokens: data.usage.completion_tokens,
+          totalTokens: data.usage.total_tokens
+        } : undefined
       };
 
     } catch (parseError) {
@@ -962,7 +991,6 @@ JOB DESCRIPTION:
 Company: ${jobDescription.company}
 Position: ${jobDescription.title}
 Location: ${jobDescription.extractedInfo.location || 'Not specified'}
-Experience Level: ${jobDescription.extractedInfo.experienceLevel || 'Not specified'}
 
 Required Skills: ${jobDescription.extractedInfo.requiredSkills.join(', ')}
 Preferred Skills: ${jobDescription.extractedInfo.preferredSkills.join(', ')}
@@ -1102,7 +1130,6 @@ JOB DESCRIPTION:
 Company: ${jobDescription.company}
 Position: ${jobDescription.title}
 Location: ${jobDescription.extractedInfo.location || 'Not specified'}
-Experience Level: ${jobDescription.extractedInfo.experienceLevel || 'Not specified'}
 
 Required Skills: ${jobDescription.extractedInfo.requiredSkills.join(', ')}
 Preferred Skills: ${jobDescription.extractedInfo.preferredSkills.join(', ')}
@@ -1251,7 +1278,6 @@ JOB DESCRIPTION:
 Company: ${jobDescription.company}
 Position: ${jobDescription.title}
 Location: ${jobDescription.extractedInfo.location || 'Not specified'}
-Experience Level: ${jobDescription.extractedInfo.experienceLevel || 'Not specified'}
 
 Required Skills: ${jobDescription.extractedInfo.requiredSkills.join(', ')}
 Preferred Skills: ${jobDescription.extractedInfo.preferredSkills.join(', ')}
@@ -1376,7 +1402,6 @@ JOB DESCRIPTION:
 Company: ${jobDescription.company}
 Position: ${jobDescription.title}
 Location: ${jobDescription.extractedInfo.location || 'Not specified'}
-Experience Level: ${jobDescription.extractedInfo.experienceLevel || 'Not specified'}
 
 Required Skills: ${jobDescription.extractedInfo.requiredSkills.join(', ')}
 Preferred Skills: ${jobDescription.extractedInfo.preferredSkills.join(', ')}

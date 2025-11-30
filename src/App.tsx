@@ -8,7 +8,7 @@ import "./App.css";
 type Page = 'dashboard' | 'chunks' | 'jobs';
 
 function AppShell() {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  const [currentPage, setCurrentPage] = useState<Page>('jobs');
   const { state } = useAppState();
 
   const renderCurrentPage = () => {

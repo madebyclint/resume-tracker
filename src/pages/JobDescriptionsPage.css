@@ -219,9 +219,17 @@
 
 .jobs-layout {
   display: grid;
-  grid-template-columns: 1.2fr 1.8fr;
   gap: 20px;
   height: calc(100vh - 140px);
+  transition: grid-template-columns 0.3s ease;
+}
+
+.jobs-layout.full-width {
+  grid-template-columns: 1fr;
+}
+
+.jobs-layout.split-view {
+  grid-template-columns: 1.2fr 1.8fr;
 }
 
 /* Jobs List */
@@ -1367,9 +1375,12 @@
   font-size: 15px;
 }
 
-.company-name,
 .school-name {
   font-style: italic;
+  color: #555;
+}
+
+.company-name {
   color: #555;
 }
 

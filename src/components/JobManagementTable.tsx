@@ -208,20 +208,9 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                   className={`sortable-header ${sortField === 'company' ? 'active' : ''}`}
                   onClick={() => handleSort('company')}
                 >
-                  Company
+                  Company / Position
                   <span className={`sort-indicator ${sortField === 'company' ? 'active' : ''}`}>
                     {getSortIcon('company')}
-                  </span>
-                </div>
-              </th>
-              <th>
-                <div
-                  className={`sortable-header ${sortField === 'title' ? 'active' : ''}`}
-                  onClick={() => handleSort('title')}
-                >
-                  Position
-                  <span className={`sort-indicator ${sortField === 'title' ? 'active' : ''}`}>
-                    {getSortIcon('title')}
                   </span>
                 </div>
               </th>
@@ -269,13 +258,12 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                   </span>
                 </div>
               </th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {sortedJobs.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={7}>
                   <div className="empty-state">
                     <div className="empty-state-icon">📋</div>
                     <div className="empty-state-title">
@@ -302,8 +290,34 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                       {job.sequentialId || 'N/A'}
                     </span>
                   </td>
-                  <td className="company-cell">{job.company}</td>
-                  <td className="title-cell">{job.title}</td>
+                  <td className="company-position-cell">
+                    <div className="company-name">{job.company}</div>
+                    <div className="position-row">
+                      <span className="position-title">{job.title}</span>
+                      <span className="inline-actions">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(job.id);
+                          }}
+                          className="action-btn edit-btn"
+                          title="Edit job"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(job.id);
+                          }}
+                          className="action-btn delete-btn"
+                          title="Delete job"
+                        >
+                          🗑️
+                        </button>
+                      </span>
+                    </div>
+                  </td>
                   <td className="status-cell">
                     <select
                       value={job.applicationStatus || 'not_applied'}
@@ -329,28 +343,6 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                   </td>
                   <td className="date-cell">
                     {formatDate(job.lastActivityDate)}
-                  </td>
-                  <td className="actions-cell">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(job.id);
-                      }}
-                      className="action-btn edit-btn"
-                      title="Edit job"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(job.id);
-                      }}
-                      className="action-btn delete-btn"
-                      title="Delete job"
-                    >
-                      🗑️
-                    </button>
                   </td>
                 </tr>
               ))

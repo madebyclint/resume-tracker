@@ -19,6 +19,61 @@ import './JobDescriptionsPage.css';
 
 // Remove the local interface since we're using the one from documentMatcher
 
+// Helper functions to extract min/max from salary ranges
+const extractSalaryMin = (salaryRange: string): string => {
+  const match = salaryRange.match(/\$?([\d,]+)k?/i);
+  if (!match) return '';
+  let value = match[1].replace(/,/g, '');
+  // If the original match included 'k', multiply by 1000
+  if (match[0].toLowerCase().includes('k')) {
+    value = (parseInt(value) * 1000).toString();
+  }
+  return value;
+};
+
+const extractSalaryMax = (salaryRange: string): string => {
+  const matches = salaryRange.match(/\$?([\d,]+)k?/gi);
+  if (matches && matches.length >= 2) {
+    let value = matches[1].replace(/[\$,]/gi, '');
+    // If the second match included 'k', multiply by 1000
+    if (matches[1].toLowerCase().includes('k')) {
+      value = (parseInt(value) * 1000).toString();
+    }
+    return value;
+  }
+  return '';
+};
+
+// Helper function to format currency
+const formatCurrency = (value: string): string => {
+  const num = parseFloat(value);
+  if (isNaN(num)) return value;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(num);
+};
+
+// Helper function to estimate cost based on OpenAI pricing
+const estimateCost = (usage: { promptTokens: number; completionTokens: number }): string => {
+  // GPT-3.5-turbo pricing (as of 2024): $0.50 per 1M input tokens, $1.50 per 1M output tokens
+  // GPT-4 pricing: $10.00 per 1M input tokens, $30.00 per 1M output tokens
+  // Using GPT-3.5-turbo rates as default
+  const inputCostPer1M = 0.50;
+  const outputCostPer1M = 1.50;
+
+  const inputCost = (usage.promptTokens / 1_000_000) * inputCostPer1M;
+  const outputCost = (usage.completionTokens / 1_000_000) * outputCostPer1M;
+  const totalCost = inputCost + outputCost;
+
+  if (totalCost < 0.001) {
+    return `<$0.001`;
+  }
+  return `~$${totalCost.toFixed(4)}`;
+};
+
 const JobDescriptionsPage: React.FC = () => {
   const { state, setState } = useAppState();
   const [activeTab, setActiveTab] = useState<'job-descriptions' | 'resume-formatter'>('job-descriptions');
@@ -29,7 +84,19 @@ const JobDescriptionsPage: React.FC = () => {
     url: '',
     rawText: '',
     additionalContext: '',
-    sequentialId: ''
+    sequentialId: '',
+    role: '',
+    location: '',
+    workArrangement: '' as 'hybrid' | 'remote' | 'office' | '',
+    source1Type: 'url' as 'url' | 'text',
+    source1Content: '',
+    source2Type: 'url' as 'url' | 'text',
+    source2Content: '',
+    salaryMin: '',
+    salaryMax: '',
+    contactName: '',
+    contactEmail: '',
+    contactPhone: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
@@ -39,6 +106,11 @@ const JobDescriptionsPage: React.FC = () => {
   const [isReparsing, setIsReparsing] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [lastParseUsage, setLastParseUsage] = useState<{
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  } | null>(null);
 
   // Generation modal states
   const [showGeneratedModal, setShowGeneratedModal] = useState(false);
@@ -136,16 +208,37 @@ const JobDescriptionsPage: React.FC = () => {
     setAutoParseError(null);
 
     try {
-      const result = await parseJobDescription(text);
+      const result = await parseJobDescription(text, {
+        applicationDate: new Date().toISOString().split('T')[0],
+        applicationId: getNextSequentialId(),
+        impactFocus: 'General Application',
+        impactLevel: 'Standard'
+      });
 
       if (result.success && result.extractedInfo) {
         const info = result.extractedInfo;
+
+        // Store usage data from auto-parse
+        if (result.usage) {
+          setLastParseUsage(result.usage);
+        }
 
         setFormData(prev => ({
           ...prev,
           // Only auto-fill if fields are empty to avoid overwriting user input
           title: prev.title || info.role || '',
-          company: prev.company || info.company || ''
+          company: prev.company || info.company || '',
+          role: prev.role || info.role || '',
+          location: prev.location || info.location || '',
+          workArrangement: (prev.workArrangement || info.workArrangement || '') as 'hybrid' | 'remote' | 'office' | '',
+          salaryMin: prev.salaryMin || (info.salaryRange ? extractSalaryMin(info.salaryRange) : ''),
+          salaryMax: prev.salaryMax || (info.salaryRange ? extractSalaryMax(info.salaryRange) : ''),
+          // Auto-populate URL and Source 1 if URL is extracted
+          url: prev.url || info.jobUrl || '',
+          source1Type: info.jobUrl ? 'url' : prev.source1Type,
+          source1Content: prev.source1Content || info.jobUrl || '',
+          // Use applicationId if available and sequential ID is not set
+          sequentialId: prev.sequentialId || (info.applicationId ? info.applicationId : '')
         }));
       }
     } catch (error) {
@@ -165,16 +258,38 @@ const JobDescriptionsPage: React.FC = () => {
     setIsReparsing(true);
 
     try {
-      const result = await parseJobDescription(formData.rawText);
+      const result = await parseJobDescription(formData.rawText, {
+        applicationDate: new Date().toISOString().split('T')[0],
+        applicationId: parseInt(formData.sequentialId) || getNextSequentialId(),
+        impactFocus: 'Re-parsed Job Description',
+        impactLevel: 'Standard'
+      });
 
       if (result.success && result.extractedInfo) {
         const info = result.extractedInfo;
+
+        // Store usage data
+        if (result.usage) {
+          setLastParseUsage(result.usage);
+        }
 
         // Update form data with extracted info, but don't overwrite user-entered data
         setFormData(prev => ({
           ...prev,
           title: info.role || prev.title,
-          company: info.company || prev.company
+          company: info.company || prev.company,
+          // Update new fields if they're empty or if extracted data is available
+          role: info.role || prev.role,
+          location: info.location || prev.location,
+          workArrangement: (info.workArrangement || prev.workArrangement) as 'hybrid' | 'remote' | 'office' | '',
+          salaryMin: info.salaryRange ? extractSalaryMin(info.salaryRange) : prev.salaryMin,
+          salaryMax: info.salaryRange ? extractSalaryMax(info.salaryRange) : prev.salaryMax,
+          // Update URL and Source 1 if URL is extracted
+          url: info.jobUrl || prev.url,
+          source1Type: info.jobUrl ? 'url' : prev.source1Type,
+          source1Content: info.jobUrl || prev.source1Content,
+          // Use applicationId if available and sequential ID is not set
+          sequentialId: prev.sequentialId || (info.applicationId ? info.applicationId : prev.sequentialId)
         }));
 
         alert('Job description re-parsed successfully! Check the extracted details.');
@@ -198,21 +313,52 @@ const JobDescriptionsPage: React.FC = () => {
       url: job.url || '',
       rawText: job.rawText,
       additionalContext: job.additionalContext || '',
-      sequentialId: job.sequentialId?.toString() || ''
+      sequentialId: job.sequentialId?.toString() || '',
+      role: job.role || '',
+      location: job.location || '',
+      workArrangement: job.workArrangement || '',
+      source1Type: 'url',
+      source1Content: job.url || job.source1?.content || '',
+      source2Type: job.source2?.type || 'url',
+      source2Content: job.source2?.content || '',
+      salaryMin: job.salaryMin?.toString() || '',
+      salaryMax: job.salaryMax?.toString() || '',
+      contactName: job.contact?.name || '',
+      contactEmail: job.contact?.email || '',
+      contactPhone: job.contact?.phone || ''
     });
     setEditingJobId(jobId);
     setShowAddForm(true);
+    setLastParseUsage(null); // Clear usage when starting to edit
   };
 
   const handleCancelEdit = () => {
     setEditingJobId(null);
-    setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '', sequentialId: '' });
+    setFormData({
+      title: '',
+      company: '',
+      url: '',
+      rawText: '',
+      additionalContext: '',
+      sequentialId: '',
+      role: '',
+      location: '',
+      workArrangement: '',
+      source1Type: 'url',
+      source1Content: '',
+      source2Type: 'url',
+      source2Content: '',
+      salaryMin: '',
+      salaryMax: '',
+      contactName: '',
+      contactEmail: '',
+      contactPhone: ''
+    });
     setShowAddForm(false);
     setFetchError(null);
     setIsFetchingURL(false);
-  };
-
-  const handleSaveJobDescription = async () => {
+    setLastParseUsage(null); // Clear usage when canceling
+  }; const handleSaveJobDescription = async () => {
     if (!formData.title.trim() || !formData.company.trim() || !formData.rawText.trim()) {
       alert('Please fill in all required fields');
       return;
@@ -227,7 +373,17 @@ const JobDescriptionsPage: React.FC = () => {
 
       let parseResult = null;
       if (!isEditing || (existingJob && existingJob.rawText !== formData.rawText.trim())) {
-        parseResult = await parseJobDescription(formData.rawText);
+        parseResult = await parseJobDescription(formData.rawText, {
+          applicationDate: new Date().toISOString().split('T')[0],
+          applicationId: parseInt(formData.sequentialId) || getNextSequentialId(),
+          impactFocus: 'New Job Application',
+          impactLevel: 'High'
+        });
+
+        // Store usage data from save
+        if (parseResult?.usage) {
+          setLastParseUsage(parseResult.usage);
+        }
       }
 
       // Use AI-extracted info to fill in missing fields if available
@@ -248,6 +404,26 @@ const JobDescriptionsPage: React.FC = () => {
           url: formData.url.trim() || undefined,
           rawText: formData.rawText.trim(),
           additionalContext: formData.additionalContext.trim() || undefined,
+          // New fields
+          role: formData.role.trim() || undefined,
+          location: formData.location.trim() || undefined,
+          workArrangement: formData.workArrangement || undefined,
+          source1: (formData.url.trim() || formData.source1Content.trim()) ? {
+            type: 'url',
+            content: formData.url.trim() || formData.source1Content.trim()
+          } : undefined,
+          source2: formData.source2Content.trim() ? {
+            type: formData.source2Type,
+            content: formData.source2Content.trim()
+          } : undefined,
+          salaryMin: formData.salaryMin ? parseFloat(formData.salaryMin) : undefined,
+          salaryMax: formData.salaryMax ? parseFloat(formData.salaryMax) : undefined,
+          salaryRange: (formData.salaryMin && formData.salaryMax) ? `$${formData.salaryMin} - $${formData.salaryMax}` : undefined,
+          contact: (formData.contactName.trim() || formData.contactEmail.trim() || formData.contactPhone.trim()) ? {
+            name: formData.contactName.trim() || undefined,
+            email: formData.contactEmail.trim() || undefined,
+            phone: formData.contactPhone.trim() || undefined
+          } : undefined,
           // Only update AI-extracted info if we re-parsed
           ...(parseResult && {
             extractedInfo: parseResult.extractedInfo,
@@ -279,6 +455,26 @@ const JobDescriptionsPage: React.FC = () => {
           url: formData.url.trim() || undefined,
           rawText: formData.rawText.trim(),
           additionalContext: formData.additionalContext.trim() || undefined,
+          // New fields
+          role: formData.role.trim() || undefined,
+          location: formData.location.trim() || undefined,
+          workArrangement: formData.workArrangement || undefined,
+          source1: (formData.url.trim() || formData.source1Content.trim()) ? {
+            type: 'url',
+            content: formData.url.trim() || formData.source1Content.trim()
+          } : undefined,
+          source2: formData.source2Content.trim() ? {
+            type: formData.source2Type,
+            content: formData.source2Content.trim()
+          } : undefined,
+          salaryMin: formData.salaryMin ? parseFloat(formData.salaryMin) : undefined,
+          salaryMax: formData.salaryMax ? parseFloat(formData.salaryMax) : undefined,
+          salaryRange: (formData.salaryMin && formData.salaryMax) ? `$${formData.salaryMin} - $${formData.salaryMax}` : undefined,
+          contact: (formData.contactName.trim() || formData.contactEmail.trim() || formData.contactPhone.trim()) ? {
+            name: formData.contactName.trim() || undefined,
+            email: formData.contactEmail.trim() || undefined,
+            phone: formData.contactPhone.trim() || undefined
+          } : undefined,
           extractedInfo: parseResult?.extractedInfo || {
             requiredSkills: [],
             preferredSkills: [],
@@ -301,7 +497,26 @@ const JobDescriptionsPage: React.FC = () => {
       }
 
       // Reset form
-      setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '', sequentialId: '' });
+      setFormData({
+        title: '',
+        company: '',
+        url: '',
+        rawText: '',
+        additionalContext: '',
+        sequentialId: '',
+        role: '',
+        location: '',
+        workArrangement: '',
+        source1Type: 'url',
+        source1Content: '',
+        source2Type: 'url',
+        source2Content: '',
+        salaryMin: '',
+        salaryMax: '',
+        contactName: '',
+        contactEmail: '',
+        contactPhone: ''
+      });
       setShowAddForm(false);
 
       if (parseResult && !parseResult.success && parseResult.error) {
@@ -1169,7 +1384,14 @@ const JobDescriptionsPage: React.FC = () => {
                 type="url"
                 value={formData.url}
                 onChange={(e) => {
-                  setFormData(prev => ({ ...prev, url: e.target.value }));
+                  const newUrl = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    url: newUrl,
+                    // Auto-populate Source 1 with the job listing URL
+                    source1Type: 'url',
+                    source1Content: newUrl
+                  }));
                   setFetchError(null);
                 }}
                 placeholder="https://company.com/careers/job-id"
@@ -1244,26 +1466,203 @@ AI will automatically fill in the job title and company name fields above!"
               <small style={{ color: '#666', fontSize: '12px' }}>
                 Include the full job posting text for best AI extraction results.
               </small>
-              <button
-                type="button"
-                onClick={handleReparse}
-                disabled={isProcessing || isReparsing || !formData.rawText.trim()}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  whiteSpace: 'nowrap'
-                }}
-                title="Re-analyze the job description text with AI to extract missing company/title info"
-              >
-                {isReparsing ? 'Re-parsing...' : '🔄 Re-parse with AI'}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {lastParseUsage && (
+                  <small style={{
+                    color: '#888',
+                    fontSize: '11px',
+                    background: '#f8f9fa',
+                    padding: '2px 6px',
+                    borderRadius: '3px',
+                    border: '1px solid #e9ecef'
+                  }}
+                    title={`Input: ${lastParseUsage.promptTokens} tokens, Output: ${lastParseUsage.completionTokens} tokens, Total: ${lastParseUsage.totalTokens} tokens`}
+                  >
+                    📊 {lastParseUsage.promptTokens}↗ {lastParseUsage.completionTokens}↘ • 💰 {estimateCost(lastParseUsage)}
+                  </small>
+                )}
+                <button
+                  type="button"
+                  onClick={handleReparse}
+                  disabled={isProcessing || isReparsing || !formData.rawText.trim()}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="Re-analyze the job description text with AI to extract missing company/title info"
+                >
+                  {isReparsing ? 'Re-parsing...' : '🔄 Re-parse with AI'}
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* New edit fields */}
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="job-role">Role/Position</label>
+              <input
+                id="job-role"
+                type="text"
+                value={formData.role}
+                onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+                placeholder="e.g., Senior Software Engineer, Product Manager"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="job-location">Location</label>
+              <input
+                id="job-location"
+                type="text"
+                value={formData.location}
+                onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                placeholder="e.g., San Francisco, CA"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group" style={{ width: '200px' }}>
+              <label htmlFor="work-arrangement">Work Arrangement</label>
+              <select
+                id="work-arrangement"
+                value={formData.workArrangement}
+                onChange={(e) => setFormData(prev => ({ ...prev, workArrangement: e.target.value as 'hybrid' | 'remote' | 'office' | '' }))}
+                disabled={isProcessing}
+              >
+                <option value="">Select...</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="remote">Remote</option>
+                <option value="office">Office</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="salary-min">Salary Min</label>
+              <input
+                id="salary-min"
+                type="number"
+                value={formData.salaryMin}
+                onChange={(e) => setFormData(prev => ({ ...prev, salaryMin: e.target.value }))}
+                placeholder="120000"
+                disabled={isProcessing}
+              />
+              {formData.salaryMin && (
+                <small style={{ color: '#666', fontSize: '11px' }}>
+                  {formatCurrency(formData.salaryMin)}
+                </small>
+              )}
+            </div>
+            <div className="form-group">
+              <label htmlFor="salary-max">Salary Max</label>
+              <input
+                id="salary-max"
+                type="number"
+                value={formData.salaryMax}
+                onChange={(e) => setFormData(prev => ({ ...prev, salaryMax: e.target.value }))}
+                placeholder="180000"
+                disabled={isProcessing}
+              />
+              {formData.salaryMax && (
+                <small style={{ color: '#666', fontSize: '11px' }}>
+                  {formatCurrency(formData.salaryMax)}
+                </small>
+              )}
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="source1-content">Source 1</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  value={formData.source1Type}
+                  onChange={(e) => setFormData(prev => ({ ...prev, source1Type: e.target.value as 'url' | 'text' }))}
+                  disabled={isProcessing}
+                  style={{ width: '80px' }}
+                >
+                  <option value="url">URL</option>
+                  <option value="text">Text</option>
+                </select>
+                <input
+                  id="source1-content"
+                  type={formData.source1Type === 'url' ? 'url' : 'text'}
+                  value={formData.source1Content}
+                  onChange={(e) => setFormData(prev => ({ ...prev, source1Content: e.target.value }))}
+                  placeholder={formData.source1Type === 'url' ? 'https://example.com' : 'Source description'}
+                  disabled={isProcessing}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="source2-content">Source 2</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  value={formData.source2Type}
+                  onChange={(e) => setFormData(prev => ({ ...prev, source2Type: e.target.value as 'url' | 'text' }))}
+                  disabled={isProcessing}
+                  style={{ width: '80px' }}
+                >
+                  <option value="url">URL</option>
+                  <option value="text">Text</option>
+                </select>
+                <input
+                  id="source2-content"
+                  type={formData.source2Type === 'url' ? 'url' : 'text'}
+                  value={formData.source2Content}
+                  onChange={(e) => setFormData(prev => ({ ...prev, source2Content: e.target.value }))}
+                  placeholder={formData.source2Type === 'url' ? 'https://example.com' : 'Source description'}
+                  disabled={isProcessing}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div className="form-group">
+              <label htmlFor="contact-name">Contact Name</label>
+              <input
+                id="contact-name"
+                type="text"
+                value={formData.contactName}
+                onChange={(e) => setFormData(prev => ({ ...prev, contactName: e.target.value }))}
+                placeholder="e.g., Jane Smith"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="contact-email">Contact Email</label>
+              <input
+                id="contact-email"
+                type="email"
+                value={formData.contactEmail}
+                onChange={(e) => setFormData(prev => ({ ...prev, contactEmail: e.target.value }))}
+                placeholder="e.g., recruiter@company.com"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="contact-phone">Contact Phone</label>
+              <input
+                id="contact-phone"
+                type="tel"
+                value={formData.contactPhone}
+                onChange={(e) => setFormData(prev => ({ ...prev, contactPhone: e.target.value }))}
+                placeholder="e.g., (555) 123-4567"
+                disabled={isProcessing}
+              />
+            </div>
+          </div>
+
           <div className="form-group">
             <label htmlFor="additional-context">Additional Context (Optional)</label>
             <textarea
@@ -1305,7 +1704,7 @@ AI will automatically fill in the job title and company name fields above!"
                 <p>No job descriptions yet. Add one to get started!</p>
               </div>
             ) : (
-              <div className="jobs-layout">
+              <div className={`jobs-layout ${selectedJob ? 'split-view' : 'full-width'}`}>
                 <JobManagementTable
                   jobs={state.jobDescriptions}
                   onEdit={handleEditJobDescription}
@@ -1357,15 +1756,66 @@ AI will automatically fill in the job title and company name fields above!"
                           <strong>Role:</strong> {selectedJob.extractedInfo.role || 'Not extracted'}
                         </div>
                         <div className="info-item">
-                          <strong>Department:</strong> {selectedJob.extractedInfo.department || 'Not specified'}
+                          <strong>Location:</strong> {selectedJob.location || selectedJob.extractedInfo.location || 'Not specified'}
                         </div>
                         <div className="info-item">
-                          <strong>Location:</strong> {selectedJob.extractedInfo.location || 'Not specified'}
+                          <strong>Work Arrangement:</strong> {selectedJob.workArrangement || 'Not specified'}
                         </div>
                         <div className="info-item">
-                          <strong>Experience Level:</strong> {selectedJob.extractedInfo.experienceLevel || 'Not specified'}
+                          <strong>Salary Range:</strong> {
+                            selectedJob.salaryRange ||
+                            selectedJob.extractedInfo.salaryRange ||
+                            (selectedJob.salaryMin && selectedJob.salaryMax ?
+                              `$${selectedJob.salaryMin.toLocaleString()} - $${selectedJob.salaryMax.toLocaleString()}` :
+                              'Not specified')
+                          }
                         </div>
                       </div>
+
+                      {(selectedJob.source1 || selectedJob.source2) && (
+                        <div className="job-sources-section">
+                          <h4>Sources</h4>
+                          {selectedJob.source1 && (
+                            <div className="source-item">
+                              <strong>Source 1 ({selectedJob.source1.type}):</strong>
+                              {selectedJob.source1.type === 'url' ? (
+                                <a href={selectedJob.source1.content} target="_blank" rel="noopener noreferrer">
+                                  {selectedJob.source1.content} ↗
+                                </a>
+                              ) : (
+                                <span>{selectedJob.source1.content}</span>
+                              )}
+                            </div>
+                          )}
+                          {selectedJob.source2 && (
+                            <div className="source-item">
+                              <strong>Source 2 ({selectedJob.source2.type}):</strong>
+                              {selectedJob.source2.type === 'url' ? (
+                                <a href={selectedJob.source2.content} target="_blank" rel="noopener noreferrer">
+                                  {selectedJob.source2.content} ↗
+                                </a>
+                              ) : (
+                                <span>{selectedJob.source2.content}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedJob.contact && (selectedJob.contact.name || selectedJob.contact.email || selectedJob.contact.phone) && (
+                        <div className="job-contact-section">
+                          <h4>Contact Information</h4>
+                          {selectedJob.contact.name && (
+                            <div><strong>Name:</strong> {selectedJob.contact.name}</div>
+                          )}
+                          {selectedJob.contact.email && (
+                            <div><strong>Email:</strong> <a href={`mailto:${selectedJob.contact.email}`}>{selectedJob.contact.email}</a></div>
+                          )}
+                          {selectedJob.contact.phone && (
+                            <div><strong>Phone:</strong> <a href={`tel:${selectedJob.contact.phone}`}>{selectedJob.contact.phone}</a></div>
+                          )}
+                        </div>
+                      )}
 
                       {selectedJob.url && (
                         <div className="job-url-section">
