@@ -174,7 +174,7 @@ export function convertToJobDescriptions(csvData: CSVJobApplication[]): JobDescr
     const status = mapStatus(job.status);
     
     const jobDescription: JobDescription = {
-      id: crypto.randomUUID(),
+      id: job.id || crypto.randomUUID(),
       title: job.discipline || 'Unknown Position',
       company: job.company || 'Unknown Company',
       url: job.contactLink || undefined,

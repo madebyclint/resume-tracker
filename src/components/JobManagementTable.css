@@ -218,6 +218,14 @@
   padding-left: 16px;
 }
 
+.id-cell {
+  display: none;
+}
+
+.job-id {
+  display: none;
+}
+
 .company-cell {
   font-weight: 600;
   color: #1e293b;

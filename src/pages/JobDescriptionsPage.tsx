@@ -69,6 +69,9 @@ const JobDescriptionsPage: React.FC = () => {
   const [previewDocumentIsLinked, setPreviewDocumentIsLinked] = useState(false);
   const [previewDocumentOnLink, setPreviewDocumentOnLink] = useState<(() => void) | null>(null);
 
+  // Linked documents search state
+  const [linkedDocumentsSearch, setLinkedDocumentsSearch] = useState('');
+
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
     if (!job) return;
@@ -1044,85 +1047,138 @@ const JobDescriptionsPage: React.FC = () => {
 
                     {/* Linked Documents Section */}
                     <div className="linked-documents-section">
-                      <h3>Linked Documents</h3>
+                      <div className="linked-documents-header">
+                        <h3>Linked Documents</h3>
+                        {(selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0) && (
+                          <div className="linked-documents-search">
+                            <input
+                              type="text"
+                              placeholder="Search linked documents..."
+                              value={linkedDocumentsSearch}
+                              onChange={(e) => setLinkedDocumentsSearch(e.target.value)}
+                              className="search-input"
+                            />
+                            {linkedDocumentsSearch && (
+                              <button
+                                onClick={() => setLinkedDocumentsSearch('')}
+                                className="clear-search-button"
+                                title="Clear search"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
-                      {/* Linked Resumes */}
-                      {selectedJob.linkedResumeIds.length > 0 && (
-                        <div className="linked-category">
-                          <h4>📄 Resumes ({selectedJob.linkedResumeIds.length})</h4>
-                          <div className="linked-documents-list">
-                            {selectedJob.linkedResumeIds.map((resumeId) => {
-                              const resume = state.resumes.find((r: any) => r.id === resumeId);
-                              return resume ? (
-                                <div key={resumeId} className="linked-document-item">
+                      {/* Filtered Linked Resumes */}
+                      {(() => {
+                        const filteredResumes = selectedJob.linkedResumeIds
+                          .map((resumeId) => state.resumes.find((r: any) => r.id === resumeId))
+                          .filter((resume) => {
+                            if (!resume) return false;
+                            if (!linkedDocumentsSearch) return true;
+                            const searchTerm = linkedDocumentsSearch.toLowerCase();
+                            const resumeName = (resume.name || resume.fileName || '').toLowerCase();
+                            const resumeContent = (resume.textContent || '').toLowerCase();
+                            return resumeName.includes(searchTerm) || resumeContent.includes(searchTerm);
+                          });
+
+                        return filteredResumes.length > 0 && (
+                          <div className="linked-category">
+                            <h4>📄 Resumes ({filteredResumes.length}{linkedDocumentsSearch ? ` of ${selectedJob.linkedResumeIds.length}` : ''})</h4>
+                            <div className="linked-documents-list">
+                              {filteredResumes.map((resume) => (
+                                <div key={resume!.id} className="linked-document-item">
                                   <div className="document-info">
-                                    <span className="document-title">{resume.name || resume.fileName}</span>
+                                    <span className="document-title">{resume!.name || resume!.fileName}</span>
                                     <span className="document-date">
-                                      {new Date(resume.uploadDate).toLocaleDateString()}
+                                      {new Date(resume!.uploadDate).toLocaleDateString()}
                                     </span>
                                   </div>
                                   <div className="document-actions">
                                     <button
                                       className="view-button"
                                       onClick={() => {
-                                        console.log('View resume:', resume.name);
+                                        const isLinked = selectedJob.linkedResumeIds.includes(resume!.id);
+                                        const onLink = () => handleLinkResume(selectedJob.id, resume!.id);
+                                        handlePreviewDocument(resume!, isLinked, onLink);
                                       }}
+                                      title="Preview document content"
                                     >
-                                      View
+                                      👁️ Preview
                                     </button>
                                     <button
                                       className="unlink-button"
-                                      onClick={() => handleLinkResume(selectedJob.id, resumeId)}
+                                      onClick={() => handleLinkResume(selectedJob.id, resume!.id)}
                                       title="Unlink from this job"
                                     >
-                                      🔗
+                                      🔗 Unlink
                                     </button>
                                   </div>
                                 </div>
-                              ) : null;
-                            })}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
-                      {/* Linked Cover Letters */}
-                      {selectedJob.linkedCoverLetterIds.length > 0 && (
-                        <div className="linked-category">
-                          <h4>📝 Cover Letters ({selectedJob.linkedCoverLetterIds.length})</h4>
-                          <div className="linked-documents-list">
-                            {selectedJob.linkedCoverLetterIds.map((coverLetterId) => {
-                              const coverLetter = state.coverLetters.find((cl: any) => cl.id === coverLetterId);
-                              return coverLetter ? (
-                                <div key={coverLetterId} className="linked-document-item">
+                      {/* Filtered Linked Cover Letters */}
+                      {(() => {
+                        const filteredCoverLetters = selectedJob.linkedCoverLetterIds
+                          .map((coverLetterId) => state.coverLetters.find((cl: any) => cl.id === coverLetterId))
+                          .filter((coverLetter) => {
+                            if (!coverLetter) return false;
+                            if (!linkedDocumentsSearch) return true;
+                            const searchTerm = linkedDocumentsSearch.toLowerCase();
+                            const coverLetterName = (coverLetter.name || coverLetter.fileName || '').toLowerCase();
+                            const coverLetterContent = (coverLetter.textContent || '').toLowerCase();
+                            const targetCompany = ((coverLetter as CoverLetter).targetCompany || '').toLowerCase();
+                            const targetPosition = ((coverLetter as CoverLetter).targetPosition || '').toLowerCase();
+                            return coverLetterName.includes(searchTerm) ||
+                              coverLetterContent.includes(searchTerm) ||
+                              targetCompany.includes(searchTerm) ||
+                              targetPosition.includes(searchTerm);
+                          });
+
+                        return filteredCoverLetters.length > 0 && (
+                          <div className="linked-category">
+                            <h4>📝 Cover Letters ({filteredCoverLetters.length}{linkedDocumentsSearch ? ` of ${selectedJob.linkedCoverLetterIds.length}` : ''})</h4>
+                            <div className="linked-documents-list">
+                              {filteredCoverLetters.map((coverLetter) => (
+                                <div key={coverLetter!.id} className="linked-document-item">
                                   <div className="document-info">
-                                    <span className="document-title">{coverLetter.name || coverLetter.fileName}</span>
+                                    <span className="document-title">{coverLetter!.name || coverLetter!.fileName}</span>
                                     <span className="document-date">
-                                      {new Date(coverLetter.uploadDate).toLocaleDateString()}
+                                      {new Date(coverLetter!.uploadDate).toLocaleDateString()}
                                     </span>
                                   </div>
                                   <div className="document-actions">
                                     <button
                                       className="view-button"
                                       onClick={() => {
-                                        console.log('View cover letter:', coverLetter.name);
+                                        const isLinked = selectedJob.linkedCoverLetterIds.includes(coverLetter!.id);
+                                        const onLink = () => handleLinkCoverLetter(selectedJob.id, coverLetter!.id);
+                                        handlePreviewDocument(coverLetter!, isLinked, onLink);
                                       }}
+                                      title="Preview document content"
                                     >
-                                      View
+                                      👁️ Preview
                                     </button>
                                     <button
                                       className="unlink-button"
-                                      onClick={() => handleLinkCoverLetter(selectedJob.id, coverLetterId)}
+                                      onClick={() => handleLinkCoverLetter(selectedJob.id, coverLetter!.id)}
                                       title="Unlink from this job"
                                     >
-                                      🔗
+                                      🔗 Unlink
                                     </button>
                                   </div>
                                 </div>
-                              ) : null;
-                            })}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0 && (
                         <p className="no-linked-documents">

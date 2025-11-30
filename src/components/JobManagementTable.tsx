@@ -11,7 +11,7 @@ interface JobManagementTableProps {
   selectedJobId: string | null;
 }
 
-type SortField = 'company' | 'title' | 'applicationDate' | 'lastActivityDate' | 'applicationStatus' | 'daysSinceApplication';
+type SortField = 'id' | 'company' | 'title' | 'applicationDate' | 'lastActivityDate' | 'applicationStatus' | 'daysSinceApplication';
 type SortDirection = 'asc' | 'desc';
 
 const JobManagementTable: React.FC<JobManagementTableProps> = ({
@@ -22,32 +22,31 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
   onSelect,
   selectedJobId
 }) => {
-  const [sortField, setSortField] = useState<SortField>('lastActivityDate');
+  const [sortField, setSortField] = useState<SortField>('id');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterSource, setFilterSource] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
   // Calculate computed fields for each job
   const jobsWithComputedFields = jobs.map(job => ({
     ...job,
-    daysSinceApplication: job.applicationDate ? 
+    daysSinceApplication: job.applicationDate ?
       Math.ceil((new Date().getTime() - new Date(job.applicationDate).getTime()) / (1000 * 60 * 60 * 24)) : null,
-    daysInCurrentStatus: job.lastActivityDate ? 
+    daysInCurrentStatus: job.lastActivityDate ?
       Math.ceil((new Date().getTime() - new Date(job.lastActivityDate).getTime()) / (1000 * 60 * 60 * 24)) : null
   }));
 
   // Filter jobs
   const filteredJobs = jobsWithComputedFields.filter(job => {
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.title.toLowerCase().includes(searchTerm.toLowerCase());
-    
+      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (job.id && job.id.toLowerCase().includes(searchTerm.toLowerCase()));
+
     const matchesStatus = filterStatus === 'all' || job.applicationStatus === filterStatus;
-    const matchesSource = filterSource === 'all' || job.source === filterSource;
-    
-    return matchesSearch && matchesStatus && matchesSource;
+
+    return matchesSearch && matchesStatus;
   });
 
   // Sort jobs
@@ -56,6 +55,11 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
     let bValue: any;
 
     switch (sortField) {
+      case 'id':
+        // Extract numeric part from ID for proper sorting
+        aValue = parseInt(a.id.replace(/\D/g, '')) || 0;
+        bValue = parseInt(b.id.replace(/\D/g, '')) || 0;
+        break;
       case 'company':
         aValue = a.company.toLowerCase();
         bValue = b.company.toLowerCase();
@@ -90,9 +94,6 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
     return 0;
   });
 
-  // Get unique sources for filter
-  const uniqueSources = [...new Set(jobs.map(job => job.source).filter(Boolean))];
-
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -105,15 +106,6 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
   const getSortIcon = (field: SortField) => {
     if (sortField !== field) return '⇅';
     return sortDirection === 'asc' ? '↗️' : '↘️';
-  };
-
-  const getSourceBadgeClass = (source: string) => {
-    const normalizedSource = source?.toLowerCase() || '';
-    if (normalizedSource.includes('linkedin')) return 'source-linkedin';
-    if (normalizedSource.includes('indeed')) return 'source-indeed';
-    if (normalizedSource.includes('recruiter')) return 'source-recruiter';
-    if (normalizedSource.includes('tech for good')) return 'source-tech-for-good';
-    return 'source-other';
   };
 
   const getDaysClass = (days: number | null) => {
@@ -139,8 +131,8 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
           📊 Job Applications
           <span className="job-count-badge">{filteredJobs.length} of {jobs.length}</span>
         </h2>
-        
-        <button 
+
+        <button
           className="filters-toggle"
           onClick={() => setShowFilters(!showFilters)}
         >
@@ -160,11 +152,11 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
               className="search-input"
             />
           </div>
-          
+
           <div className="filter-group">
             <label className="filter-label">Status</label>
-            <select 
-              value={filterStatus} 
+            <select
+              value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="filter-select"
             >
@@ -176,26 +168,13 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
               <option value="offered">Offered</option>
             </select>
           </div>
-          
-          <div className="filter-group">
-            <label className="filter-label">Source</label>
-            <select 
-              value={filterSource} 
-              onChange={(e) => setFilterSource(e.target.value)}
-              className="filter-select"
-            >
-              <option value="all">All Sources</option>
-              {uniqueSources.map(source => (
-                <option key={source} value={source}>{source}</option>
-              ))}
-            </select>
-          </div>
-          
-          <button 
+
+
+
+          <button
             className="clear-filters-btn"
             onClick={() => {
               setFilterStatus('all');
-              setFilterSource('all');
               setSearchTerm('');
             }}
           >
@@ -208,8 +187,19 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
         <table className="job-table">
           <thead>
             <tr>
+              <th style={{ display: 'none' }}>
+                <div
+                  className={`sortable-header ${sortField === 'id' ? 'active' : ''}`}
+                  onClick={() => handleSort('id')}
+                >
+                  ID
+                  <span className={`sort-indicator ${sortField === 'id' ? 'active' : ''}`}>
+                    {getSortIcon('id')}
+                  </span>
+                </div>
+              </th>
               <th>
-                <div 
+                <div
                   className={`sortable-header ${sortField === 'company' ? 'active' : ''}`}
                   onClick={() => handleSort('company')}
                 >
@@ -220,7 +210,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                 </div>
               </th>
               <th>
-                <div 
+                <div
                   className={`sortable-header ${sortField === 'title' ? 'active' : ''}`}
                   onClick={() => handleSort('title')}
                 >
@@ -230,9 +220,8 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                   </span>
                 </div>
               </th>
-              <th>Source</th>
               <th>
-                <div 
+                <div
                   className={`sortable-header ${sortField === 'applicationStatus' ? 'active' : ''}`}
                   onClick={() => handleSort('applicationStatus')}
                 >
@@ -243,7 +232,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                 </div>
               </th>
               <th>
-                <div 
+                <div
                   className={`sortable-header ${sortField === 'applicationDate' ? 'active' : ''}`}
                   onClick={() => handleSort('applicationDate')}
                 >
@@ -254,7 +243,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                 </div>
               </th>
               <th>
-                <div 
+                <div
                   className={`sortable-header ${sortField === 'daysSinceApplication' ? 'active' : ''}`}
                   onClick={() => handleSort('daysSinceApplication')}
                 >
@@ -265,7 +254,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                 </div>
               </th>
               <th>
-                <div 
+                <div
                   className={`sortable-header ${sortField === 'lastActivityDate' ? 'active' : ''}`}
                   onClick={() => handleSort('lastActivityDate')}
                 >
@@ -288,7 +277,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                       {jobs.length === 0 ? 'No job applications yet' : 'No jobs match your filters'}
                     </div>
                     <div className="empty-state-description">
-                      {jobs.length === 0 
+                      {jobs.length === 0
                         ? 'Start by adding a job description or importing from CSV'
                         : 'Try adjusting your search or filter criteria'
                       }
@@ -298,18 +287,18 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
               </tr>
             ) : (
               sortedJobs.map(job => (
-                <tr 
+                <tr
                   key={job.id}
                   className={selectedJobId === job.id ? 'selected' : ''}
                   onClick={() => onSelect(job.id)}
                 >
-                  <td className="company-cell">{job.company}</td>
-                  <td className="title-cell">{job.title}</td>
-                  <td>
-                    <span className={`source-badge ${getSourceBadgeClass(job.source || '')}`}>
-                      {job.source || 'Unknown'}
+                  <td className="id-cell">
+                    <span className="job-id">
+                      {job.id || 'N/A'}
                     </span>
                   </td>
+                  <td className="company-cell">{job.company}</td>
+                  <td className="title-cell">{job.title}</td>
                   <td className="status-cell">
                     <select
                       value={job.applicationStatus || 'not_applied'}
@@ -337,7 +326,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                     {formatDate(job.lastActivityDate)}
                   </td>
                   <td className="actions-cell">
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onEdit(job.id);
@@ -347,7 +336,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                     >
                       ✏️
                     </button>
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onDelete(job.id);
