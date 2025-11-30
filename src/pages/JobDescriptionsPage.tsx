@@ -914,10 +914,11 @@ const JobDescriptionsPage: React.FC = () => {
     }
 
     // Check Skills section has bullet points with bold labels
-    const skillsSection = text.match(/## Skills.*?(?=##|\n\n|$)/is);
+    const skillsSection = text.match(/##\s+skills.*?(?=##|\n\n|$)/is);
     if (skillsSection) {
       const skillsContent = skillsSection[0];
-      const hasBoldLabels = /\*\*[^*]+\*\*/.test(skillsContent);
+      // Look for bold labels with colon (e.g., **Frontend:** or **Category:**)
+      const hasBoldLabels = /\*\*[^*]*:\*\*/.test(skillsContent);
       const hasBulletPoints = /^\s*[-*+]\s/m.test(skillsContent);
 
       if (hasBoldLabels && hasBulletPoints) {

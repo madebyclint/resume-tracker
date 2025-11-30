@@ -11,3 +11,4 @@
 - Add job search
 - Add JD page scraping from url
 - Build a workflow for applying from lookup to submission
+- JD list line numbers need to scroll with content - otherwise useless
