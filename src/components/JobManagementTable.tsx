@@ -133,7 +133,20 @@ DoubleKnot Creative  •  Seattle WA  •  2010 to 2014
 * Clear communicator with strong collaboration instincts.
 * Passionate about reducing operational friction for small businesses.`;
 
+    // Generate dynamic label components
+    const companyName = job.company || 'Unknown Company';
+    const roleTitle = job.title || job.extractedInfo?.role || 'Unknown Role';
+    const roleInitials = roleTitle
+      .split(' ')
+      .map((word: string) => word.charAt(0).toUpperCase())
+      .join('')
+      .substring(0, 4); // Limit to 4 characters for readability
+    const jobId = job.sequentialId || job.id || 'Unknown ID';
+
+    const dynamicLabel = `Submitted: ${companyName} ${roleInitials} Job ${jobId}`;
+
     const chatPrompt = `From the following JD, generate a full Markdown resume that is fully ASCII-safe with:
+- From now on, whenever I start a new JD thread, label it: ${dynamicLabel}
 - Only ONE divider line, placed immediately after the header and nowhere else in the document.
 - Header compressed with bullet separators.
 - Skills section using bullet points with bold category labels.
