@@ -133,11 +133,19 @@ DoubleKnot Creative  •  Seattle WA  •  2010 to 2014
 * Clear communicator with strong collaboration instincts.
 * Passionate about reducing operational friction for small businesses.`;
 
-    const chatPrompt = `From the following job description, generate a tailored resume following this exact format and structure:
+    const chatPrompt = `From the following JD, generate a full Markdown resume that is fully ASCII-safe with:
+- Only ONE divider line, placed immediately after the header and nowhere else in the document.
+- Header compressed with bullet separators.
+- Skills section using bullet points with bold category labels.
+- No em dashes, no Unicode, and no fancy characters.
+- Do NOT insert any additional dividers or horizontal rules anywhere else in the resume.
+- Use your best judgment - I'll request changes if needed
+
+Follow this exact format and structure:
 
 ${resumeTemplate}
 
-Tailor the content to match the job requirements while keeping the same formatting, structure, and professional tone. Focus on relevant skills and experience that align with the role. Use your best judgment - I'll request changes if needed.
+Tailor the content to match the job requirements while keeping the same formatting, structure, and professional tone. Focus on relevant skills and experience that align with the role.
 
 Job Description:
 ${job.rawText}`;
