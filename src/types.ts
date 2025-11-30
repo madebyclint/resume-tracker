@@ -28,6 +28,7 @@ export interface CoverLetter {
 
 export interface JobDescription {
   id: string;
+  sequentialId?: number; // Sequential tracking number (e.g., Job #1, Job #2)
   title: string;
   company: string;
   url?: string; // URL of the original job listing

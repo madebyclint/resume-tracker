@@ -11,7 +11,7 @@ interface JobManagementTableProps {
   selectedJobId: string | null;
 }
 
-type SortField = 'id' | 'company' | 'title' | 'applicationDate' | 'lastActivityDate' | 'applicationStatus' | 'daysSinceApplication';
+type SortField = 'id' | 'sequentialId' | 'company' | 'title' | 'applicationDate' | 'lastActivityDate' | 'applicationStatus' | 'daysSinceApplication';
 type SortDirection = 'asc' | 'desc';
 
 const JobManagementTable: React.FC<JobManagementTableProps> = ({
@@ -22,7 +22,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
   onSelect,
   selectedJobId
 }) => {
-  const [sortField, setSortField] = useState<SortField>('id');
+  const [sortField, setSortField] = useState<SortField>('sequentialId');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,6 +42,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
     const matchesSearch = searchTerm === '' ||
       job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
       job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (job.sequentialId && job.sequentialId.toString().includes(searchTerm)) ||
       (job.id && job.id.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesStatus = filterStatus === 'all' || job.applicationStatus === filterStatus;
@@ -59,6 +60,10 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
         // Extract numeric part from ID for proper sorting
         aValue = parseInt(a.id.replace(/\D/g, '')) || 0;
         bValue = parseInt(b.id.replace(/\D/g, '')) || 0;
+        break;
+      case 'sequentialId':
+        aValue = a.sequentialId || 0;
+        bValue = b.sequentialId || 0;
         break;
       case 'company':
         aValue = a.company.toLowerCase();
@@ -187,14 +192,14 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
         <table className="job-table">
           <thead>
             <tr>
-              <th style={{ display: 'none' }}>
+              <th style={{ width: '60px', textAlign: 'center' }}>
                 <div
-                  className={`sortable-header ${sortField === 'id' ? 'active' : ''}`}
-                  onClick={() => handleSort('id')}
+                  className={`sortable-header ${sortField === 'sequentialId' ? 'active' : ''}`}
+                  onClick={() => handleSort('sequentialId')}
                 >
-                  ID
-                  <span className={`sort-indicator ${sortField === 'id' ? 'active' : ''}`}>
-                    {getSortIcon('id')}
+                  Job #
+                  <span className={`sort-indicator ${sortField === 'sequentialId' ? 'active' : ''}`}>
+                    {getSortIcon('sequentialId')}
                   </span>
                 </div>
               </th>
@@ -292,9 +297,9 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                   className={selectedJobId === job.id ? 'selected' : ''}
                   onClick={() => onSelect(job.id)}
                 >
-                  <td className="id-cell">
-                    <span className="job-id">
-                      {job.id || 'N/A'}
+                  <td className="id-cell" style={{ textAlign: 'center', fontWeight: 'bold' }}>
+                    <span className="job-id" title={`UUID: ${job.id}`}>
+                      {job.sequentialId || 'N/A'}
                     </span>
                   </td>
                   <td className="company-cell">{job.company}</td>

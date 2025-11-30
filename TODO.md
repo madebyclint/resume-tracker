@@ -2,3 +2,7 @@
 - Add unit tests
 - Add type check
 - Add best practices like breaking down long components
+- Remove all Resume/cover letter generation - just keep chunking for now
+- Make JD section first
+- Save resume from formatter
+- Split formatter out into own section not part of JD

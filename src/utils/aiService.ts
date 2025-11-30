@@ -22,6 +22,125 @@ export function isAIConfigured(): boolean {
   return !!(config.apiKey && config.apiUrl && config.apiKey !== 'your_openai_api_key_here');
 }
 
+// Fetch and extract text content from a URL
+export async function fetchJobDescriptionFromURL(url: string): Promise<{
+  success: boolean;
+  title?: string;
+  company?: string;
+  text?: string;
+  error?: string;
+  corsBlocked?: boolean;
+}> {
+  try {
+    // Basic URL validation
+    const urlObj = new URL(url);
+    if (!['http:', 'https:'].includes(urlObj.protocol)) {
+      return {
+        success: false,
+        error: 'Only HTTP and HTTPS URLs are supported'
+      };
+    }
+
+    // Check if this is a known problematic domain
+    const hostname = urlObj.hostname.toLowerCase();
+    const corsBlockedDomains = ['linkedin.com', 'indeed.com', 'glassdoor.com', 'monster.com'];
+    
+    if (corsBlockedDomains.some(domain => hostname.includes(domain))) {
+      return {
+        success: false,
+        corsBlocked: true,
+        error: `CORS blocked: ${hostname} doesn't allow direct browser access. Please copy and paste the job description text manually.`
+      };
+    }
+
+    // Try to fetch with a timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ResumeTracker/1.0)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `Failed to fetch URL: ${response.status} ${response.statusText}`
+        };
+      }
+
+      const html = await response.text();
+      
+      // Extract text content from HTML
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      // Remove script and style elements
+      const scripts = doc.querySelectorAll('script, style, nav, header, footer');
+      scripts.forEach(el => el.remove());
+      
+      // Try to extract title and company from common patterns
+      let title = '';
+      let company = '';
+      
+      // Try to get title from page title or h1 elements
+      const pageTitle = doc.title;
+      const h1Elements = doc.querySelectorAll('h1');
+      
+      if (h1Elements.length > 0) {
+        title = h1Elements[0].textContent?.trim() || '';
+      } else if (pageTitle) {
+        // Extract job title from page title (common patterns)
+        const titleMatch = pageTitle.match(/^([^|]*?)(?:\s*[-|]\s*([^|]*?))?(?:\s*[-|]\s*.*)?$/);
+        if (titleMatch) {
+          title = titleMatch[1]?.trim() || '';
+          company = titleMatch[2]?.trim() || '';
+        }
+      }
+      
+      // Get main content text
+      const bodyText = doc.body?.textContent || '';
+      
+      // Clean up the text
+      const cleanText = bodyText
+        .replace(/\s+/g, ' ')  // Normalize whitespace
+        .replace(/\n\s*\n/g, '\n\n')  // Normalize line breaks
+        .trim();
+
+      return {
+        success: true,
+        title: title || undefined,
+        company: company || undefined,
+        text: cleanText
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+  } catch (error) {
+    // Check if it's a CORS error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return {
+        success: false,
+        corsBlocked: true,
+        error: 'CORS blocked: This website doesn\'t allow direct browser access. Please copy and paste the job description text manually.'
+      };
+    }
+    
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch URL'
+    };
+  }
+}
+
 // Get configuration status for user feedback
 export function getConfigurationStatus(): { configured: boolean; message: string } {
   const config = getAIConfig();
@@ -135,22 +254,27 @@ Return ONLY a valid JSON object with this structure:
 }`;
 
 // Prompt for AI to parse job descriptions and extract key information
-const JOB_DESCRIPTION_PARSING_PROMPT = `You are an expert job posting analyzer. Your task is to extract structured information from job description text.
+const JOB_DESCRIPTION_PARSING_PROMPT = `You are a precise job posting analyzer. Your task is to extract ONLY information that is explicitly stated in the job description text. DO NOT hallucinate or infer information that is not clearly present.
+
+CRITICAL RULES:
+1. Extract ONLY what is explicitly mentioned in the text
+2. Use empty arrays for missing information - DO NOT make up skills or requirements
+3. If salary/location/department is not mentioned, leave those fields empty
+4. Be conservative - better to miss information than to hallucinate it
 
 Extract the following information:
-- role: Job title/position name
-- company: Company name (if mentioned)
-- department: Department/team name (if mentioned)
-- location: Location/remote information
-- salaryRange: Salary range (if mentioned)
-- experienceLevel: Required experience level (entry, mid, senior, etc.)
-- requiredSkills: Array of required/must-have skills and technologies
-- preferredSkills: Array of preferred/nice-to-have skills
-- responsibilities: Array of key job responsibilities
-- requirements: Array of job requirements (education, experience, etc.)
+- role: Exact job title as stated (or empty string if unclear)
+- company: Exact company name if mentioned (or empty string)
+- department: Department/team name only if explicitly mentioned
+- location: Location as stated, including remote options
+- salaryRange: Salary range only if explicitly mentioned with numbers
+- experienceLevel: Experience level only if explicitly stated (e.g., "5+ years", "Senior level")
+- requiredSkills: Array of skills/technologies explicitly listed as "required" or "must have"
+- preferredSkills: Array of skills/technologies listed as "preferred", "nice to have", or "bonus"
+- responsibilities: Key responsibilities as explicitly stated (limit to 5-8 main points)
+- requirements: Education, experience, and other requirements as explicitly stated
 
-Also generate:
-- keywords: Array of 10-15 relevant keywords for matching (skills, technologies, domains)
+Generate keywords from ONLY the skills, technologies, and domains actually mentioned in the text.
 
 Return ONLY a valid JSON object with this structure:
 {
@@ -166,7 +290,7 @@ Return ONLY a valid JSON object with this structure:
     "responsibilities": ["Build scalable web applications", "Mentor junior developers"],
     "requirements": ["Bachelor's degree in CS", "5+ years experience"]
   },
-  "keywords": ["JavaScript", "React", "Node.js", "TypeScript", "AWS", "Docker", "SQL", "Senior", "Engineering", "Mentoring", "Scalable", "Web Applications", "Full Stack", "Backend", "Frontend"]
+  "keywords": ["JavaScript", "React", "Node.js", "TypeScript", "AWS", "Docker", "SQL", "Senior", "Engineering", "Mentoring"]
 }`;
 
 export async function parseTextIntoChunks(text: string): Promise<ChunkParseResult> {

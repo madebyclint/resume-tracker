@@ -7,9 +7,10 @@ interface CSVImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (jobDescriptions: JobDescription[]) => void;
+  existingJobs?: JobDescription[];
 }
 
-const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, onImport }) => {
+const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, onImport, existingJobs = [] }) => {
   const [dragActive, setDragActive] = useState(false);
   const [csvData, setCsvData] = useState<CSVJobApplication[] | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -89,7 +90,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, onImpo
     if (!csvData) return;
 
     try {
-      const jobDescriptions = convertToJobDescriptions(csvData);
+      const jobDescriptions = convertToJobDescriptions(csvData, existingJobs);
       onImport(jobDescriptions);
       onClose();
       resetState();

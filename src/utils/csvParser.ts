@@ -165,8 +165,15 @@ function generatePreview(data: CSVJobApplication[]): string {
 /**
  * Convert CSV job applications to JobDescription objects
  */
-export function convertToJobDescriptions(csvData: CSVJobApplication[]): JobDescription[] {
-  return csvData.map(job => {
+export function convertToJobDescriptions(csvData: CSVJobApplication[], existingJobs: JobDescription[] = []): JobDescription[] {
+  // Get next sequential ID starting from existing jobs
+  const getNextSequentialId = (index: number): number => {
+    if (existingJobs.length === 0 && index === 0) return 1;
+    const maxExistingId = Math.max(...existingJobs.map(jd => jd.sequentialId || 0), 0);
+    return maxExistingId + index + 1;
+  };
+
+  return csvData.map((job, index) => {
     // Create a job description from the CSV data
     const rawText = createJobDescriptionText(job);
     
@@ -175,6 +182,7 @@ export function convertToJobDescriptions(csvData: CSVJobApplication[]): JobDescr
     
     const jobDescription: JobDescription = {
       id: job.id || crypto.randomUUID(),
+      sequentialId: getNextSequentialId(index),
       title: job.discipline || 'Unknown Position',
       company: job.company || 'Unknown Company',
       url: job.contactLink || undefined,

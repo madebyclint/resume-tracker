@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription, Resume, CoverLetter } from '../types';
-import { parseJobDescription, generateTailoredResume, generateTailoredCoverLetter, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured } from '../utils/aiService';
+import { parseJobDescription, generateTailoredResume, generateTailoredCoverLetter, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
 import { findRelevantResumeChunks, findRelevantCoverLetterChunks } from '../utils/chunkMatcher';
@@ -31,6 +31,10 @@ const JobDescriptionsPage: React.FC = () => {
     additionalContext: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isFetchingURL, setIsFetchingURL] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isAutoParsing, setIsAutoParsing] = useState(false);
+  const [autoParseError, setAutoParseError] = useState<string | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
 
@@ -72,6 +76,83 @@ const JobDescriptionsPage: React.FC = () => {
   // Linked documents search state
   const [linkedDocumentsSearch, setLinkedDocumentsSearch] = useState('');
 
+  // Get next sequential job ID
+  const getNextSequentialId = (): number => {
+    if (state.jobDescriptions.length === 0) return 1;
+    const maxId = Math.max(...state.jobDescriptions.map(jd => jd.sequentialId || 0));
+    return maxId + 1;
+  };
+
+  // Handle URL fetch
+  const handleFetchURL = async () => {
+    if (!formData.url.trim()) {
+      setFetchError('Please enter a URL first');
+      return;
+    }
+
+    setIsFetchingURL(true);
+    setFetchError(null);
+
+    try {
+      const result = await fetchJobDescriptionFromURL(formData.url.trim());
+
+      if (result.success) {
+        setFormData(prev => ({
+          ...prev,
+          title: result.title || prev.title,
+          company: result.company || prev.company,
+          rawText: result.text || prev.rawText
+        }));
+        setFetchError(null);
+      } else {
+        setFetchError(result.error || 'Failed to fetch job description from URL');
+
+        // If CORS blocked, provide additional context
+        if (result.corsBlocked) {
+          // Auto-focus on the job description textarea to guide user
+          setTimeout(() => {
+            const textarea = document.getElementById('job-description') as HTMLTextAreaElement;
+            if (textarea) {
+              textarea.focus();
+              textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+        }
+      }
+    } catch (error) {
+      setFetchError(error instanceof Error ? error.message : 'Failed to fetch URL');
+    } finally {
+      setIsFetchingURL(false);
+    }
+  };
+
+  // Auto-parse job description text to extract title, company, etc.
+  const handleAutoParse = async (text: string) => {
+    if (!text.trim() || text.length < 50) return; // Skip if text is too short
+
+    setIsAutoParsing(true);
+    setAutoParseError(null);
+
+    try {
+      const result = await parseJobDescription(text);
+
+      if (result.success && result.extractedInfo) {
+        const info = result.extractedInfo;
+
+        setFormData(prev => ({
+          ...prev,
+          // Only auto-fill if fields are empty to avoid overwriting user input
+          title: prev.title || info.role || '',
+          company: prev.company || info.company || ''
+        }));
+      }
+    } catch (error) {
+      console.log('Auto-parse error:', error); // Silent fail - don't show error to user
+    } finally {
+      setIsAutoParsing(false);
+    }
+  };
+
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
     if (!job) return;
@@ -91,6 +172,8 @@ const JobDescriptionsPage: React.FC = () => {
     setEditingJobId(null);
     setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '' });
     setShowAddForm(false);
+    setFetchError(null);
+    setIsFetchingURL(false);
   };
 
   const handleSaveJobDescription = async () => {
@@ -145,6 +228,7 @@ const JobDescriptionsPage: React.FC = () => {
         // Create new job description
         const newJobDescription: JobDescription = {
           id: crypto.randomUUID(),
+          sequentialId: getNextSequentialId(),
           title: finalTitle,
           company: finalCompany,
           url: formData.url.trim() || undefined,
@@ -1021,25 +1105,86 @@ const JobDescriptionsPage: React.FC = () => {
           </div>
           <div className="form-group">
             <label htmlFor="job-url">Job Listing URL (Optional)</label>
-            <input
-              id="job-url"
-              type="url"
-              value={formData.url}
-              onChange={(e) => setFormData(prev => ({ ...prev, url: e.target.value }))}
-              placeholder="https://company.com/careers/job-id"
-              disabled={isProcessing}
-            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                id="job-url"
+                type="url"
+                value={formData.url}
+                onChange={(e) => {
+                  setFormData(prev => ({ ...prev, url: e.target.value }));
+                  setFetchError(null);
+                }}
+                placeholder="https://company.com/careers/job-id"
+                disabled={isProcessing || isFetchingURL}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={handleFetchURL}
+                disabled={isProcessing || isFetchingURL || !formData.url.trim()}
+                className="fetch-url-button"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#007acc',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {isFetchingURL ? 'Fetching...' : 'Fetch JD'}
+              </button>
+            </div>
+            {fetchError && (
+              <div style={{ color: '#e74c3c', fontSize: '12px', marginTop: '4px', padding: '8px', backgroundColor: '#fdf2f2', border: '1px solid #fecaca', borderRadius: '4px' }}>
+                <strong>URL Fetch Failed:</strong> {fetchError}
+                {fetchError.includes('CORS') && (
+                  <div style={{ marginTop: '4px', fontSize: '11px' }}>
+                    <strong>Workaround:</strong> Open the job posting in a new tab, select all text (Ctrl/Cmd+A), copy it, and paste it in the "Job Description Text" field below.
+                  </div>
+                )}
+              </div>
+            )}
+            <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+              Click "Fetch JD" to automatically extract job details from the URL. Note: LinkedIn, Indeed, and similar sites block direct access - you'll need to copy/paste manually for those.
+            </small>
           </div>
           <div className="form-group">
-            <label htmlFor="job-description">Job Description Text *</label>
+            <label htmlFor="job-description">
+              Job Description Text *
+              {isAutoParsing && <span style={{ marginLeft: '8px', color: '#007acc', fontSize: '12px' }}>(Auto-extracting job details...)</span>}
+            </label>
             <textarea
               id="job-description"
               value={formData.rawText}
-              onChange={(e) => setFormData(prev => ({ ...prev, rawText: e.target.value }))}
-              placeholder="Paste the full job description here..."
-              rows={10}
+              onChange={async (e) => {
+                const newText = e.target.value;
+                setFormData(prev => ({ ...prev, rawText: newText }));
+
+                // Auto-parse after a brief delay to avoid excessive API calls
+                if (newText.trim() && newText.length > 100) {
+                  setTimeout(() => {
+                    handleAutoParse(newText);
+                  }, 1000);
+                }
+              }}
+              placeholder="Paste the full job description here and AI will auto-extract company name, job title, and other details...
+
+For LinkedIn/Indeed jobs:
+1. Open the job posting in a new tab
+2. Select all text (Ctrl/Cmd + A) 
+3. Copy (Ctrl/Cmd + C)
+4. Paste here (Ctrl/Cmd + V)
+
+AI will automatically fill in the job title and company name fields above!"
+              rows={12}
               disabled={isProcessing}
             />
+            <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+              Include the full job posting text for best AI extraction results. The more complete the text, the better the extracted details will be.
+            </small>
           </div>
           <div className="form-group">
             <label htmlFor="additional-context">Additional Context (Optional)</label>
@@ -1052,7 +1197,7 @@ const JobDescriptionsPage: React.FC = () => {
               disabled={isProcessing}
             />
             <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
-              This context will be used when generating tailored resumes and cover letters for this position.
+              This context will be used when generating tailored resumes and cover letters for this position. After parsing, extracted job details will also be stored here for easy access.
             </small>
           </div>
           <div className="form-actions">
@@ -1748,6 +1893,7 @@ const JobDescriptionsPage: React.FC = () => {
         isOpen={showCSVImportModal}
         onClose={() => setShowCSVImportModal(false)}
         onImport={handleCSVImport}
+        existingJobs={state.jobDescriptions}
       />
 
       <DocumentPreviewModal
