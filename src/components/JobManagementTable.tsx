@@ -146,7 +146,7 @@ DoubleKnot Creative  •  Seattle WA  •  2010 to 2014
     const dynamicLabel = `Submitted: ${companyName} ${roleInitials} Job ${jobId}`;
 
     const chatPrompt = `From the following JD, generate a full Markdown resume that is fully ASCII-safe with:
-- From now on, whenever I start a new JD thread, label it: ${dynamicLabel}
+- Label this thread as: ${dynamicLabel}
 - Only ONE divider line, placed immediately after the header and nowhere else in the document.
 - Header compressed with bullet separators.
 - Skills section using bullet points with bold category labels.
