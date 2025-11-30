@@ -56,6 +56,21 @@ const formatCurrency = (value: string): string => {
   }).format(num);
 };
 
+// Helper function to clean up LinkedIn URLs
+const cleanLinkedInUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname.includes('linkedin.com') && urlObj.pathname.startsWith('/jobs/view/')) {
+      // Extract just the job ID from the path
+      const jobId = urlObj.pathname.split('/')[3];
+      return `https://www.linkedin.com/jobs/view/${jobId}`;
+    }
+    return url; // Return original URL if not a LinkedIn job URL
+  } catch {
+    return url; // Return original if URL is invalid
+  }
+};
+
 // Helper function to estimate cost based on OpenAI pricing
 const estimateCost = (usage: { promptTokens: number; completionTokens: number }): string => {
   // GPT-3.5-turbo pricing (as of 2024): $0.50 per 1M input tokens, $1.50 per 1M output tokens
@@ -101,8 +116,7 @@ const JobDescriptionsPage: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [isAutoParsing, setIsAutoParsing] = useState(false);
-  const [autoParseError, setAutoParseError] = useState<string | null>(null);
+
   const [isReparsing, setIsReparsing] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
@@ -201,52 +215,7 @@ const JobDescriptionsPage: React.FC = () => {
   };
 
   // Auto-parse job description text to extract title, company, etc.
-  const handleAutoParse = async (text: string) => {
-    if (!text.trim() || text.length < 50) return; // Skip if text is too short
 
-    setIsAutoParsing(true);
-    setAutoParseError(null);
-
-    try {
-      const result = await parseJobDescription(text, {
-        applicationDate: new Date().toISOString().split('T')[0],
-        applicationId: getNextSequentialId(),
-        impactFocus: 'General Application',
-        impactLevel: 'Standard'
-      });
-
-      if (result.success && result.extractedInfo) {
-        const info = result.extractedInfo;
-
-        // Store usage data from auto-parse
-        if (result.usage) {
-          setLastParseUsage(result.usage);
-        }
-
-        setFormData(prev => ({
-          ...prev,
-          // Only auto-fill if fields are empty to avoid overwriting user input
-          title: prev.title || info.role || '',
-          company: prev.company || info.company || '',
-          role: prev.role || info.role || '',
-          location: prev.location || info.location || '',
-          workArrangement: (prev.workArrangement || info.workArrangement || '') as 'hybrid' | 'remote' | 'office' | '',
-          salaryMin: prev.salaryMin || (info.salaryRange ? extractSalaryMin(info.salaryRange) : ''),
-          salaryMax: prev.salaryMax || (info.salaryRange ? extractSalaryMax(info.salaryRange) : ''),
-          // Auto-populate URL and Source 1 if URL is extracted
-          url: prev.url || info.jobUrl || '',
-          source1Type: info.jobUrl ? 'url' : prev.source1Type,
-          source1Content: prev.source1Content || info.jobUrl || '',
-          // Use applicationId if available and sequential ID is not set
-          sequentialId: prev.sequentialId || (info.applicationId ? info.applicationId : '')
-        }));
-      }
-    } catch (error) {
-      console.log('Auto-parse error:', error); // Silent fail - don't show error to user
-    } finally {
-      setIsAutoParsing(false);
-    }
-  };
 
   // Re-parse existing job description with AI
   const handleReparse = async () => {
@@ -284,10 +253,10 @@ const JobDescriptionsPage: React.FC = () => {
           workArrangement: (info.workArrangement || prev.workArrangement) as 'hybrid' | 'remote' | 'office' | '',
           salaryMin: info.salaryRange ? extractSalaryMin(info.salaryRange) : prev.salaryMin,
           salaryMax: info.salaryRange ? extractSalaryMax(info.salaryRange) : prev.salaryMax,
-          // Update URL and Source 1 if URL is extracted
-          url: info.jobUrl || prev.url,
+          // Update URL and Source 1 if URL is extracted (clean LinkedIn URLs)
+          url: info.jobUrl ? cleanLinkedInUrl(info.jobUrl) : prev.url,
           source1Type: info.jobUrl ? 'url' : prev.source1Type,
-          source1Content: info.jobUrl || prev.source1Content,
+          source1Content: info.jobUrl ? cleanLinkedInUrl(info.jobUrl) : prev.source1Content,
           // Use applicationId if available and sequential ID is not set
           sequentialId: prev.sequentialId || (info.applicationId ? info.applicationId : prev.sequentialId)
         }));
@@ -367,26 +336,9 @@ const JobDescriptionsPage: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      // Parse job description with AI (only if text has changed or it's a new job)
       const isEditing = editingJobId !== null;
       const existingJob = isEditing ? state.jobDescriptions.find(jd => jd.id === editingJobId) : null;
 
-      let parseResult = null;
-      if (!isEditing || (existingJob && existingJob.rawText !== formData.rawText.trim())) {
-        parseResult = await parseJobDescription(formData.rawText, {
-          applicationDate: new Date().toISOString().split('T')[0],
-          applicationId: parseInt(formData.sequentialId) || getNextSequentialId(),
-          impactFocus: 'New Job Application',
-          impactLevel: 'High'
-        });
-
-        // Store usage data from save
-        if (parseResult?.usage) {
-          setLastParseUsage(parseResult.usage);
-        }
-      }
-
-      // Use AI-extracted info to fill in missing fields if available
       const finalTitle = formData.title.trim();
       const finalCompany = formData.company.trim();
 
@@ -401,7 +353,7 @@ const JobDescriptionsPage: React.FC = () => {
           title: finalTitle,
           company: finalCompany,
           sequentialId: isNaN(updatedSequentialId || 0) ? (existingJob.sequentialId || 0) : updatedSequentialId,
-          url: formData.url.trim() || undefined,
+          url: formData.url.trim() ? cleanLinkedInUrl(formData.url.trim()) : undefined,
           rawText: formData.rawText.trim(),
           additionalContext: formData.additionalContext.trim() || undefined,
           // New fields
@@ -424,11 +376,14 @@ const JobDescriptionsPage: React.FC = () => {
             email: formData.contactEmail.trim() || undefined,
             phone: formData.contactPhone.trim() || undefined
           } : undefined,
-          // Only update AI-extracted info if we re-parsed
-          ...(parseResult && {
-            extractedInfo: parseResult.extractedInfo,
-            keywords: parseResult.keywords
-          })
+          // Keep existing extractedInfo and keywords if not re-parsed
+          extractedInfo: existingJob.extractedInfo || {
+            requiredSkills: [],
+            preferredSkills: [],
+            responsibilities: [],
+            requirements: []
+          },
+          keywords: existingJob.keywords || []
         };
 
         await saveJobDescription(updatedJobDescription);
@@ -452,7 +407,7 @@ const JobDescriptionsPage: React.FC = () => {
           sequentialId: isNaN(sequentialId) ? getNextSequentialId() : sequentialId,
           title: finalTitle,
           company: finalCompany,
-          url: formData.url.trim() || undefined,
+          url: formData.url.trim() ? cleanLinkedInUrl(formData.url.trim()) : undefined,
           rawText: formData.rawText.trim(),
           additionalContext: formData.additionalContext.trim() || undefined,
           // New fields
@@ -475,13 +430,13 @@ const JobDescriptionsPage: React.FC = () => {
             email: formData.contactEmail.trim() || undefined,
             phone: formData.contactPhone.trim() || undefined
           } : undefined,
-          extractedInfo: parseResult?.extractedInfo || {
+          extractedInfo: {
             requiredSkills: [],
             preferredSkills: [],
             responsibilities: [],
             requirements: []
           },
-          keywords: parseResult?.keywords || [],
+          keywords: [],
           uploadDate: new Date().toISOString(),
           linkedResumeIds: [],
           linkedCoverLetterIds: [],
@@ -519,9 +474,7 @@ const JobDescriptionsPage: React.FC = () => {
       });
       setShowAddForm(false);
 
-      if (parseResult && !parseResult.success && parseResult.error) {
-        alert(`Job description saved, but AI parsing failed: ${parseResult.error}`);
-      }
+      alert('Job description saved successfully!');
 
     } catch (error) {
       console.error('Error saving job description:', error);
@@ -1338,7 +1291,25 @@ const JobDescriptionsPage: React.FC = () => {
 
       {showAddForm && (
         <div className="add-job-form">
-          <h2>{editingJobId ? 'Edit Job Description' : 'Add New Job Description'}</h2>
+          <div className="form-header">
+            <h2>{editingJobId ? 'Edit Job Description' : 'Add New Job Description'}</h2>
+            <div className="form-header-actions">
+              <button
+                onClick={handleSaveJobDescription}
+                disabled={isProcessing}
+                className="save-button-top"
+              >
+                {isProcessing ? 'Saving...' : editingJobId ? 'Update Job' : 'Save Job'}
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                disabled={isProcessing}
+                className="cancel-button-top"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
           <div className="form-grid">
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label htmlFor="job-title">Job Title *</label>
@@ -1434,21 +1405,12 @@ const JobDescriptionsPage: React.FC = () => {
           <div className="form-group">
             <label htmlFor="job-description">
               Job Description Text *
-              {isAutoParsing && <span style={{ marginLeft: '8px', color: '#007acc', fontSize: '12px' }}>(Auto-extracting job details...)</span>}
             </label>
             <textarea
               id="job-description"
               value={formData.rawText}
-              onChange={async (e) => {
-                const newText = e.target.value;
-                setFormData(prev => ({ ...prev, rawText: newText }));
-
-                // Auto-parse after a brief delay to avoid excessive API calls
-                if (newText.trim() && newText.length > 100) {
-                  setTimeout(() => {
-                    handleAutoParse(newText);
-                  }, 1000);
-                }
+              onChange={(e) => {
+                setFormData(prev => ({ ...prev, rawText: e.target.value }));
               }}
               placeholder="Paste the full job description here and AI will auto-extract company name, job title, and other details...
 
@@ -1690,7 +1652,7 @@ AI will automatically fill in the job title and company name fields above!"
               disabled={isProcessing}
               className="save-button"
             >
-              {isProcessing ? 'Processing...' : editingJobId ? 'Update Job Description' : 'Save & Parse with AI'}
+              {isProcessing ? 'Saving...' : editingJobId ? 'Update Job Description' : 'Save Job Description'}
             </button>
           </div>
         </div>
@@ -1770,6 +1732,11 @@ AI will automatically fill in the job title and company name fields above!"
                               'Not specified')
                           }
                         </div>
+                        {selectedJob.extractedInfo.applicantCount && (
+                          <div className="info-item">
+                            <strong>Applicants:</strong> <span className="applicant-count">{selectedJob.extractedInfo.applicantCount}</span>
+                          </div>
+                        )}
                       </div>
 
                       {(selectedJob.source1 || selectedJob.source2) && (

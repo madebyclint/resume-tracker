@@ -10,3 +10,4 @@
 - Sort by sequential job id so i can see date applied/uploaded
 - Add job search
 - Add JD page scraping from url
+- Build a workflow for applying from lookup to submission

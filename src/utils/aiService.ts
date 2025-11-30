@@ -270,6 +270,7 @@ Extract the following information:
 - salaryRange: Salary range only if explicitly mentioned with numbers
 - jobUrl: Any URLs found in the text (LinkedIn, company careers page, etc.)
 - applicationId: Look for "Application ID:" followed by numbers or text, extract the ID value
+- applicantCount: Look for applicant/application count information (e.g., "100+ applicants", "50 applications", "Be among the first 10 applicants")
 - requiredSkills: Array of skills/technologies explicitly listed as "required" or "must have"
 - preferredSkills: Array of skills/technologies listed as "preferred", "nice to have", or "bonus"
 - responsibilities: Key responsibilities as explicitly stated (limit to 5-8 main points)
@@ -287,6 +288,7 @@ Return ONLY a valid JSON object with this structure:
     "salaryRange": "$120k - $180k",
     "jobUrl": "https://www.linkedin.com/jobs/view/4296167250",
     "applicationId": "APP-2024-001",
+    "applicantCount": "100+ applicants",
     "requiredSkills": ["JavaScript", "React", "Node.js", "SQL"],
     "preferredSkills": ["TypeScript", "AWS", "Docker"],
     "responsibilities": ["Build scalable web applications", "Mentor junior developers"],
@@ -875,6 +877,9 @@ ${text}`
         };
       }
 
+      console.log('AI parsed response:', parsed);
+      console.log('Extracted applicationId:', parsed.extractedInfo?.applicationId);
+      
       return {
         extractedInfo: parsed.extractedInfo,
         keywords: parsed.keywords,

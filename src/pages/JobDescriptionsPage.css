@@ -115,9 +115,59 @@
   margin-bottom: 20px;
 }
 
-.add-job-form h2 {
-  margin: 0 0 20px 0;
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.form-header h2 {
+  margin: 0;
   color: #333;
+}
+
+.form-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.save-button-top, .cancel-button-top {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.save-button-top {
+  background: #007bff;
+  color: white;
+}
+
+.save-button-top:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.save-button-top:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancel-button-top {
+  background: #6c757d;
+  color: white;
+}
+
+.cancel-button-top:hover:not(:disabled) {
+  background: #545b62;
+}
+
+.cancel-button-top:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .form-grid {
@@ -1645,4 +1695,14 @@
   .save-modal {
     width: 350px;
   }
+}
+
+/* Applicant count styling */
+.applicant-count {
+  color: #e67e22;
+  font-weight: 600;
+  background: rgba(230, 126, 34, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
 }

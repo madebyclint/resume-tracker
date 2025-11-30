@@ -22,6 +22,153 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
   onSelect,
   selectedJobId
 }) => {
+  // Copy job description text to clipboard
+  const handleCopyJobText = async (job: any) => {
+    try {
+      await navigator.clipboard.writeText(job.rawText);
+      // Show brief success feedback
+      const button = document.activeElement as HTMLButtonElement;
+      if (button) {
+        const originalText = button.innerHTML;
+        button.innerHTML = '✅';
+        setTimeout(() => {
+          button.innerHTML = originalText;
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('Failed to copy text:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = job.rawText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+      } catch (fallbackErr) {
+        console.error('Fallback copy failed:', fallbackErr);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
+  // Copy job description with chat instructions for resume generation
+  const handleCopyForChat = async (job: any) => {
+    const resumeTemplate = `# CLINT BUSH
+
+Senior Front-End Engineer
+Brooklyn, NY (Hybrid OK)  •  206-290-2726  •  [clint@madebyclint.com](mailto:clint@madebyclint.com)  •  linkedin.com/in/clintbush
+
+---
+
+## SUMMARY
+
+Front-end engineer with 14+ years of experience building fast, intuitive, user-centered applications across fintech, startups, and mobile. Strong foundation in React, TypeScript, Next.js, and UI architecture, with a background in design that supports clean and reliable product execution. Experienced working with internal users, stakeholders, and cross-functional teams to shape workflows, reduce friction, and solve real operational problems. Motivated by helping small businesses thrive through thoughtful, practical tools. Comfortable in fast-paced, ambiguous environments with high ownership and iterative delivery.
+
+## SKILLS
+
+* **Frontend:** React, TypeScript, JavaScript (ES6+), Next.js, Hooks, Context, Redux
+* **UI and UX:** Figma collaboration, layout, interaction patterns, accessibility (WCAG), responsive design
+* **Architecture:** Component systems, modular UI, performance tuning, maintainability
+* **Backend and APIs:** Node.js, REST APIs, SQL (PostgreSQL, MySQL), workflow integration
+* **Mobile:** React Native, Expo
+* **Quality:** Jest, Cypress, debugging, BrowserStack, release readiness
+* **Process:** Agile, rapid prototyping, iterative development, CI/CD, stakeholder collaboration
+* **Additional:** AI-assisted development, type generation, automated refactoring
+
+## EXPERIENCE
+
+### Lead Front-End Engineer / Technical Program Lead
+
+WaFd Bank / Pike Street Labs  •  Seattle WA and Brooklyn NY  •  2021 to 2025
+React, TypeScript, Next.js, React Native, Node.js, REST, SQL
+
+* Built and maintained customer-facing interfaces used by hundreds of thousands of users across web and mobile banking.
+* Led front-end architecture for an online banking redesign, including components, state patterns, and API integration.
+* One of three engineers rebuilding the mobile app in React Native using AI-assisted workflows for faster iteration.
+* Worked daily in Figma with designers to translate ambiguous workflows into clear, scalable UI patterns.
+* Collaborated directly with internal users and product partners to understand workflow needs and refine internal tools.
+* Created reusable component systems and design tokens to improve consistency and delivery speed.
+* Improved perceived performance through render isolation, workflow splitting, and progressive loading.
+* Managed and mentored a team of five developers while remaining hands-on for complex UI and integration work.
+* Owned release processes, branch strategy, QA coordination, and production support across multiple teams.
+* Used metrics, user feedback, and iterative cycles to refine features and improve usability.
+
+### Senior Full-Stack Engineer
+
+Homesite Insurance  •  Seattle WA  •  2014 to 2021
+React, TypeScript, Redux, Node.js, REST
+
+* Built and modernized customer-facing insurance applications across multiple product lines.
+* Translated complex workflows into intuitive UI in close collaboration with product and design.
+* Improved frontend performance, accessibility, and stability through iterative refactoring.
+* Implemented Jest and Cypress testing patterns to reduce regressions and increase reliability.
+
+### Frontend Developer
+
+DoubleKnot Creative  •  Seattle WA  •  2010 to 2014
+
+* Designed and built responsive, accessible websites for small businesses and nonprofits.
+* Delivered pixel-accurate UI implementations and reusable components for maintainability.
+* Improved site structure, semantic HTML, and performance across multiple client projects.
+
+## SELECTED PROJECTS
+
+### AI Travel Micro-App: WhereToGo (2025)
+
+* Designed and shipped an AI-powered travel-planning tool using React and TypeScript.
+* Focused on simple interactions, clean layout, and rapid iteration.
+* Demonstrated strong 0 to 1 delivery and product-minded engineering.
+
+## EDUCATION AND CERTIFICATIONS
+
+* Mendix Intermediate Developer Certification
+* Mendix Rapid Developer Certification
+* Art Institute of Seattle: Dynamic Web Development
+* University of Northern Colorado: BA in Graphic Design and Photography
+
+## STRENGTHS
+
+* Strong bridge between engineering, design, and real-world users.
+* High ownership and comfort in startup environments.
+* Clear communicator with strong collaboration instincts.
+* Passionate about reducing operational friction for small businesses.`;
+
+    const chatPrompt = `From the following job description, generate a tailored resume following this exact format and structure:
+
+${resumeTemplate}
+
+Tailor the content to match the job requirements while keeping the same formatting, structure, and professional tone. Focus on relevant skills and experience that align with the role. Use your best judgment - I'll request changes if needed.
+
+Job Description:
+${job.rawText}`;
+
+    try {
+      await navigator.clipboard.writeText(chatPrompt);
+      // Show brief success feedback
+      const button = document.activeElement as HTMLButtonElement;
+      if (button) {
+        const originalText = button.innerHTML;
+        button.innerHTML = '✅';
+        setTimeout(() => {
+          button.innerHTML = originalText;
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('Failed to copy text:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = chatPrompt;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+      } catch (fallbackErr) {
+        console.error('Fallback copy failed:', fallbackErr);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   const [sortField, setSortField] = useState<SortField>('sequentialId');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -304,6 +451,26 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
                           title="Edit job"
                         >
                           ✏️
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyJobText(job);
+                          }}
+                          className="action-btn copy-btn"
+                          title="Copy job description text"
+                        >
+                          📋
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyForChat(job);
+                          }}
+                          className="action-btn copy-chat-btn"
+                          title="Copy for chat (with resume instructions)"
+                        >
+                          💬
                         </button>
                         <button
                           onClick={(e) => {

@@ -333,6 +333,24 @@
   background: rgba(239, 68, 68, 0.2);
 }
 
+.copy-btn {
+  color: #28a745;
+  background: rgba(40, 167, 69, 0.1);
+}
+
+.copy-btn:hover {
+  background: rgba(40, 167, 69, 0.2);
+}
+
+.copy-chat-btn {
+  color: #6f42c1;
+  background: rgba(111, 66, 193, 0.1);
+}
+
+.copy-chat-btn:hover {
+  background: rgba(111, 66, 193, 0.2);
+}
+
 .source-badge {
   display: inline-flex;
   align-items: center;

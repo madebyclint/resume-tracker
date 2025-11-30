@@ -64,6 +64,7 @@ export interface JobDescription {
     salaryRange?: string;
     jobUrl?: string;
     applicationId?: string;
+    applicantCount?: string;
     requiredSkills: string[];
     preferredSkills: string[];
     responsibilities: string[];
