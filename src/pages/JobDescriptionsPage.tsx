@@ -917,14 +917,26 @@ const JobDescriptionsPage: React.FC = () => {
     const skillsSection = text.match(/##\s+skills.*?(?=##|\n\n|$)/is);
     if (skillsSection) {
       const skillsContent = skillsSection[0];
+
+      // Debug: Log what we found
+      console.log('Skills section found:', skillsContent.substring(0, 200) + '...');
+
       // Look for bold labels with colon (e.g., **Frontend:** or **Category:**)
       const hasBoldLabels = /\*\*[^*]*:\*\*/.test(skillsContent);
       const hasBulletPoints = /^\s*[-*+]\s/m.test(skillsContent);
 
+      // Debug: Log test results
+      console.log('hasBoldLabels:', hasBoldLabels, 'pattern tested:', /\*\*[^*]*:\*\*/.toString());
+      console.log('hasBulletPoints:', hasBulletPoints);
+
+      // Also test a simpler pattern to see if basic bold text is found
+      const hasAnyBold = /\*\*.*?\*\*/.test(skillsContent);
+      console.log('hasAnyBold:', hasAnyBold);
+
       if (hasBoldLabels && hasBulletPoints) {
         results.push({ type: 'pass', message: '✓ Skills section uses bullet points with bold category labels' });
       } else if (!hasBoldLabels) {
-        results.push({ type: 'error', message: '❌ Skills section missing bold category labels (**Category:**)' });
+        results.push({ type: 'error', message: `❌ Skills section missing bold category labels (**Category:**) - Found bold: ${hasAnyBold}, Found bullets: ${hasBulletPoints}` });
       } else if (!hasBulletPoints) {
         results.push({ type: 'error', message: '❌ Skills section missing bullet points' });
       }
