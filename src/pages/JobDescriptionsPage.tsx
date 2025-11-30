@@ -28,13 +28,15 @@ const JobDescriptionsPage: React.FC = () => {
     company: '',
     url: '',
     rawText: '',
-    additionalContext: ''
+    additionalContext: '',
+    sequentialId: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isAutoParsing, setIsAutoParsing] = useState(false);
   const [autoParseError, setAutoParseError] = useState<string | null>(null);
+  const [isReparsing, setIsReparsing] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
 
@@ -153,6 +155,39 @@ const JobDescriptionsPage: React.FC = () => {
     }
   };
 
+  // Re-parse existing job description with AI
+  const handleReparse = async () => {
+    if (!formData.rawText.trim()) {
+      alert('Please add job description text first');
+      return;
+    }
+
+    setIsReparsing(true);
+
+    try {
+      const result = await parseJobDescription(formData.rawText);
+
+      if (result.success && result.extractedInfo) {
+        const info = result.extractedInfo;
+
+        // Update form data with extracted info, but don't overwrite user-entered data
+        setFormData(prev => ({
+          ...prev,
+          title: info.role || prev.title,
+          company: info.company || prev.company
+        }));
+
+        alert('Job description re-parsed successfully! Check the extracted details.');
+      } else {
+        alert('Failed to parse job description. Please check the text and try again.');
+      }
+    } catch (error) {
+      alert('Error parsing job description: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsReparsing(false);
+    }
+  };
+
   const handleEditJobDescription = (jobId: string) => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
     if (!job) return;
@@ -162,7 +197,8 @@ const JobDescriptionsPage: React.FC = () => {
       company: job.company,
       url: job.url || '',
       rawText: job.rawText,
-      additionalContext: job.additionalContext || ''
+      additionalContext: job.additionalContext || '',
+      sequentialId: job.sequentialId?.toString() || ''
     });
     setEditingJobId(jobId);
     setShowAddForm(true);
@@ -170,7 +206,7 @@ const JobDescriptionsPage: React.FC = () => {
 
   const handleCancelEdit = () => {
     setEditingJobId(null);
-    setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '' });
+    setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '', sequentialId: '' });
     setShowAddForm(false);
     setFetchError(null);
     setIsFetchingURL(false);
@@ -200,10 +236,15 @@ const JobDescriptionsPage: React.FC = () => {
 
       if (isEditing && existingJob) {
         // Update existing job description
+        const updatedSequentialId = formData.sequentialId.trim() ?
+          parseInt(formData.sequentialId.trim()) :
+          existingJob.sequentialId;
+
         const updatedJobDescription: JobDescription = {
           ...existingJob,
           title: finalTitle,
           company: finalCompany,
+          sequentialId: isNaN(updatedSequentialId || 0) ? (existingJob.sequentialId || 0) : updatedSequentialId,
           url: formData.url.trim() || undefined,
           rawText: formData.rawText.trim(),
           additionalContext: formData.additionalContext.trim() || undefined,
@@ -226,9 +267,13 @@ const JobDescriptionsPage: React.FC = () => {
         setEditingJobId(null);
       } else {
         // Create new job description
+        const sequentialId = formData.sequentialId.trim() ?
+          parseInt(formData.sequentialId.trim()) :
+          getNextSequentialId();
+
         const newJobDescription: JobDescription = {
           id: crypto.randomUUID(),
-          sequentialId: getNextSequentialId(),
+          sequentialId: isNaN(sequentialId) ? getNextSequentialId() : sequentialId,
           title: finalTitle,
           company: finalCompany,
           url: formData.url.trim() || undefined,
@@ -256,7 +301,7 @@ const JobDescriptionsPage: React.FC = () => {
       }
 
       // Reset form
-      setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '' });
+      setFormData({ title: '', company: '', url: '', rawText: '', additionalContext: '', sequentialId: '' });
       setShowAddForm(false);
 
       if (parseResult && !parseResult.success && parseResult.error) {
@@ -1080,7 +1125,7 @@ const JobDescriptionsPage: React.FC = () => {
         <div className="add-job-form">
           <h2>{editingJobId ? 'Edit Job Description' : 'Add New Job Description'}</h2>
           <div className="form-grid">
-            <div className="form-group">
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label htmlFor="job-title">Job Title *</label>
               <input
                 id="job-title"
@@ -1100,6 +1145,19 @@ const JobDescriptionsPage: React.FC = () => {
                 onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
                 placeholder="e.g., TechCorp Inc."
                 disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group" style={{ width: '120px' }}>
+              <label htmlFor="sequential-id">Job # (Optional)</label>
+              <input
+                id="sequential-id"
+                type="number"
+                min="1"
+                value={formData.sequentialId}
+                onChange={(e) => setFormData(prev => ({ ...prev, sequentialId: e.target.value }))}
+                placeholder={editingJobId ? "Current" : getNextSequentialId().toString()}
+                disabled={isProcessing}
+                title="Sequential job tracking number (e.g., Job #1, Job #2)"
               />
             </div>
           </div>
@@ -1182,9 +1240,29 @@ AI will automatically fill in the job title and company name fields above!"
               rows={12}
               disabled={isProcessing}
             />
-            <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
-              Include the full job posting text for best AI extraction results. The more complete the text, the better the extracted details will be.
-            </small>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+              <small style={{ color: '#666', fontSize: '12px' }}>
+                Include the full job posting text for best AI extraction results.
+              </small>
+              <button
+                type="button"
+                onClick={handleReparse}
+                disabled={isProcessing || isReparsing || !formData.rawText.trim()}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  whiteSpace: 'nowrap'
+                }}
+                title="Re-analyze the job description text with AI to extract missing company/title info"
+              >
+                {isReparsing ? 'Re-parsing...' : '🔄 Re-parse with AI'}
+              </button>
+            </div>
           </div>
           <div className="form-group">
             <label htmlFor="additional-context">Additional Context (Optional)</label>
