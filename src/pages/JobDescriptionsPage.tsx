@@ -46,6 +46,92 @@ const extractSalaryMax = (salaryRange: string): string => {
   return '';
 };
 
+// Helper function to create a simple hash from text (for cache key)
+const createTextHash = (text: string): string => {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return hash.toString();
+};
+
+// Helper function to calculate AI costs (OpenAI GPT-3.5/4 pricing)
+const calculateAICost = (usage: { promptTokens: number; completionTokens: number; totalTokens: number }): number => {
+  // OpenAI GPT-3.5-turbo pricing (as of Dec 2025): $0.001 per 1K input tokens, $0.002 per 1K output tokens
+  // GPT-4 pricing: $0.01 per 1K input tokens, $0.03 per 1K output tokens
+  // Using GPT-3.5 rates as default - adjust based on your model usage
+  const inputCostPer1K = 0.001;
+  const outputCostPer1K = 0.002;
+
+  const inputCost = (usage.promptTokens / 1000) * inputCostPer1K;
+  const outputCost = (usage.completionTokens / 1000) * outputCostPer1K;
+
+  return inputCost + outputCost;
+};
+
+// Smart AI parsing function that avoids duplicate calls
+const smartParseJobDescription = async (
+  rawText: string,
+  existingJob: JobDescription | null,
+  cache: Map<string, any>,
+  setCache: (cache: Map<string, any>) => void,
+  additionalContext?: any
+): Promise<{
+  success: boolean;
+  extractedInfo?: any;
+  keywords?: string[];
+  usage?: any;
+  error?: string;
+  fromCache?: boolean;
+}> => {
+  if (!rawText.trim()) {
+    return { success: false, error: 'No text to parse' };
+  }
+
+  const textHash = createTextHash(rawText.trim());
+  const cacheKey = `${textHash}_${JSON.stringify(additionalContext || {})}`;
+
+  // Check if existing job already has this text parsed
+  if (existingJob?.aiUsage?.rawTextHash === textHash && existingJob.extractedInfo) {
+    console.log('Using existing job data - text unchanged');
+    return {
+      success: true,
+      extractedInfo: existingJob.extractedInfo,
+      keywords: existingJob.keywords,
+      fromCache: true
+    };
+  }
+
+  // Check in-memory cache
+  const cachedResult = cache.get(cacheKey);
+  if (cachedResult && (Date.now() - cachedResult.timestamp) < 5 * 60 * 1000) { // 5 minute cache
+    console.log('Using cached AI result');
+    return {
+      ...cachedResult.result,
+      fromCache: true
+    };
+  }
+
+  // No cache hit - make AI call
+  console.log('Making new AI parsing call');
+  const result = await parseJobDescription(rawText, additionalContext);
+
+  // Cache the result if successful
+  if (result.success) {
+    const newCache = new Map(cache);
+    newCache.set(cacheKey, {
+      result,
+      textHash,
+      timestamp: Date.now()
+    });
+    setCache(newCache);
+  }
+
+  return result;
+};
+
 // Helper function to format currency
 const formatCurrency = (value: string): string => {
   const num = parseFloat(value);
@@ -158,6 +244,35 @@ const JobDescriptionsPage: React.FC = () => {
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [tempNotes, setTempNotes] = useState('');
 
+  // Toast helper functions
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration = 4000) => {
+    const id = Date.now().toString();
+    const newToast = { id, message, type, duration };
+    setToasts(prev => [...prev, newToast]);
+
+    // Auto-remove after duration
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, duration);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+  const [showExpandedStats, setShowExpandedStats] = useState(false);
+  const [chartType, setChartType] = useState<'bar' | 'line'>('line');
+  const [aiParseCache, setAiParseCache] = useState<Map<string, {
+    result: any;
+    textHash: string;
+    timestamp: number;
+  }>>(new Map());
+  const [toasts, setToasts] = useState<Array<{
+    id: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    duration?: number;
+  }>>([]);
+
   // Generation modal states
   const [showGeneratedModal, setShowGeneratedModal] = useState(false);
   const [generatedContent, setGeneratedContent] = useState('');
@@ -251,26 +366,75 @@ const JobDescriptionsPage: React.FC = () => {
   // Re-parse existing job description with AI
   const handleReparse = async () => {
     if (!formData.rawText.trim()) {
-      alert('Please add job description text first');
+      showToast('Please add job description text first', 'warning');
       return;
     }
 
     setIsReparsing(true);
 
     try {
-      const result = await parseJobDescription(formData.rawText, {
-        applicationDate: new Date().toISOString().split('T')[0],
-        applicationId: parseInt(formData.sequentialId) || getNextSequentialId(),
-        impactFocus: 'Re-parsed Job Description',
-        impactLevel: 'Standard'
-      });
+      const existingJob = editingJobId ? state.jobDescriptions.find(job => job.id === editingJobId) || null : null;
+      const result = await smartParseJobDescription(
+        formData.rawText,
+        existingJob,
+        aiParseCache,
+        setAiParseCache,
+        {
+          applicationDate: new Date().toISOString().split('T')[0],
+          applicationId: parseInt(formData.sequentialId) || getNextSequentialId(),
+          impactFocus: 'Re-parsed Job Description',
+          impactLevel: 'Standard'
+        }
+      );
 
       if (result.success && result.extractedInfo) {
         const info = result.extractedInfo;
 
-        // Store usage data
-        if (result.usage) {
+        // Store usage data and update job if not from cache
+        if (result.usage && !result.fromCache) {
           setLastParseUsage(result.usage);
+
+          // If we're editing an existing job, update its AI usage tracking
+          if (editingJobId && existingJob) {
+            const textHash = createTextHash(formData.rawText.trim());
+            const estimatedCost = calculateAICost(result.usage);
+            const updatedUsage = {
+              totalTokens: (existingJob.aiUsage?.totalTokens || 0) + result.usage.totalTokens,
+              promptTokens: (existingJob.aiUsage?.promptTokens || 0) + result.usage.promptTokens,
+              completionTokens: (existingJob.aiUsage?.completionTokens || 0) + result.usage.completionTokens,
+              estimatedCost: (existingJob.aiUsage?.estimatedCost || 0) + estimatedCost,
+              parseCount: (existingJob.aiUsage?.parseCount || 0) + 1,
+              lastParseDate: new Date().toISOString(),
+              rawTextHash: textHash
+            };
+
+            // Update the job in state with new AI usage
+            setState(prev => ({
+              ...prev,
+              jobDescriptions: prev.jobDescriptions.map(job =>
+                job.id === editingJobId
+                  ? {
+                    ...job,
+                    extractedInfo: info,
+                    keywords: result.keywords || [],
+                    aiUsage: updatedUsage
+                  }
+                  : job
+              )
+            }));
+
+            // Also save to storage
+            const updatedJob: JobDescription = {
+              ...existingJob,
+              extractedInfo: info,
+              keywords: result.keywords || [],
+              aiUsage: updatedUsage
+            };
+            saveJobDescription(updatedJob);
+          }
+        } else if (result.fromCache) {
+          // Show different message for cached results
+          console.log('Used cached result - no additional AI cost incurred');
         }
 
         // Update form data with extracted info, but don't overwrite user-entered data
@@ -292,12 +456,16 @@ const JobDescriptionsPage: React.FC = () => {
           sequentialId: prev.sequentialId || (info.applicationId ? info.applicationId : prev.sequentialId)
         }));
 
-        alert('Job description re-parsed successfully! Check the extracted details.');
+        if (result.fromCache) {
+          showToast('Job description processed successfully using cached data (no additional AI cost)!', 'success');
+        } else {
+          showToast('Job description re-parsed successfully! Check the extracted details.', 'success');
+        }
       } else {
-        alert('Failed to parse job description. Please check the text and try again.');
+        showToast('Failed to parse job description. Please check the text and try again.', 'error');
       }
     } catch (error) {
-      alert('Error parsing job description: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      showToast('Error parsing job description: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error');
     } finally {
       setIsReparsing(false);
     }
@@ -364,7 +532,7 @@ const JobDescriptionsPage: React.FC = () => {
     setLastParseUsage(null); // Clear usage when canceling
   }; const handleSaveJobDescription = async () => {
     if (!formData.title.trim() || !formData.company.trim() || !formData.rawText.trim()) {
-      alert('Please fill in all required fields');
+      showToast('Please fill in all required fields', 'warning');
       return;
     }
 
@@ -482,6 +650,60 @@ const JobDescriptionsPage: React.FC = () => {
           applicationStatus: 'not_applied'
         };
 
+        // Parse job description with AI if configured and text is available
+        if (formData.rawText.trim() && isAIConfigured()) {
+          try {
+            const parseResult = await smartParseJobDescription(
+              formData.rawText,
+              null, // New job, no existing data
+              aiParseCache,
+              setAiParseCache,
+              {
+                applicationDate: new Date().toISOString().split('T')[0],
+                applicationId: sequentialId,
+                impactFocus: 'New Job Description',
+                impactLevel: 'Standard'
+              }
+            );
+
+            if (parseResult.success && parseResult.extractedInfo) {
+              // Update extracted info
+              newJobDescription.extractedInfo = parseResult.extractedInfo;
+              newJobDescription.keywords = parseResult.keywords || [];
+
+              // Track AI usage (only if not from cache)
+              if (parseResult.usage && !parseResult.fromCache) {
+                const textHash = createTextHash(formData.rawText.trim());
+                const estimatedCost = calculateAICost(parseResult.usage);
+                newJobDescription.aiUsage = {
+                  totalTokens: parseResult.usage.totalTokens,
+                  promptTokens: parseResult.usage.promptTokens,
+                  completionTokens: parseResult.usage.completionTokens,
+                  estimatedCost: estimatedCost,
+                  parseCount: 1,
+                  lastParseDate: new Date().toISOString(),
+                  rawTextHash: textHash
+                };
+              } else if (parseResult.fromCache) {
+                // If from cache, set a minimal usage record to track that it was processed
+                const textHash = createTextHash(formData.rawText.trim());
+                newJobDescription.aiUsage = {
+                  totalTokens: 0,
+                  promptTokens: 0,
+                  completionTokens: 0,
+                  estimatedCost: 0,
+                  parseCount: 0,
+                  lastParseDate: new Date().toISOString(),
+                  rawTextHash: textHash
+                };
+              }
+            }
+          } catch (parseError) {
+            console.warn('Failed to parse job description with AI:', parseError);
+            // Continue with saving even if AI parsing fails
+          }
+        }
+
         await saveJobDescription(newJobDescription);
 
         setState(prev => ({
@@ -515,11 +737,11 @@ const JobDescriptionsPage: React.FC = () => {
       });
       setShowAddForm(false);
 
-      alert('Job description saved successfully!');
+      showToast('Job description saved successfully!', 'success');
 
     } catch (error) {
       console.error('Error saving job description:', error);
-      alert('Failed to save job description. Please try again.');
+      showToast('Failed to save job description. Please try again.', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -538,7 +760,7 @@ const JobDescriptionsPage: React.FC = () => {
       }));
     } catch (error) {
       console.error('Error deleting job description:', error);
-      alert('Failed to delete job description. Please try again.');
+      showToast('Failed to delete job description. Please try again.', 'error');
     }
   };
 
@@ -563,7 +785,7 @@ const JobDescriptionsPage: React.FC = () => {
       }));
     } catch (error) {
       console.error('Error linking resume:', error);
-      alert('Failed to link resume. Please try again.');
+      showToast('Failed to link resume. Please try again.', 'error');
     }
   };
 
@@ -588,7 +810,7 @@ const JobDescriptionsPage: React.FC = () => {
       }));
     } catch (error) {
       console.error('Error linking cover letter:', error);
-      alert('Failed to link cover letter. Please try again.');
+      showToast('Failed to link cover letter. Please try again.', 'error');
     }
   };
 
@@ -622,7 +844,7 @@ const JobDescriptionsPage: React.FC = () => {
       }));
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Failed to update status. Please try again.');
+      showToast('Failed to update status. Please try again.', 'error');
     }
   };
 
@@ -704,7 +926,7 @@ const JobDescriptionsPage: React.FC = () => {
   // Generate tailored resume
   const handleGenerateResume = async (jobDescription: JobDescription) => {
     if (!isAIConfigured()) {
-      alert('AI service is not configured. Please set up your OpenAI API key in the .env file.');
+      showToast('AI service is not configured. Please set up your OpenAI API key in the .env file.', 'warning');
       return;
     }
 
@@ -797,7 +1019,7 @@ const JobDescriptionsPage: React.FC = () => {
   // Generate tailored cover letter
   const handleGenerateCoverLetter = async (jobDescription: JobDescription) => {
     if (!isAIConfigured()) {
-      alert('AI service is not configured. Please set up your OpenAI API key in the .env file.');
+      showToast('AI service is not configured. Please set up your OpenAI API key in the .env file.', 'warning');
       return;
     }
 
@@ -905,11 +1127,11 @@ const JobDescriptionsPage: React.FC = () => {
         console.log('State updated with fresh data from database');
       }
 
-      alert(`${generationType === 'resume' ? 'Resume' : 'Cover letter'} saved successfully! Check your ${generationType === 'resume' ? 'Resume' : 'Cover Letter'} library.`);
+      showToast(`${generationType === 'resume' ? 'Resume' : 'Cover letter'} saved successfully! Check your ${generationType === 'resume' ? 'Resume' : 'Cover Letter'} library.`, 'success');
       console.log('Save process completed successfully');
     } catch (error) {
       console.error('Error saving generated content:', error);
-      alert(`Failed to save ${generationType === 'resume' ? 'resume' : 'cover letter'}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showToast(`Failed to save ${generationType === 'resume' ? 'resume' : 'cover letter'}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
       throw error;
     }
   };
@@ -928,10 +1150,10 @@ const JobDescriptionsPage: React.FC = () => {
         jobDescriptions: [...prev.jobDescriptions, ...jobDescriptions]
       }));
 
-      alert(`Successfully imported ${jobDescriptions.length} job description${jobDescriptions.length === 1 ? '' : 's'}!`);
+      showToast(`Successfully imported ${jobDescriptions.length} job description${jobDescriptions.length === 1 ? '' : 's'}!`, 'success');
     } catch (error) {
       console.error('Error importing CSV:', error);
-      alert(`Failed to import job descriptions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showToast(`Failed to import job descriptions: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
   };
 
@@ -1819,6 +2041,384 @@ AI will automatically fill in the job title and company name fields above!"
         </div>
       )}
 
+      {activeTab === 'job-descriptions' && state.jobDescriptions.length > 0 && (
+        <div className="job-stats-section">
+          <div className="stats-container">
+            {(() => {
+              // Basic status stats
+              const stats = {
+                not_applied: state.jobDescriptions.filter(job => !job.applicationStatus || job.applicationStatus === 'not_applied').length,
+                applied: state.jobDescriptions.filter(job => job.applicationStatus === 'applied').length,
+                interviewing: state.jobDescriptions.filter(job => job.applicationStatus === 'interviewing').length,
+                rejected: state.jobDescriptions.filter(job => job.applicationStatus === 'rejected').length,
+                offered: state.jobDescriptions.filter(job => job.applicationStatus === 'offered').length,
+                withdrawn: state.jobDescriptions.filter(job => job.applicationStatus === 'withdrawn').length,
+              };
+              const total = state.jobDescriptions.length;
+
+              // Advanced analytics calculations
+              const jobsWithDates = state.jobDescriptions.filter(job => job.uploadDate || job.applicationDate).sort((a, b) => {
+                const dateA = new Date(a.applicationDate || a.uploadDate);
+                const dateB = new Date(b.applicationDate || b.uploadDate);
+                return dateA.getTime() - dateB.getTime();
+              });
+
+              const firstJobDate = jobsWithDates.length > 0 ? new Date(jobsWithDates[0].applicationDate || jobsWithDates[0].uploadDate) : new Date();
+              const daysSinceFirst = Math.floor((new Date().getTime() - firstJobDate.getTime()) / (1000 * 60 * 60 * 24));
+              const avgPerDay = daysSinceFirst > 0 ? (total / daysSinceFirst).toFixed(2) : '0';
+
+              // Impact stats
+              const impactStats = {
+                low: state.jobDescriptions.filter(job => job.impact === 'low').length,
+                medium: state.jobDescriptions.filter(job => job.impact === 'medium').length,
+                high: state.jobDescriptions.filter(job => job.impact === 'high').length,
+              };
+              const totalWithImpact = impactStats.low + impactStats.medium + impactStats.high;
+              const impactRatio = totalWithImpact > 0 ? ((impactStats.high / totalWithImpact) * 100).toFixed(0) : '0';
+
+              // AI Usage and Cost tracking
+              const aiStats = state.jobDescriptions.reduce((acc, job) => {
+                if (job.aiUsage) {
+                  acc.totalTokens += job.aiUsage.totalTokens;
+                  acc.totalCost += job.aiUsage.estimatedCost;
+                  acc.parseCount += job.aiUsage.parseCount;
+                  acc.jobsWithAI += 1;
+                }
+                return acc;
+              }, {
+                totalTokens: 0,
+                totalCost: 0,
+                parseCount: 0,
+                jobsWithAI: 0
+              });
+
+              // Daily velocity data for chart (last 14 days)
+              const dailyData = [];
+              for (let i = 13; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                const count = state.jobDescriptions.filter(job => {
+                  const jobDate = (job.applicationDate || job.uploadDate)?.split('T')[0];
+                  return jobDate === dateStr;
+                }).length;
+                dailyData.push({ date: dateStr, count, displayDate: date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
+              }
+
+              // Weekly velocity data (last 8 weeks)
+              const weeklyData = [];
+              for (let i = 7; i >= 0; i--) {
+                const endDate = new Date();
+                endDate.setDate(endDate.getDate() - (i * 7));
+                const startDate = new Date(endDate);
+                startDate.setDate(startDate.getDate() - 6);
+
+                const count = state.jobDescriptions.filter(job => {
+                  const jobDate = new Date(job.applicationDate || job.uploadDate);
+                  return jobDate >= startDate && jobDate <= endDate;
+                }).length;
+
+                const weekNum = Math.floor(endDate.getTime() / (1000 * 60 * 60 * 24 * 7));
+                weeklyData.push({
+                  week: `W${weekNum % 52}`,
+                  count,
+                  startDate: startDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
+                  endDate: endDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+                });
+              }
+
+              return (
+                <>
+                  <div className="stats-header">
+                    <h3>Application Status Overview</h3>
+                    <div className="stats-header-controls">
+                      <span className="total-count">Total Jobs: {total}</span>
+                      <button
+                        className="expand-stats-btn"
+                        onClick={() => setShowExpandedStats(!showExpandedStats)}
+                        title={showExpandedStats ? "Hide detailed analytics" : "Show detailed analytics"}
+                      >
+                        {showExpandedStats ? '▼ Less Stats' : '▲ More Stats'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="stats-grid">
+                    <div className="stat-item not-applied">
+                      <span className="stat-label">Not Applied</span>
+                      <span className="stat-value">{stats.not_applied}</span>
+                    </div>
+                    <div className="stat-item applied">
+                      <span className="stat-label">Applied</span>
+                      <span className="stat-value">{stats.applied}</span>
+                    </div>
+                    <div className="stat-item interviewing">
+                      <span className="stat-label">Interviewing</span>
+                      <span className="stat-value">{stats.interviewing}</span>
+                    </div>
+                    <div className="stat-item offered">
+                      <span className="stat-label">Offered</span>
+                      <span className="stat-value">{stats.offered}</span>
+                    </div>
+                    <div className="stat-item rejected">
+                      <span className="stat-label">Rejected</span>
+                      <span className="stat-value">{stats.rejected}</span>
+                    </div>
+                    <div className="stat-item withdrawn">
+                      <span className="stat-label">Withdrawn</span>
+                      <span className="stat-value">{stats.withdrawn}</span>
+                    </div>
+                  </div>
+
+                  {showExpandedStats && (
+                    <div className="expanded-stats">
+                      <div className="analytics-section">
+                        <h4>📊 Advanced Analytics</h4>
+                        <div className="analytics-grid">
+                          <div className="analytics-item">
+                            <span className="analytics-label">Days Since First</span>
+                            <span className="analytics-value">{daysSinceFirst}</span>
+                          </div>
+                          <div className="analytics-item">
+                            <span className="analytics-label">Avg Per Day</span>
+                            <span className="analytics-value">{avgPerDay}</span>
+                          </div>
+                          <div className="analytics-item">
+                            <span className="analytics-label">Impact Ratio</span>
+                            <span className="analytics-value">{impactRatio}%</span>
+                          </div>
+                          <div className="analytics-item">
+                            <span className="analytics-label">Success Rate</span>
+                            <span className="analytics-value">{stats.applied > 0 ? ((stats.offered / stats.applied) * 100).toFixed(0) : '0'}%</span>
+                          </div>
+                        </div>
+
+                        <div className="ai-cost-section">
+                          <h4>🤖 AI Usage & Costs</h4>
+                          <div className="analytics-grid">
+                            <div className="analytics-item ai-cost">
+                              <span className="analytics-label">Total Tokens</span>
+                              <span className="analytics-value">{aiStats.totalTokens.toLocaleString()}</span>
+                            </div>
+                            <div className="analytics-item ai-cost">
+                              <span className="analytics-label">Est. Cost</span>
+                              <span className="analytics-value">${aiStats.totalCost.toFixed(4)}</span>
+                            </div>
+                            <div className="analytics-item ai-cost">
+                              <span className="analytics-label">Parse Count</span>
+                              <span className="analytics-value">{aiStats.parseCount}</span>
+                            </div>
+                            <div className="analytics-item ai-cost">
+                              <span className="analytics-label">Avg Cost/Job</span>
+                              <span className="analytics-value">${aiStats.jobsWithAI > 0 ? (aiStats.totalCost / aiStats.jobsWithAI).toFixed(4) : '0.0000'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="impact-section">
+                        <h4>🎯 Impact Levels</h4>
+                        <div className="impact-grid">
+                          <div className="impact-item low">
+                            <span className="impact-label">Low Impact</span>
+                            <span className="impact-value">{impactStats.low}</span>
+                          </div>
+                          <div className="impact-item medium">
+                            <span className="impact-label">Medium Impact</span>
+                            <span className="impact-value">{impactStats.medium}</span>
+                          </div>
+                          <div className="impact-item high">
+                            <span className="impact-label">High Impact</span>
+                            <span className="impact-value">{impactStats.high}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="charts-section">
+                        <div className="charts-header">
+                          <h4>📈 Velocity Charts</h4>
+                          <div className="chart-type-toggle">
+                            <button
+                              className={`chart-toggle-btn ${chartType === 'bar' ? 'active' : ''}`}
+                              onClick={() => setChartType('bar')}
+                            >
+                              📊 Bars
+                            </button>
+                            <button
+                              className={`chart-toggle-btn ${chartType === 'line' ? 'active' : ''}`}
+                              onClick={() => setChartType('line')}
+                            >
+                              📈 Lines
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="chart-container">
+                          <h4>Daily Velocity (Last 14 Days)</h4>
+                          {chartType === 'bar' ? (
+                            <div className="mini-chart daily-chart bar-chart">
+                              {dailyData.map((day, idx) => (
+                                <div key={idx} className="chart-bar-container">
+                                  <div
+                                    className="chart-bar"
+                                    style={{
+                                      height: `${Math.max(day.count * 20, 4)}px`,
+                                      backgroundColor: day.count > 0 ? '#007bff' : '#e9ecef'
+                                    }}
+                                    title={`${day.displayDate}: ${day.count} applications`}
+                                  ></div>
+                                  <span className="chart-label">{day.displayDate}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="line-chart-container">
+                              <svg className="line-chart daily-line-chart" viewBox="0 0 400 80" preserveAspectRatio="none">
+                                <defs>
+                                  <linearGradient id="dailyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stopColor="#007bff" stopOpacity="0.3" />
+                                    <stop offset="100%" stopColor="#007bff" stopOpacity="0.1" />
+                                  </linearGradient>
+                                </defs>
+                                {/* Grid lines */}
+                                {[0, 1, 2, 3, 4].map(i => (
+                                  <line
+                                    key={i}
+                                    x1="0"
+                                    y1={i * 20}
+                                    x2="400"
+                                    y2={i * 20}
+                                    stroke="#e9ecef"
+                                    strokeWidth="0.5"
+                                  />
+                                ))}
+                                {/* Data line */}
+                                <polyline
+                                  fill="none"
+                                  stroke="#007bff"
+                                  strokeWidth="2"
+                                  points={dailyData.map((day, idx) =>
+                                    `${(idx / (dailyData.length - 1)) * 400},${80 - Math.min(day.count * 20, 76)}`
+                                  ).join(' ')}
+                                />
+                                {/* Area fill */}
+                                <polygon
+                                  fill="url(#dailyGradient)"
+                                  points={`0,80 ${dailyData.map((day, idx) =>
+                                    `${(idx / (dailyData.length - 1)) * 400},${80 - Math.min(day.count * 20, 76)}`
+                                  ).join(' ')} 400,80`}
+                                />
+                                {/* Data points */}
+                                {dailyData.map((day, idx) => (
+                                  <circle
+                                    key={idx}
+                                    cx={(idx / (dailyData.length - 1)) * 400}
+                                    cy={80 - Math.min(day.count * 20, 76)}
+                                    r="3"
+                                    fill="#007bff"
+                                    stroke="#ffffff"
+                                    strokeWidth="2"
+                                  >
+                                    <title>{`${day.displayDate}: ${day.count} applications`}</title>
+                                  </circle>
+                                ))}
+                              </svg>
+                              <div className="line-chart-labels">
+                                {dailyData.filter((_, idx) => idx % 2 === 0).map((day, idx) => (
+                                  <span key={idx} className="line-chart-label">{day.displayDate}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="chart-container">
+                          <h4>Weekly Velocity (Last 8 Weeks)</h4>
+                          {chartType === 'bar' ? (
+                            <div className="mini-chart weekly-chart bar-chart">
+                              {weeklyData.map((week, idx) => (
+                                <div key={idx} className="chart-bar-container">
+                                  <div
+                                    className="chart-bar"
+                                    style={{
+                                      height: `${Math.max(week.count * 8, 4)}px`,
+                                      backgroundColor: week.count > 0 ? '#28a745' : '#e9ecef'
+                                    }}
+                                    title={`Week ${week.week} (${week.startDate}-${week.endDate}): ${week.count} applications`}
+                                  ></div>
+                                  <span className="chart-label">{week.week}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="line-chart-container">
+                              <svg className="line-chart weekly-line-chart" viewBox="0 0 400 80" preserveAspectRatio="none">
+                                <defs>
+                                  <linearGradient id="weeklyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stopColor="#28a745" stopOpacity="0.3" />
+                                    <stop offset="100%" stopColor="#28a745" stopOpacity="0.1" />
+                                  </linearGradient>
+                                </defs>
+                                {/* Grid lines */}
+                                {[0, 1, 2, 3, 4].map(i => (
+                                  <line
+                                    key={i}
+                                    x1="0"
+                                    y1={i * 20}
+                                    x2="400"
+                                    y2={i * 20}
+                                    stroke="#e9ecef"
+                                    strokeWidth="0.5"
+                                  />
+                                ))}
+                                {/* Data line */}
+                                <polyline
+                                  fill="none"
+                                  stroke="#28a745"
+                                  strokeWidth="2"
+                                  points={weeklyData.map((week, idx) =>
+                                    `${(idx / (weeklyData.length - 1)) * 400},${80 - Math.min(week.count * 10, 76)}`
+                                  ).join(' ')}
+                                />
+                                {/* Area fill */}
+                                <polygon
+                                  fill="url(#weeklyGradient)"
+                                  points={`0,80 ${weeklyData.map((week, idx) =>
+                                    `${(idx / (weeklyData.length - 1)) * 400},${80 - Math.min(week.count * 10, 76)}`
+                                  ).join(' ')} 400,80`}
+                                />
+                                {/* Data points */}
+                                {weeklyData.map((week, idx) => (
+                                  <circle
+                                    key={idx}
+                                    cx={(idx / (weeklyData.length - 1)) * 400}
+                                    cy={80 - Math.min(week.count * 10, 76)}
+                                    r="3"
+                                    fill="#28a745"
+                                    stroke="#ffffff"
+                                    strokeWidth="2"
+                                  >
+                                    <title>{`Week ${week.week} (${week.startDate}-${week.endDate}): ${week.count} applications`}</title>
+                                  </circle>
+                                ))}
+                              </svg>
+                              <div className="line-chart-labels">
+                                {weeklyData.map((week, idx) => (
+                                  <span key={idx} className="line-chart-label">{week.week}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {
         activeTab === 'job-descriptions' && (
           <div className="job-descriptions-content">
@@ -1935,6 +2535,26 @@ AI will automatically fill in the job title and company name fields above!"
                         {selectedJob.extractedInfo.applicantCount && (
                           <div className="info-item">
                             <strong>Applicants:</strong> <span className="applicant-count">{selectedJob.extractedInfo.applicantCount}</span>
+                          </div>
+                        )}
+                        {selectedJob.aiUsage && (
+                          <div className="info-item ai-usage-item" style={{ gridColumn: '1 / -1' }}>
+                            <strong>AI Parsing Cost:</strong>
+                            <div style={{
+                              marginTop: '4px',
+                              padding: '8px',
+                              backgroundColor: '#fff3cd',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              border: '1px solid #ffeaa7'
+                            }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                                <span><strong>Tokens:</strong> {selectedJob.aiUsage.totalTokens.toLocaleString()}</span>
+                                <span><strong>Cost:</strong> ${selectedJob.aiUsage.estimatedCost.toFixed(4)}</span>
+                                <span><strong>Parses:</strong> {selectedJob.aiUsage.parseCount}</span>
+                                <span><strong>Last Parse:</strong> {selectedJob.aiUsage.lastParseDate ? new Date(selectedJob.aiUsage.lastParseDate).toLocaleDateString() : 'Unknown'}</span>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2681,6 +3301,30 @@ AI will automatically fill in the job title and company name fields above!"
         onLink={previewDocumentOnLink || undefined}
         isLinked={previewDocumentIsLinked}
       />
+
+      {/* Toast Container */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`toast toast-${toast.type}`}
+            onClick={() => removeToast(toast.id)}
+          >
+            <div className="toast-content">
+              <span className="toast-icon">
+                {toast.type === 'success' && '✅'}
+                {toast.type === 'error' && '❌'}
+                {toast.type === 'warning' && '⚠️'}
+                {toast.type === 'info' && 'ℹ️'}
+              </span>
+              <span className="toast-message">{toast.message}</span>
+              <button className="toast-close" onClick={(e) => { e.stopPropagation(); removeToast(toast.id); }}>
+                ✕
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div >
   );
 };

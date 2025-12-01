@@ -101,6 +101,17 @@ export interface JobDescription {
   // Quick stats
   daysSinceApplication?: number; // computed field
   daysInCurrentStatus?: number; // computed field
+  
+  // AI Usage tracking
+  aiUsage?: {
+    totalTokens: number;
+    promptTokens: number;
+    completionTokens: number;
+    estimatedCost: number; // in USD
+    parseCount: number; // number of times AI parsed this job
+    lastParseDate?: string;
+    rawTextHash?: string; // hash of the rawText when last parsed to detect changes
+  };
 }
 
 // Union type for documents
