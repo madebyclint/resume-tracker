@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faThumbsUp, faMinus, faFire } from '@fortawesome/free-solid-svg-icons';
 
 interface JobManagementTableProps {
   jobs: JobDescription[];
@@ -13,6 +15,32 @@ interface JobManagementTableProps {
 
 type SortField = 'id' | 'sequentialId' | 'company' | 'title' | 'applicationDate' | 'lastActivityDate' | 'applicationStatus' | 'daysSinceApplication';
 type SortDirection = 'asc' | 'desc';
+
+// Helper function to get impact level icon
+const getImpactIcon = (impact: any) => {
+  if (typeof impact === 'boolean') {
+    return impact ? faFire : null;
+  }
+  switch (impact) {
+    case 'high': return faFire;
+    case 'medium': return faThumbsUp;
+    case 'low': return null;
+    default: return null;
+  }
+};
+
+// Helper function to get impact level color
+const getImpactColor = (impact: any) => {
+  if (typeof impact === 'boolean') {
+    return impact ? '#ff6b35' : '#6c757d';
+  }
+  switch (impact) {
+    case 'high': return '#ff6b35'; // Orange/red for high impact
+    case 'medium': return '#28a745'; // Green for medium
+    case 'low': return '#6c757d'; // Gray for low (no icon)
+    default: return '#6c757d'; // Gray for unspecified
+  }
+};
 
 const JobManagementTable: React.FC<JobManagementTableProps> = ({
   jobs,
@@ -392,6 +420,31 @@ ${job.rawText}`;
     });
   };
 
+  const formatSalary = (job: any) => {
+    // First check if we have min/max values
+    if (job.salaryMin && job.salaryMax) {
+      const formatAmount = (amount: number) => {
+        if (amount >= 1000) {
+          return `$${(amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1)}k`;
+        }
+        return `$${amount}`;
+      };
+      return `${formatAmount(job.salaryMin)}-${formatAmount(job.salaryMax)}`;
+    }
+
+    // Fallback to salaryRange field if available
+    if (job.salaryRange) {
+      return job.salaryRange;
+    }
+
+    // Check extractedInfo for salary range
+    if (job.extractedInfo?.salaryRange) {
+      return job.extractedInfo.salaryRange;
+    }
+
+    return null;
+  };
+
   return (
     <div className="job-management-container">
       <div className="job-management-header">
@@ -499,28 +552,6 @@ ${job.rawText}`;
                   </span>
                 </div>
               </th>
-              <th>
-                <div
-                  className={`sortable-header ${sortField === 'daysSinceApplication' ? 'active' : ''}`}
-                  onClick={() => handleSort('daysSinceApplication')}
-                >
-                  Days Ago
-                  <span className={`sort-indicator ${sortField === 'daysSinceApplication' ? 'active' : ''}`}>
-                    {getSortIcon('daysSinceApplication')}
-                  </span>
-                </div>
-              </th>
-              <th>
-                <div
-                  className={`sortable-header ${sortField === 'lastActivityDate' ? 'active' : ''}`}
-                  onClick={() => handleSort('lastActivityDate')}
-                >
-                  Last Activity
-                  <span className={`sort-indicator ${sortField === 'lastActivityDate' ? 'active' : ''}`}>
-                    {getSortIcon('lastActivityDate')}
-                  </span>
-                </div>
-              </th>
             </tr>
           </thead>
           <tbody>
@@ -554,9 +585,23 @@ ${job.rawText}`;
                     </span>
                   </td>
                   <td className="company-position-cell">
-                    <div className="company-name">{job.company}</div>
+                    <div className="company-name">
+                      {getImpactIcon(job.impact) && (
+                        <FontAwesomeIcon
+                          icon={getImpactIcon(job.impact)!}
+                          style={{ color: getImpactColor(job.impact), marginRight: '6px', fontSize: '12px' }}
+                          title={`Impact: ${typeof job.impact === 'string' ? job.impact : job.impact ? 'High' : 'None'}`}
+                        />
+                      )}
+                      {job.company}
+                    </div>
                     <div className="position-row">
-                      <span className="position-title">{job.title}</span>
+                      <span className="position-title">
+                        {job.title}
+                        {formatSalary(job) && (
+                          <span className="salary-info"> ({formatSalary(job)})</span>
+                        )}
+                      </span>
                       <span className="inline-actions">
                         <button
                           onClick={(e) => {
@@ -638,14 +683,8 @@ ${job.rawText}`;
                       <option value="offered">Offered</option>
                     </select>
                   </td>
-                  <td className="date-cell">
-                    {formatDate(job.applicationDate)}
-                  </td>
                   <td className={`days-cell ${getDaysClass(job.daysSinceApplication)}`}>
-                    {job.daysSinceApplication !== null ? `${job.daysSinceApplication}d` : '-'}
-                  </td>
-                  <td className="date-cell">
-                    {formatDate(job.lastActivityDate)}
+                    {formatDate(job.applicationDate)} ({job.daysSinceApplication !== null ? `${job.daysSinceApplication}d` : '-'})
                   </td>
                 </tr>
               ))

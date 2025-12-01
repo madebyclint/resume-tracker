@@ -16,6 +16,8 @@ import CSVImportModal from '../components/CSVImportModal';
 import JobManagementTable from '../components/JobManagementTable';
 import DocumentPreviewModal from '../components/DocumentPreviewModal';
 import './JobDescriptionsPage.css';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faThumbsUp, faMinus, faFire, faTimes, faEdit, faCopy, faTable, faFileAlt } from '@fortawesome/free-solid-svg-icons';
 
 // Remove the local interface since we're using the one from documentMatcher
 
@@ -89,6 +91,32 @@ const estimateCost = (usage: { promptTokens: number; completionTokens: number })
   return `~$${totalCost.toFixed(4)}`;
 };
 
+// Helper function to get impact level icon
+const getImpactIcon = (impact: any) => {
+  if (typeof impact === 'boolean') {
+    return impact ? faFire : null;
+  }
+  switch (impact) {
+    case 'high': return faFire;
+    case 'medium': return faThumbsUp;
+    case 'low': return null;
+    default: return null;
+  }
+};
+
+// Helper function to get impact level color
+const getImpactColor = (impact: any) => {
+  if (typeof impact === 'boolean') {
+    return impact ? '#ff6b35' : '#6c757d';
+  }
+  switch (impact) {
+    case 'high': return '#ff6b35'; // Orange/red for high impact
+    case 'medium': return '#28a745'; // Green for medium
+    case 'low': return '#6c757d'; // Gray for low (no icon)
+    default: return '#6c757d'; // Gray for unspecified
+  }
+};
+
 const JobDescriptionsPage: React.FC = () => {
   const { state, setState } = useAppState();
   const [activeTab, setActiveTab] = useState<'job-descriptions' | 'resume-formatter'>('job-descriptions');
@@ -99,6 +127,7 @@ const JobDescriptionsPage: React.FC = () => {
     url: '',
     rawText: '',
     additionalContext: '',
+    notes: '',
     sequentialId: '',
     role: '',
     location: '',
@@ -111,7 +140,8 @@ const JobDescriptionsPage: React.FC = () => {
     salaryMax: '',
     contactName: '',
     contactEmail: '',
-    contactPhone: ''
+    contactPhone: '',
+    impact: '' as 'low' | 'medium' | 'high' | ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
@@ -125,6 +155,8 @@ const JobDescriptionsPage: React.FC = () => {
     completionTokens: number;
     totalTokens: number;
   } | null>(null);
+  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  const [tempNotes, setTempNotes] = useState('');
 
   // Generation modal states
   const [showGeneratedModal, setShowGeneratedModal] = useState(false);
@@ -281,6 +313,7 @@ const JobDescriptionsPage: React.FC = () => {
       url: job.url || '',
       rawText: job.rawText,
       additionalContext: job.additionalContext || '',
+      notes: job.notes || '',
       sequentialId: job.sequentialId?.toString() || '',
       role: job.role || '',
       location: job.location || '',
@@ -293,7 +326,8 @@ const JobDescriptionsPage: React.FC = () => {
       salaryMax: job.salaryMax?.toString() || '',
       contactName: job.contact?.name || '',
       contactEmail: job.contact?.email || '',
-      contactPhone: job.contact?.phone || ''
+      contactPhone: job.contact?.phone || '',
+      impact: job.impact || ''
     });
     setEditingJobId(jobId);
     setShowAddForm(true);
@@ -308,6 +342,7 @@ const JobDescriptionsPage: React.FC = () => {
       url: '',
       rawText: '',
       additionalContext: '',
+      notes: '',
       sequentialId: '',
       role: '',
       location: '',
@@ -320,7 +355,8 @@ const JobDescriptionsPage: React.FC = () => {
       salaryMax: '',
       contactName: '',
       contactEmail: '',
-      contactPhone: ''
+      contactPhone: '',
+      impact: ''
     });
     setShowAddForm(false);
     setFetchError(null);
@@ -377,6 +413,7 @@ const JobDescriptionsPage: React.FC = () => {
             email: formData.contactEmail.trim() || undefined,
             phone: formData.contactPhone.trim() || undefined
           } : undefined,
+          impact: formData.impact || undefined,
           // Keep existing extractedInfo and keywords if not re-parsed
           extractedInfo: existingJob.extractedInfo || {
             requiredSkills: [],
@@ -431,6 +468,7 @@ const JobDescriptionsPage: React.FC = () => {
             email: formData.contactEmail.trim() || undefined,
             phone: formData.contactPhone.trim() || undefined
           } : undefined,
+          impact: formData.impact || undefined,
           extractedInfo: {
             requiredSkills: [],
             preferredSkills: [],
@@ -459,6 +497,7 @@ const JobDescriptionsPage: React.FC = () => {
         url: '',
         rawText: '',
         additionalContext: '',
+        notes: '',
         sequentialId: '',
         role: '',
         location: '',
@@ -471,7 +510,8 @@ const JobDescriptionsPage: React.FC = () => {
         salaryMax: '',
         contactName: '',
         contactEmail: '',
-        contactPhone: ''
+        contactPhone: '',
+        impact: ''
       });
       setShowAddForm(false);
 
@@ -584,6 +624,76 @@ const JobDescriptionsPage: React.FC = () => {
       console.error('Error updating status:', error);
       alert('Failed to update status. Please try again.');
     }
+  };
+
+  // Notes management handlers
+  const handleQuickNote = async (jobId: string, noteText: string) => {
+    const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
+    if (!jobDescription) return;
+
+    const now = new Date().toLocaleString();
+    const newNote = `[${now}] ${noteText}`;
+    const updatedNotes = jobDescription.notes
+      ? `${jobDescription.notes}\n${newNote}`
+      : newNote;
+
+    const updatedJobDescription: JobDescription = {
+      ...jobDescription,
+      notes: updatedNotes,
+      lastActivityDate: new Date().toISOString()
+    };
+
+    try {
+      await saveJobDescription(updatedJobDescription);
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: prev.jobDescriptions.map(jd =>
+          jd.id === jobId ? updatedJobDescription : jd
+        )
+      }));
+    } catch (error) {
+      console.error('Error adding quick note:', error);
+      alert('Failed to add note. Please try again.');
+    }
+  };
+
+  const handleEditNotes = (jobId: string) => {
+    const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
+    if (!jobDescription) return;
+
+    setEditingNotesId(jobId);
+    setTempNotes(jobDescription.notes || '');
+  };
+
+  const handleSaveNotes = async (jobId: string) => {
+    const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
+    if (!jobDescription) return;
+
+    const updatedJobDescription: JobDescription = {
+      ...jobDescription,
+      notes: tempNotes.trim() || undefined,
+      lastActivityDate: new Date().toISOString()
+    };
+
+    try {
+      await saveJobDescription(updatedJobDescription);
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: prev.jobDescriptions.map(jd =>
+          jd.id === jobId ? updatedJobDescription : jd
+        )
+      }));
+      setEditingNotesId(null);
+      setTempNotes('');
+    } catch (error) {
+      console.error('Error saving notes:', error);
+      alert('Failed to save notes. Please try again.');
+    }
+  };
+
+  const handleCancelNotesEdit = () => {
+    setEditingNotesId(null);
+    setTempNotes('');
   };
 
   // Calculate potential document matches using sophisticated matching
@@ -1518,6 +1628,23 @@ AI will automatically fill in the job title and company name fields above!"
                 <option value="office">Office</option>
               </select>
             </div>
+            <div className="form-group" style={{ width: '200px' }}>
+              <label htmlFor="impact-level">
+                <FontAwesomeIcon icon={getImpactIcon(formData.impact) || faMinus} style={{ color: getImpactColor(formData.impact), marginRight: '6px' }} />
+                Impact Level
+              </label>
+              <select
+                id="impact-level"
+                value={formData.impact}
+                onChange={(e) => setFormData(prev => ({ ...prev, impact: e.target.value as 'low' | 'medium' | 'high' | '' }))}
+                disabled={isProcessing}
+              >
+                <option value="">Select...</option>
+                <option value="low">Low</option>
+                <option value="medium">👍 Medium</option>
+                <option value="high">🔥 High</option>
+              </select>
+            </div>
           </div>
 
           <div className="form-grid">
@@ -1654,6 +1781,25 @@ AI will automatically fill in the job title and company name fields above!"
               This context will be used when generating tailored resumes and cover letters for this position. After parsing, extracted job details will also be stored here for easy access.
             </small>
           </div>
+
+          {/* Notes field - only show when editing existing job */}
+          {editingJobId && (
+            <div className="form-group">
+              <label htmlFor="notes">Notes (Optional)</label>
+              <textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Add personal notes about this job (application status, interview notes, follow-ups, etc.)"
+                rows={4}
+                disabled={isProcessing}
+              />
+              <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+                Use this space for personal tracking notes, interview feedback, follow-up reminders, and other observations.
+              </small>
+            </div>
+          )}
+
           <div className="form-actions">
             <button
               onClick={handleCancelEdit}
@@ -1697,6 +1843,13 @@ AI will automatically fill in the job title and company name fields above!"
                       <h2>{selectedJob.title}</h2>
                       <div className="job-actions">
                         <button
+                          className="close-split-button"
+                          onClick={() => setSelectedJobId(null)}
+                          title="Close details panel"
+                        >
+                          ✕
+                        </button>
+                        <button
                           className="edit-button"
                           onClick={() => handleEditJobDescription(selectedJob.id)}
                           disabled={showAddForm}
@@ -1732,11 +1885,43 @@ AI will automatically fill in the job title and company name fields above!"
                         <div className="info-item">
                           <strong>Role:</strong> {selectedJob.extractedInfo.role || 'Not extracted'}
                         </div>
+                        {selectedJob.extractedInfo.companyDescription && (
+                          <div className="info-item" style={{ gridColumn: '1 / -1' }}>
+                            <strong>Company Description:</strong>
+                            <div style={{
+                              marginTop: '4px',
+                              padding: '8px',
+                              backgroundColor: '#f8f9fa',
+                              borderRadius: '4px',
+                              fontSize: '14px',
+                              fontStyle: 'italic',
+                              color: '#495057'
+                            }}>
+                              {selectedJob.extractedInfo.companyDescription}
+                            </div>
+                          </div>
+                        )}
                         <div className="info-item">
                           <strong>Location:</strong> {selectedJob.location || selectedJob.extractedInfo.location || 'Not specified'}
                         </div>
                         <div className="info-item">
                           <strong>Work Arrangement:</strong> {selectedJob.workArrangement || 'Not specified'}
+                        </div>
+                        <div className="info-item">
+                          <strong>Impact Level:</strong>
+                          {selectedJob.impact ? (
+                            <span style={{ marginLeft: '8px' }}>
+                              <FontAwesomeIcon
+                                icon={getImpactIcon(selectedJob.impact) || faMinus}
+                                style={{ color: getImpactColor(selectedJob.impact), marginRight: '6px' }}
+                              />
+                              {typeof selectedJob.impact === 'string' ?
+                                selectedJob.impact.charAt(0).toUpperCase() + selectedJob.impact.slice(1) :
+                                'High'}
+                            </span>
+                          ) : (
+                            <span style={{ marginLeft: '8px', color: '#6c757d' }}>Not specified</span>
+                          )}
                         </div>
                         <div className="info-item">
                           <strong>Salary Range:</strong> {
@@ -1986,6 +2171,89 @@ AI will automatically fill in the job title and company name fields above!"
                         </div>
                       </div>
                     )}
+
+                    {/* Enhanced Notes Section */}
+                    <div className="notes-section">
+                      <div className="notes-header">
+                        <h3>Notes</h3>
+                        <div className="notes-actions">
+                          <div className="quick-notes">
+                            <button
+                              className="quick-note-btn"
+                              onClick={() => handleQuickNote(selectedJob.id, 'Applied')}
+                              title="Mark as applied"
+                            >
+                              📝 Applied
+                            </button>
+                            <button
+                              className="quick-note-btn"
+                              onClick={() => handleQuickNote(selectedJob.id, 'Interview scheduled')}
+                              title="Note interview scheduled"
+                            >
+                              📅 Interview
+                            </button>
+                            <button
+                              className="quick-note-btn"
+                              onClick={() => handleQuickNote(selectedJob.id, 'Follow up needed')}
+                              title="Mark for follow up"
+                            >
+                              🔔 Follow up
+                            </button>
+                            <button
+                              className="quick-note-btn"
+                              onClick={() => handleQuickNote(selectedJob.id, 'Rejected')}
+                              title="Mark as rejected"
+                            >
+                              ❌ Rejected
+                            </button>
+                          </div>
+                          <button
+                            className="edit-notes-btn"
+                            onClick={() => handleEditNotes(selectedJob.id)}
+                          >
+                            ✏️ Edit
+                          </button>
+                        </div>
+                      </div>
+
+                      {editingNotesId === selectedJob.id ? (
+                        <div className="notes-editing">
+                          <textarea
+                            value={tempNotes}
+                            onChange={(e) => setTempNotes(e.target.value)}
+                            placeholder="Add your notes here..."
+                            rows={4}
+                            className="notes-textarea"
+                          />
+                          <div className="notes-edit-actions">
+                            <button
+                              className="save-notes-btn"
+                              onClick={() => handleSaveNotes(selectedJob.id)}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="cancel-notes-btn"
+                              onClick={() => handleCancelNotesEdit()}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="notes-display">
+                          {selectedJob.notes ? (
+                            <div className="notes-content">
+                              {selectedJob.notes.split('\n').map((line, index) => (
+                                <p key={index}>{line}</p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="no-notes">No notes yet. Use quick actions above or click Edit to add notes.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     {/* <div className="generation-section">
                       <h3>AI Document Generation</h3>

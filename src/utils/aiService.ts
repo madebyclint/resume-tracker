@@ -261,13 +261,20 @@ CRITICAL RULES:
 2. Use empty arrays for missing information - DO NOT make up skills or requirements
 3. If salary/location/department is not mentioned, leave those fields empty
 4. Be conservative - better to miss information than to hallucinate it
+5. ALWAYS convert hourly rates to annual salaries (multiply by 2080 hours)
+6. Clean up location formatting (remove extra spaces, standardize format)
 
 Extract the following information:
 - role: Exact job title as stated (or empty string if unclear)
 - company: Exact company name if mentioned (or empty string)
-- location: Location as stated, including remote options
-- workArrangement: Work type if mentioned - look for keywords like "remote", "hybrid", "office", "on-site", "work from home", "WFH", "workplace type", or phrases like "workplace type is Hybrid" - return exactly "remote", "hybrid", or "office"
-- salaryRange: Salary range only if explicitly mentioned with numbers
+- companyDescription: Generate a brief 1-2 sentence AI summary of the company based on any information mentioned in the job description (company mission, industry, size, culture, products, recent news, etc.). If no company information is provided, leave empty string
+- location: Clean location format - remove work arrangement suffixes like "-Hybrid", "-Remote". For "manhattan, NY -Hybrid" return "Manhattan, NY" and set workArrangement to "hybrid"
+- workArrangement: Work type if mentioned - look for keywords like "remote", "hybrid", "office", "on-site", "work from home", "WFH", "workplace type", or location suffixes like "-Hybrid", "-Remote" - return exactly "remote", "hybrid", or "office"
+- salaryRange: Process salary information intelligently:
+  * For hourly rates (e.g. "$75/hr", "$50/hour"), convert to annual by multiplying by 2080 (40 hours × 52 weeks)
+  * For "$75/hr as W2" format this as "$156,000/year" (75 × 2080 = 156,000)
+  * Keep original format for annual salaries
+  * Include employment type context if mentioned (W2, 1099, contractor, etc.)
 - jobUrl: Any URLs found in the text (LinkedIn, company careers page, etc.)
 - applicationId: Look for "Application ID:" followed by numbers or text, extract the ID value
 - applicantCount: Look for applicant/application count information (e.g., "100+ applicants", "50 applications", "Be among the first 10 applicants")
@@ -281,11 +288,12 @@ Generate keywords from ONLY the skills, technologies, and domains actually menti
 Return ONLY a valid JSON object with this structure:
 {
   "extractedInfo": {
-    "role": "Senior Software Engineer",
+    "role": "UI Frontend Architect",
     "company": "TechCorp",
-    "location": "San Francisco, CA / Remote",
+    "companyDescription": "TechCorp is a Series B funded AI startup focused on democratizing artificial intelligence with a mission to make AI accessible to everyone.",
+    "location": "Manhattan, NY",
     "workArrangement": "hybrid",
-    "salaryRange": "$120k - $180k",
+    "salaryRange": "$156,000/year (W2)",
     "jobUrl": "https://www.linkedin.com/jobs/view/4296167250",
     "applicationId": "APP-2024-001",
     "applicantCount": "100+ applicants",

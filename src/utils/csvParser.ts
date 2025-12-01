@@ -191,6 +191,7 @@ export function convertToJobDescriptions(csvData: CSVJobApplication[], existingJ
       extractedInfo: {
         role: job.discipline || undefined,
         company: job.company || undefined,
+        companyDescription: undefined,
         requiredSkills: [],
         preferredSkills: [],
         responsibilities: [],

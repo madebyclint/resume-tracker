@@ -59,6 +59,7 @@ export interface JobDescription {
   extractedInfo: {
     role?: string;
     company?: string;
+    companyDescription?: string;
     location?: string;
     workArrangement?: string;
     salaryRange?: string;
@@ -84,6 +85,7 @@ export interface JobDescription {
   contactPerson?: string; // recruiter or contact person
   secondaryContact?: string; // additional contact
   priority?: 'low' | 'medium' | 'high'; // how interested you are
+  impact?: 'low' | 'medium' | 'high'; // potential career impact level
   followUpDate?: string; // when to follow up next
   interviewDates?: string[]; // array of interview dates
   salaryDiscussed?: string; // salary range discussed
