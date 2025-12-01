@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Chunk, Resume, CoverLetter, ChunkType, Document, isResume, isCoverLetter } from '../types';
 import { getAllChunks, getChunksBySourceDoc, updateChunk, deleteChunk, deleteAllChunks, exportChunksAsJSON, exportAllDataAsJSON, migrateChunkTypesAndTags, importAllDataFromJSON, ImportResult } from '../storage';
 import { getChunkTypeLabel } from '../utils/aiService';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faSync, faSortUp, faSortDown, faSort } from '@fortawesome/free-solid-svg-icons';
 
 interface ChunkLibraryPageProps {
   resumes: Resume[];
@@ -379,7 +381,7 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
                 }}
                 title="Update existing chunks to new type system (cv_/cl_ prefixes)"
               >
-                🔄 Migrate Chunks
+                <FontAwesomeIcon icon={faSync} /> Migrate Chunks
               </button>
               <button
                 onClick={handleDeleteAllChunks}
@@ -597,7 +599,7 @@ export default function ChunkLibraryPage({ resumes, coverLetters }: ChunkLibrary
                 sortConfig.field === 'createdAt' ? 'Date Created' :
                   sortConfig.field === 'parsedBy' ? 'Parse Method' :
                     sortConfig.field.charAt(0).toUpperCase() + sortConfig.field.slice(1)}
-            ({sortConfig.direction === 'asc' ? '↑' : '↓'})
+            (<FontAwesomeIcon icon={sortConfig.direction === 'asc' ? faSortUp : faSortDown} />)
           </div>
         </div>
       </div>

@@ -5,6 +5,8 @@ import { formatFileSize, formatDate, extractTextFromDocument } from "../utils/do
 import { parseTextIntoChunks, isAIConfigured, showConfigInstructions } from "../utils/aiService";
 import { parseResumeWithRules, getParseResultSummary } from "../utils/plainTextParser";
 import ChunkReviewModal from "./ChunkReviewModal";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCheck, faTimes, faFileAlt, faTools, faEdit } from '@fortawesome/free-solid-svg-icons';
 
 interface ResumeTableProps {
   resumes: Resume[];
@@ -196,13 +198,13 @@ export default function ResumeTable({
       }));
 
       if (textContent && textContent.trim().length > 0) {
-        alert(`✅ Text extracted successfully!\n\n📄 ${textContent.length} characters extracted`);
+        alert(`Text extracted successfully!\n\n${textContent.length} characters extracted`);
       } else {
-        const shouldTryAgain = confirm(`❌ Automatic text extraction failed.\n\nThis can happen with:\n• Complex Word document layouts\n• Password-protected documents\n• Corrupted Word files\n\n🔧 Would you like to try the manual text input method?\n\n(Click OK to manually paste text, or Cancel to skip)`);
+        const shouldTryAgain = confirm(`❌ Automatic text extraction failed.\n\nThis can happen with:\n• Complex Word document layouts\n• Password-protected documents\n• Corrupted Word files\n\nWould you like to try the manual text input method?\n\n(Click OK to manually paste text, or Cancel to skip)`);
 
         if (shouldTryAgain) {
           // Trigger the manual extraction directly
-          const manualText = prompt(`📝 Manual Text Input\n\nPlease:\n1. Open your Word document\n2. Select all text (Cmd+A)\n3. Copy the text (Cmd+C)\n4. Paste it below:`);
+          const manualText = prompt(`Manual Text Input\n\nPlease:\n1. Open your Word document\n2. Select all text (Cmd+A)\n3. Copy the text (Cmd+C)\n4. Paste it below:`);
 
           if (manualText && manualText.trim().length > 0) {
             const updatedResumeWithManualText = {
@@ -218,7 +220,7 @@ export default function ResumeTable({
               )
             }));
 
-            alert(`✅ Manual text input successful!\n\n📄 ${manualText.trim().length} characters added`);
+            alert(`Manual text input successful!\n\n${manualText.trim().length} characters added`);
           }
         }
       }
@@ -373,11 +375,11 @@ export default function ResumeTable({
                     <div>
                       {resume.textContent && resume.textContent.trim().length > 0 ? (
                         <span style={{ color: "#22c55e", fontWeight: "600", fontSize: "0.8rem" }}>
-                          Text extracted ✓
+                          Text extracted <FontAwesomeIcon icon={faCheck} className="success-icon" />
                         </span>
                       ) : (
                         <span style={{ color: "#ef4444", fontWeight: "600", fontSize: "0.8rem" }}>
-                          No text extracted ✗
+                          No text extracted <FontAwesomeIcon icon={faTimes} className="error-icon" />
                         </span>
                       )}
                       {resume.textContent && (
@@ -391,7 +393,7 @@ export default function ResumeTable({
                     <div>
                       {resumeChunkCounts[resume.id] > 0 ? (
                         <span style={{ color: "#8b5cf6", fontWeight: "600", fontSize: "0.8rem" }}>
-                          {resumeChunkCounts[resume.id]} chunks parsed ✓
+                          {resumeChunkCounts[resume.id]} chunks parsed <FontAwesomeIcon icon={faCheck} className="success-icon" />
                         </span>
                       ) : (
                         <span style={{ color: "#6b7280", fontWeight: "600", fontSize: "0.8rem" }}>

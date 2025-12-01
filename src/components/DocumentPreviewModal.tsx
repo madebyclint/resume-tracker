@@ -1,5 +1,7 @@
 import React from 'react';
 import { Resume, CoverLetter } from '../types';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faFileText, faTimes } from '@fortawesome/free-solid-svg-icons';
 import './GeneratedContentModal.css'; // Reuse existing modal styles
 
 interface DocumentPreviewModalProps {
@@ -39,14 +41,14 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
 
   const isResume = !('targetCompany' in document) && !('targetPosition' in document);
   const documentType = isResume ? 'Resume' : 'Cover Letter';
-  const icon = isResume ? '📄' : '📝';
+  const icon = <FontAwesomeIcon icon={faFileText} />;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh' }}>
         <div className="modal-header">
           <h2>{icon} {document.name || document.fileName}</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose}><FontAwesomeIcon icon={faTimes} /></button>
         </div>
 
         <div className="modal-body">
@@ -117,7 +119,7 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                   textAlign: 'center',
                   padding: '40px'
                 }}>
-                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
+                  <div style={{ fontSize: '48px', marginBottom: '16px' }}><FontAwesomeIcon icon={faFileText} /></div>
                   <p>No text content available for preview.</p>
                   <p style={{ fontSize: '12px' }}>
                     This document may need to be reprocessed to extract text content.

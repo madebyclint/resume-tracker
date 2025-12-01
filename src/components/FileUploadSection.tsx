@@ -3,6 +3,8 @@ import { Resume, CoverLetter, AppState } from "../types";
 import { saveResume, saveCoverLetter, debugIndexedDB, clearAllData } from "../storage";
 import { checkForDuplicates } from "../utils/duplicateChecker";
 import { formatFileSize, extractTextFromDocument } from "../utils/documentUtils";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faUpload, faFileAlt } from '@fortawesome/free-solid-svg-icons';
 
 interface FileUploadSectionProps {
   state: AppState;
@@ -218,8 +220,8 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
           if (jobRole) detectedInfo.push(`Role: ${jobRole}`);
           const detectedMsg = detectedInfo.length > 0 ? `\n\n✨ Detected: ${detectedInfo.join(', ')}` : '';
 
-          const targetCompany = prompt(`📄 Cover Letter Detected: ${file.name}${detectedMsg}\n\nEnter the target company (leave blank to use detected):`, companyName || '');
-          const targetPosition = prompt(`📄 Cover Letter: ${file.name}\n\nEnter the target position (leave blank to use detected):`, jobRole || '');
+          const targetCompany = prompt(`Cover Letter Detected: ${file.name}${detectedMsg}\n\nEnter the target company (leave blank to use detected):`, companyName || '');
+          const targetPosition = prompt(`Cover Letter: ${file.name}\n\nEnter the target position (leave blank to use detected):`, jobRole || '');
 
           const coverLetter: CoverLetter = {
             id: crypto.randomUUID(),
@@ -286,7 +288,7 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
         >
-          {isUploading ? 'Uploading...' : '📄 Upload Documents'}
+          {isUploading ? 'Uploading...' : <><FontAwesomeIcon icon={faUpload} /> Upload Documents</>}
         </button>
         <button
           type="button"

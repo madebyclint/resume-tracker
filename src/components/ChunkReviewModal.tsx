@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Chunk, ChunkType } from '../types';
 import { getChunkTypeLabel, isValidChunkType } from '../utils/aiService';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faTimes } from '@fortawesome/free-solid-svg-icons';
 
 interface ChunkReviewModalProps {
   isOpen: boolean;
@@ -175,7 +177,7 @@ export default function ChunkReviewModal({
                 padding: '0.25rem'
               }}
             >
-              ×
+              <FontAwesomeIcon icon={faTimes} />
             </button>
           </div>
         </div>

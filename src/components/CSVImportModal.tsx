@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { parseCSV, convertToJobDescriptions, CSVJobApplication } from '../utils/csvParser';
 import { JobDescription } from '../types';
 import './GeneratedContentModal.css'; // Reuse existing modal styles
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faFileAlt } from '@fortawesome/free-solid-svg-icons';
 
 interface CSVImportModalProps {
   isOpen: boolean;
@@ -170,7 +172,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, onImpo
                   </div>
                 ) : (
                   <div>
-                    <div style={{ fontSize: '48px', marginBottom: '10px' }}>📄</div>
+                    <div style={{ fontSize: '48px', marginBottom: '10px' }}><FontAwesomeIcon icon={faFileAlt} /></div>
                     <p><strong>Drop your CSV file here</strong></p>
                     <p>or <span style={{ color: '#007acc', textDecoration: 'underline' }}>click to browse</span></p>
                     <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>

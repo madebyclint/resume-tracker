@@ -14,10 +14,10 @@ import GeneratedContentModal from '../components/GeneratedContentModal';
 import ValidationMessage from '../components/ValidationMessage';
 import CSVImportModal from '../components/CSVImportModal';
 import JobManagementTable from '../components/JobManagementTable';
-import DocumentPreviewModal from '../components/DocumentPreviewModal';
+
 import './JobDescriptionsPage.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faTimes, faEdit, faCopy, faTable, faFileAlt } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faTimes, faEdit, faCopy, faTable, faFileAlt, faFileImport, faChartBar, faDollarSign, faSync, faArrowUp, faArrowDown, faCheck, faExclamationTriangle, faPaperclip, faPlus, faSearch, faEye } from '@fortawesome/free-solid-svg-icons';
 
 // Remove the local interface since we're using the one from documentMatcher
 
@@ -302,14 +302,12 @@ const JobDescriptionsPage: React.FC = () => {
   // CSV import modal state
   const [showCSVImportModal, setShowCSVImportModal] = useState(false);
 
-  // Document preview modal state
-  const [showDocumentPreviewModal, setShowDocumentPreviewModal] = useState(false);
-  const [previewDocument, setPreviewDocument] = useState<Resume | CoverLetter | null>(null);
-  const [previewDocumentIsLinked, setPreviewDocumentIsLinked] = useState(false);
-  const [previewDocumentOnLink, setPreviewDocumentOnLink] = useState<(() => void) | null>(null);
+
 
   // Linked documents search state
   const [linkedDocumentsSearch, setLinkedDocumentsSearch] = useState('');
+  const [showDocumentLinkingModal, setShowDocumentLinkingModal] = useState(false);
+  const [documentLinkingSearch, setDocumentLinkingSearch] = useState('');
 
   // Get next sequential job ID
   const getNextSequentialId = (): number => {
@@ -1157,19 +1155,14 @@ const JobDescriptionsPage: React.FC = () => {
     }
   };
 
-  // Document preview handlers
-  const handlePreviewDocument = (document: Resume | CoverLetter, isLinked: boolean, onLink: () => void) => {
-    setPreviewDocument(document);
-    setPreviewDocumentIsLinked(isLinked);
-    setPreviewDocumentOnLink(() => onLink);
-    setShowDocumentPreviewModal(true);
-  };
-
-  const handleCloseDocumentPreview = () => {
-    setShowDocumentPreviewModal(false);
-    setPreviewDocument(null);
-    setPreviewDocumentIsLinked(false);
-    setPreviewDocumentOnLink(null);
+  // Simple preview function that opens content in new tab
+  const handlePreviewDocument = (document: Resume | CoverLetter) => {
+    const content = document.textContent || 'No content available';
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    // Clean up the URL object after a short delay
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
   // Markdown Resume Generation Prompt Validator
@@ -1629,7 +1622,7 @@ const JobDescriptionsPage: React.FC = () => {
               disabled={showAddForm}
               title="Import job applications from CSV file"
             >
-              📄 Import CSV
+              <FontAwesomeIcon icon={faFileImport} /> Import CSV
             </button>
           </div>
         )}
@@ -1786,7 +1779,7 @@ AI will automatically fill in the job title and company name fields above!"
                   }}
                     title={`Input: ${lastParseUsage.promptTokens} tokens, Output: ${lastParseUsage.completionTokens} tokens, Total: ${lastParseUsage.totalTokens} tokens`}
                   >
-                    📊 {lastParseUsage.promptTokens}↗ {lastParseUsage.completionTokens}↘ • 💰 {estimateCost(lastParseUsage)}
+                    <FontAwesomeIcon icon={faChartBar} /> {lastParseUsage.promptTokens}<FontAwesomeIcon icon={faArrowUp} /> {lastParseUsage.completionTokens}<FontAwesomeIcon icon={faArrowDown} /> • <FontAwesomeIcon icon={faDollarSign} /> {estimateCost(lastParseUsage)}
                   </small>
                 )}
 
@@ -1806,7 +1799,7 @@ AI will automatically fill in the job title and company name fields above!"
                   }}
                   title="Re-analyze the job description text with AI to extract missing company/title info"
                 >
-                  {isReparsing ? 'Re-parsing...' : '🔄 Re-parse with AI'}
+                  {isReparsing ? 'Re-parsing...' : <><FontAwesomeIcon icon={faSync} /> Re-parse with AI</>}
                 </button>
               </div>
             </div>
@@ -1863,8 +1856,8 @@ AI will automatically fill in the job title and company name fields above!"
               >
                 <option value="">Select...</option>
                 <option value="low">Low</option>
-                <option value="medium">👍 Medium</option>
-                <option value="high">🔥 High</option>
+                <option value="medium"><FontAwesomeIcon icon={faThumbsUp} /> Medium</option>
+                <option value="high"><FontAwesomeIcon icon={faFire} /> High</option>
               </select>
             </div>
           </div>
@@ -2172,7 +2165,7 @@ AI will automatically fill in the job title and company name fields above!"
                   {showExpandedStats && (
                     <div className="expanded-stats">
                       <div className="analytics-section">
-                        <h4>📊 Advanced Analytics</h4>
+                        <h4><FontAwesomeIcon icon={faChartBar} /> Advanced Analytics</h4>
                         <div className="analytics-grid">
                           <div className="analytics-item">
                             <span className="analytics-label">Days Since First</span>
@@ -2241,7 +2234,7 @@ AI will automatically fill in the job title and company name fields above!"
                               className={`chart-toggle-btn ${chartType === 'bar' ? 'active' : ''}`}
                               onClick={() => setChartType('bar')}
                             >
-                              📊 Bars
+                              <FontAwesomeIcon icon={faChartBar} /> Bars
                             </button>
                             <button
                               className={`chart-toggle-btn ${chartType === 'line' ? 'active' : ''}`}
@@ -2440,7 +2433,41 @@ AI will automatically fill in the job title and company name fields above!"
                 {selectedJob && (
                   <div className="job-details">
                     <div className="job-details-header">
-                      <h2>{selectedJob.title}</h2>
+                      <div className="job-title-section">
+                        <h2>{selectedJob.title}</h2>
+                        <div className="document-link-indicator">
+                          <button
+                            className={`paperclip-button ${selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0
+                              ? 'no-documents'
+                              : 'has-documents'
+                              }`}
+                            onClick={() => setShowDocumentLinkingModal(true)}
+                            title={
+                              selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0
+                                ? 'No documents linked. Click to search and link documents.'
+                                : `${selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length} document(s) linked: ${[
+                                  ...selectedJob.linkedResumeIds.map(id => {
+                                    const resume = state.resumes.find(r => r.id === id);
+                                    return resume ? `📄 ${resume.name || resume.fileName}` : '';
+                                  }),
+                                  ...selectedJob.linkedCoverLetterIds.map(id => {
+                                    const coverLetter = state.coverLetters.find(cl => cl.id === id);
+                                    return coverLetter ? `📝 ${coverLetter.name || coverLetter.fileName}` : '';
+                                  })
+                                ].filter(Boolean).join('\n')}`
+                            }
+                          >
+                            <FontAwesomeIcon icon={faPaperclip} />
+                            {selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0 ? (
+                              <FontAwesomeIcon icon={faPlus} className="add-icon" />
+                            ) : (
+                              <span className="document-count">
+                                {selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      </div>
                       <div className="job-actions">
                         <button
                           className="close-split-button"
@@ -2641,147 +2668,37 @@ AI will automatically fill in the job title and company name fields above!"
                       )}
                     </div>
 
-                    {/* Linked Documents Section */}
-                    <div className="linked-documents-section">
-                      <div className="linked-documents-header">
-                        <h3>Linked Documents</h3>
-                        {(selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0) && (
-                          <div className="linked-documents-search">
-                            <input
-                              type="text"
-                              placeholder="Search linked documents..."
-                              value={linkedDocumentsSearch}
-                              onChange={(e) => setLinkedDocumentsSearch(e.target.value)}
-                              className="search-input"
-                            />
-                            {linkedDocumentsSearch && (
-                              <button
-                                onClick={() => setLinkedDocumentsSearch('')}
-                                className="clear-search-button"
-                                title="Clear search"
-                              >
-                                ✕
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Filtered Linked Resumes */}
-                      {(() => {
-                        const filteredResumes = selectedJob.linkedResumeIds
-                          .map((resumeId) => state.resumes.find((r: any) => r.id === resumeId))
-                          .filter((resume) => {
-                            if (!resume) return false;
-                            if (!linkedDocumentsSearch) return true;
-                            const searchTerm = linkedDocumentsSearch.toLowerCase();
-                            const resumeName = (resume.name || resume.fileName || '').toLowerCase();
-                            const resumeContent = (resume.textContent || '').toLowerCase();
-                            return resumeName.includes(searchTerm) || resumeContent.includes(searchTerm);
-                          });
-
-                        return filteredResumes.length > 0 && (
-                          <div className="linked-category">
-                            <h4>📄 Resumes ({filteredResumes.length}{linkedDocumentsSearch ? ` of ${selectedJob.linkedResumeIds.length}` : ''})</h4>
-                            <div className="linked-documents-list">
-                              {filteredResumes.map((resume) => (
-                                <div key={resume!.id} className="linked-document-item">
-                                  <div className="document-info">
-                                    <span className="document-title">{resume!.name || resume!.fileName}</span>
-                                    <span className="document-date">
-                                      {new Date(resume!.uploadDate).toLocaleDateString()}
-                                    </span>
-                                  </div>
-                                  <div className="document-actions">
-                                    <button
-                                      className="view-button"
-                                      onClick={() => {
-                                        const isLinked = selectedJob.linkedResumeIds.includes(resume!.id);
-                                        const onLink = () => handleLinkResume(selectedJob.id, resume!.id);
-                                        handlePreviewDocument(resume!, isLinked, onLink);
-                                      }}
-                                      title="Preview document content"
-                                    >
-                                      👁️ Preview
-                                    </button>
-                                    <button
-                                      className="unlink-button"
-                                      onClick={() => handleLinkResume(selectedJob.id, resume!.id)}
-                                      title="Unlink from this job"
-                                    >
-                                      🔗 Unlink
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Filtered Linked Cover Letters */}
-                      {(() => {
-                        const filteredCoverLetters = selectedJob.linkedCoverLetterIds
-                          .map((coverLetterId) => state.coverLetters.find((cl: any) => cl.id === coverLetterId))
-                          .filter((coverLetter) => {
-                            if (!coverLetter) return false;
-                            if (!linkedDocumentsSearch) return true;
-                            const searchTerm = linkedDocumentsSearch.toLowerCase();
-                            const coverLetterName = (coverLetter.name || coverLetter.fileName || '').toLowerCase();
-                            const coverLetterContent = (coverLetter.textContent || '').toLowerCase();
-                            const targetCompany = ((coverLetter as CoverLetter).targetCompany || '').toLowerCase();
-                            const targetPosition = ((coverLetter as CoverLetter).targetPosition || '').toLowerCase();
-                            return coverLetterName.includes(searchTerm) ||
-                              coverLetterContent.includes(searchTerm) ||
-                              targetCompany.includes(searchTerm) ||
-                              targetPosition.includes(searchTerm);
-                          });
-
-                        return filteredCoverLetters.length > 0 && (
-                          <div className="linked-category">
-                            <h4>📝 Cover Letters ({filteredCoverLetters.length}{linkedDocumentsSearch ? ` of ${selectedJob.linkedCoverLetterIds.length}` : ''})</h4>
-                            <div className="linked-documents-list">
-                              {filteredCoverLetters.map((coverLetter) => (
-                                <div key={coverLetter!.id} className="linked-document-item">
-                                  <div className="document-info">
-                                    <span className="document-title">{coverLetter!.name || coverLetter!.fileName}</span>
-                                    <span className="document-date">
-                                      {new Date(coverLetter!.uploadDate).toLocaleDateString()}
-                                    </span>
-                                  </div>
-                                  <div className="document-actions">
-                                    <button
-                                      className="view-button"
-                                      onClick={() => {
-                                        const isLinked = selectedJob.linkedCoverLetterIds.includes(coverLetter!.id);
-                                        const onLink = () => handleLinkCoverLetter(selectedJob.id, coverLetter!.id);
-                                        handlePreviewDocument(coverLetter!, isLinked, onLink);
-                                      }}
-                                      title="Preview document content"
-                                    >
-                                      👁️ Preview
-                                    </button>
-                                    <button
-                                      className="unlink-button"
-                                      onClick={() => handleLinkCoverLetter(selectedJob.id, coverLetter!.id)}
-                                      title="Unlink from this job"
-                                    >
-                                      🔗 Unlink
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0 && (
-                        <p className="no-linked-documents">
-                          No documents linked to this job yet. Generate new documents or link existing ones from the matching results below.
+                    {/* Linked Documents Summary */}
+                    {(selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0) && (
+                      <div className="linked-documents-summary">
+                        <h3>Linked Documents ({selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length})</h3>
+                        <div className="document-summary-list">
+                          {selectedJob.linkedResumeIds.map(resumeId => {
+                            const resume = state.resumes.find(r => r.id === resumeId);
+                            return resume ? (
+                              <div key={resume.id} className="document-summary-item">
+                                <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
+                                <span className="document-name">{resume.name || resume.fileName}</span>
+                                <span className="document-type">Resume</span>
+                              </div>
+                            ) : null;
+                          })}
+                          {selectedJob.linkedCoverLetterIds.map(coverLetterId => {
+                            const coverLetter = state.coverLetters.find(cl => cl.id === coverLetterId);
+                            return coverLetter ? (
+                              <div key={coverLetter.id} className="document-summary-item">
+                                <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
+                                <span className="document-name">{coverLetter.name || coverLetter.fileName}</span>
+                                <span className="document-type">Cover Letter</span>
+                              </div>
+                            ) : null;
+                          })}
+                        </div>
+                        <p className="document-summary-note">
+                          <FontAwesomeIcon icon={faPaperclip} /> Click the paperclip icon next to the job title to manage linked documents.
                         </p>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {selectedJob.additionalContext && (
                       <div className="additional-context-section">
@@ -2803,7 +2720,7 @@ AI will automatically fill in the job title and company name fields above!"
                               onClick={() => handleQuickNote(selectedJob.id, 'Applied')}
                               title="Mark as applied"
                             >
-                              📝 Applied
+                              <FontAwesomeIcon icon={faFileAlt} /> Applied
                             </button>
                             <button
                               className="quick-note-btn"
@@ -2824,7 +2741,7 @@ AI will automatically fill in the job title and company name fields above!"
                               onClick={() => handleQuickNote(selectedJob.id, 'Rejected')}
                               title="Mark as rejected"
                             >
-                              ❌ Rejected
+                              <FontAwesomeIcon icon={faTimes} /> Rejected
                             </button>
                           </div>
                           <button
@@ -2918,7 +2835,7 @@ AI will automatically fill in the job title and company name fields above!"
                               className="toggle-checkbox"
                             />
                             <span className="toggle-text">
-                              📄 Use Full Text Generation for Resume
+                              <FontAwesomeIcon icon={faFileAlt} /> Use Full Text Generation for Resume
                               <span className="toggle-badge">{useFullTextForResume ? 'ON' : 'OFF'}</span>
                             </span>
                           </label>
@@ -2939,7 +2856,7 @@ AI will automatically fill in the job title and company name fields above!"
                               className="toggle-checkbox"
                             />
                             <span className="toggle-text">
-                              📄 Use Full Text Generation for Cover Letter
+                              <FontAwesomeIcon icon={faFileAlt} /> Use Full Text Generation for Cover Letter
                               <span className="toggle-badge">{useFullTextForCoverLetter ? 'ON' : 'OFF'}</span>
                             </span>
                           </label>
@@ -2969,7 +2886,7 @@ AI will automatically fill in the job title and company name fields above!"
                                 <span className="resume-name">
                                   {match.documentName}
                                   <span className="document-type-badge">
-                                    {match.documentType === 'resume' ? '📄' : '📝'}
+                                    <FontAwesomeIcon icon={faFileAlt} />
                                   </span>
                                 </span>
                                 <span className="match-score">
@@ -2996,7 +2913,7 @@ AI will automatically fill in the job title and company name fields above!"
                                           }
                                         };
 
-                                        handlePreviewDocument(document, isLinked, onLink);
+                                        handlePreviewDocument(document);
                                       }
                                     }}
                                     title="Preview document content"
@@ -3294,13 +3211,290 @@ AI will automatically fill in the job title and company name fields above!"
         existingJobs={state.jobDescriptions}
       />
 
-      <DocumentPreviewModal
-        isOpen={showDocumentPreviewModal}
-        onClose={handleCloseDocumentPreview}
-        document={previewDocument}
-        onLink={previewDocumentOnLink || undefined}
-        isLinked={previewDocumentIsLinked}
-      />
+
+
+      {/* Document Linking Modal */}
+      {showDocumentLinkingModal && selectedJob && (
+        <div className="modal-overlay" onClick={() => setShowDocumentLinkingModal(false)}>
+          <div className="modal-content document-linking-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Link Documents to "{selectedJob.title}"</h3>
+              <button
+                className="modal-close"
+                onClick={() => setShowDocumentLinkingModal(false)}
+                title="Close"
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {/* Search Bar */}
+              <div className="document-search-section">
+                <div className="search-input-container">
+                  <FontAwesomeIcon icon={faSearch} className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search documents by name or content..."
+                    value={documentLinkingSearch}
+                    onChange={(e) => setDocumentLinkingSearch(e.target.value)}
+                    className="search-input"
+                    autoFocus
+                  />
+                  {documentLinkingSearch && (
+                    <button
+                      onClick={() => setDocumentLinkingSearch('')}
+                      className="clear-search-button"
+                      title="Clear search"
+                    >
+                      <FontAwesomeIcon icon={faTimes} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Currently Linked Documents */}
+              {(selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0) && (
+                <div className="linked-documents-section">
+                  <h4>Currently Linked Documents ({selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length})</h4>
+
+                  {/* Linked Resumes */}
+                  {selectedJob.linkedResumeIds.length > 0 && (
+                    <div className="document-category">
+                      <h5><FontAwesomeIcon icon={faFileAlt} /> Resumes ({selectedJob.linkedResumeIds.length})</h5>
+                      <div className="documents-list">
+                        {selectedJob.linkedResumeIds.map((resumeId) => {
+                          const resume = state.resumes.find(r => r.id === resumeId);
+                          if (!resume) return null;
+                          return (
+                            <div key={resume.id} className="document-item linked">
+                              <div className="document-info">
+                                <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
+                                <div className="document-details">
+                                  <span className="document-name">{resume.name || resume.fileName}</span>
+                                  <span className="document-date">{new Date(resume.uploadDate).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                              <div className="document-actions">
+                                <button
+                                  className="preview-doc-button"
+                                  onClick={() => handlePreviewDocument(resume)}
+                                  title="Preview this resume in new tab"
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                </button>
+                                <button
+                                  className="unlink-button"
+                                  onClick={() => handleLinkResume(selectedJob.id, resume.id)}
+                                  title="Unlink this resume"
+                                >
+                                  Unlink
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Linked Cover Letters */}
+                  {selectedJob.linkedCoverLetterIds.length > 0 && (
+                    <div className="document-category">
+                      <h5><FontAwesomeIcon icon={faFileAlt} /> Cover Letters ({selectedJob.linkedCoverLetterIds.length})</h5>
+                      <div className="documents-list">
+                        {selectedJob.linkedCoverLetterIds.map((coverLetterId) => {
+                          const coverLetter = state.coverLetters.find(cl => cl.id === coverLetterId);
+                          if (!coverLetter) return null;
+                          return (
+                            <div key={coverLetter.id} className="document-item linked">
+                              <div className="document-info">
+                                <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
+                                <div className="document-details">
+                                  <span className="document-name">{coverLetter.name || coverLetter.fileName}</span>
+                                  <span className="document-date">{new Date(coverLetter.uploadDate).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                              <div className="document-actions">
+                                <button
+                                  className="preview-doc-button"
+                                  onClick={() => handlePreviewDocument(coverLetter)}
+                                  title="Preview this cover letter in new tab"
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                </button>
+                                <button
+                                  className="unlink-button"
+                                  onClick={() => handleLinkCoverLetter(selectedJob.id, coverLetter.id)}
+                                  title="Unlink this cover letter"
+                                >
+                                  Unlink
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Available Documents to Link */}
+              <div className="available-documents-section">
+                <h4>Available Documents to Link</h4>
+
+                {/* Available Resumes */}
+                {(() => {
+                  const availableResumes = state.resumes.filter(resume => {
+                    // Filter out already linked resumes
+                    if (selectedJob.linkedResumeIds.includes(resume.id)) return false;
+
+                    // Apply search filter
+                    if (!documentLinkingSearch) return true;
+                    const searchTerm = documentLinkingSearch.toLowerCase();
+                    const resumeName = (resume.name || resume.fileName || '').toLowerCase();
+                    const resumeContent = (resume.textContent || '').toLowerCase();
+                    return resumeName.includes(searchTerm) || resumeContent.includes(searchTerm);
+                  });
+
+                  return availableResumes.length > 0 && (
+                    <div className="document-category">
+                      <h5><FontAwesomeIcon icon={faFileAlt} /> Resumes ({availableResumes.length})</h5>
+                      <div className="documents-list">
+                        {availableResumes.map((resume) => (
+                          <div key={resume.id} className="document-item available">
+                            <div className="document-info">
+                              <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
+                              <div className="document-details">
+                                <span className="document-name">{resume.name || resume.fileName}</span>
+                                <span className="document-date">{new Date(resume.uploadDate).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <div className="document-actions">
+                              <button
+                                className="preview-doc-button"
+                                onClick={() => window.open(`data:text/plain;charset=utf-8,${encodeURIComponent(resume.textContent || 'No content available')}`, '_blank')}
+                                title="Preview this resume in new tab"
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+                              <button
+                                className="link-button"
+                                onClick={() => handleLinkResume(selectedJob.id, resume.id)}
+                                title="Link this resume"
+                              >
+                                Link
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Available Cover Letters */}
+                {(() => {
+                  const availableCoverLetters = state.coverLetters.filter(coverLetter => {
+                    // Filter out already linked cover letters
+                    if (selectedJob.linkedCoverLetterIds.includes(coverLetter.id)) return false;
+
+                    // Apply search filter
+                    if (!documentLinkingSearch) return true;
+                    const searchTerm = documentLinkingSearch.toLowerCase();
+                    const coverLetterName = (coverLetter.name || coverLetter.fileName || '').toLowerCase();
+                    const coverLetterContent = (coverLetter.textContent || '').toLowerCase();
+                    const targetCompany = ((coverLetter as CoverLetter).targetCompany || '').toLowerCase();
+                    const targetPosition = ((coverLetter as CoverLetter).targetPosition || '').toLowerCase();
+                    return coverLetterName.includes(searchTerm) ||
+                      coverLetterContent.includes(searchTerm) ||
+                      targetCompany.includes(searchTerm) ||
+                      targetPosition.includes(searchTerm);
+                  });
+
+                  return availableCoverLetters.length > 0 && (
+                    <div className="document-category">
+                      <h5><FontAwesomeIcon icon={faFileAlt} /> Cover Letters ({availableCoverLetters.length})</h5>
+                      <div className="documents-list">
+                        {availableCoverLetters.map((coverLetter) => (
+                          <div key={coverLetter.id} className="document-item available">
+                            <div className="document-info">
+                              <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
+                              <div className="document-details">
+                                <span className="document-name">{coverLetter.name || coverLetter.fileName}</span>
+                                <span className="document-date">{new Date(coverLetter.uploadDate).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <div className="document-actions">
+                              <button
+                                className="preview-doc-button"
+                                onClick={() => window.open(`data:text/plain;charset=utf-8,${encodeURIComponent(coverLetter.textContent || 'No content available')}`, '_blank')}
+                                title="Preview this cover letter in new tab"
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+                              <button
+                                className="link-button"
+                                onClick={() => handleLinkCoverLetter(selectedJob.id, coverLetter.id)}
+                                title="Link this cover letter"
+                              >
+                                Link
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* No documents message */}
+                {state.resumes.length === 0 && state.coverLetters.length === 0 && (
+                  <p className="no-documents-message">
+                    No documents available to link. Upload some resumes or cover letters first.
+                  </p>
+                )}
+
+                {/* No matching documents message */}
+                {(state.resumes.length > 0 || state.coverLetters.length > 0) &&
+                  state.resumes.filter(r => !selectedJob.linkedResumeIds.includes(r.id)).length === 0 &&
+                  state.coverLetters.filter(cl => !selectedJob.linkedCoverLetterIds.includes(cl.id)).length === 0 && (
+                    <p className="no-documents-message">
+                      All available documents are already linked to this job.
+                    </p>
+                  )}
+
+                {/* No search results message */}
+                {documentLinkingSearch &&
+                  state.resumes.filter(r => {
+                    if (selectedJob.linkedResumeIds.includes(r.id)) return false;
+                    const searchTerm = documentLinkingSearch.toLowerCase();
+                    const resumeName = (r.name || r.fileName || '').toLowerCase();
+                    const resumeContent = (r.textContent || '').toLowerCase();
+                    return resumeName.includes(searchTerm) || resumeContent.includes(searchTerm);
+                  }).length === 0 &&
+                  state.coverLetters.filter(cl => {
+                    if (selectedJob.linkedCoverLetterIds.includes(cl.id)) return false;
+                    const searchTerm = documentLinkingSearch.toLowerCase();
+                    const coverLetterName = (cl.name || cl.fileName || '').toLowerCase();
+                    const coverLetterContent = (cl.textContent || '').toLowerCase();
+                    const targetCompany = ((cl as CoverLetter).targetCompany || '').toLowerCase();
+                    const targetPosition = ((cl as CoverLetter).targetPosition || '').toLowerCase();
+                    return coverLetterName.includes(searchTerm) ||
+                      coverLetterContent.includes(searchTerm) ||
+                      targetCompany.includes(searchTerm) ||
+                      targetPosition.includes(searchTerm);
+                  }).length === 0 && (
+                    <p className="no-documents-message">
+                      No documents match your search "{documentLinkingSearch}".
+                    </p>
+                  )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Container */}
       <div className="toast-container">
@@ -3313,7 +3507,7 @@ AI will automatically fill in the job title and company name fields above!"
             <div className="toast-content">
               <span className="toast-icon">
                 {toast.type === 'success' && '✅'}
-                {toast.type === 'error' && '❌'}
+                {toast.type === 'error' && <FontAwesomeIcon icon={faTimes} />}
                 {toast.type === 'warning' && '⚠️'}
                 {toast.type === 'info' && 'ℹ️'}
               </span>

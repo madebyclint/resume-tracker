@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie } from '@fortawesome/free-solid-svg-icons';
 
 interface JobManagementTableProps {
   jobs: JobDescription[];
@@ -449,7 +449,7 @@ ${job.rawText}`;
     <div className="job-management-container">
       <div className="job-management-header">
         <h2 className="job-management-title">
-          📊 Job Applications
+          <FontAwesomeIcon icon={faChartPie} /> Job Applications
           <span className="job-count-badge">{filteredJobs.length} of {jobs.length}</span>
         </h2>
 
@@ -559,7 +559,7 @@ ${job.rawText}`;
               <tr>
                 <td colSpan={7}>
                   <div className="empty-state">
-                    <div className="empty-state-icon">📋</div>
+                    <div className="empty-state-icon"><FontAwesomeIcon icon={faCopy} size="2x" /></div>
                     <div className="empty-state-title">
                       {jobs.length === 0 ? 'No job applications yet' : 'No jobs match your filters'}
                     </div>
@@ -611,7 +611,7 @@ ${job.rawText}`;
                           className="action-btn edit-btn"
                           title="Edit job"
                         >
-                          ✏️
+                          <FontAwesomeIcon icon={faEdit} />
                         </button>
                         <button
                           onClick={(e) => {
@@ -621,7 +621,7 @@ ${job.rawText}`;
                           className="action-btn copy-btn"
                           title="Copy job description text"
                         >
-                          📋
+                          <FontAwesomeIcon icon={faCopy} />
                         </button>
                         <button
                           onClick={(e) => {
@@ -631,7 +631,7 @@ ${job.rawText}`;
                           className="action-btn copy-excel-btn"
                           title="Copy row for Excel (tab-separated)"
                         >
-                          📊
+                          <FontAwesomeIcon icon={faTable} />
                         </button>
                         <button
                           onClick={(e) => {
@@ -641,7 +641,7 @@ ${job.rawText}`;
                           className="action-btn copy-filename-btn"
                           title="Copy filename suggestion for resume"
                         >
-                          📝
+                          <FontAwesomeIcon icon={faFileAlt} />
                         </button>
                         <button
                           onClick={(e) => {
@@ -651,7 +651,7 @@ ${job.rawText}`;
                           className="action-btn copy-chat-btn"
                           title="Copy for chat (with resume instructions)"
                         >
-                          💬
+                          <FontAwesomeIcon icon={faComment} />
                         </button>
                         <button
                           onClick={(e) => {
@@ -661,7 +661,7 @@ ${job.rawText}`;
                           className="action-btn delete-btn"
                           title="Delete job"
                         >
-                          🗑️
+                          <FontAwesomeIcon icon={faTrash} />
                         </button>
                       </span>
                     </div>

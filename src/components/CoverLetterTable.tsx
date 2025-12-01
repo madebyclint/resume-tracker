@@ -186,7 +186,7 @@ export default function CoverLetterTable({
       }));
 
       if (textContent && textContent.trim().length > 0) {
-        alert(`✅ Text extracted successfully!\n\n📄 ${textContent.length} characters extracted`);
+        alert(`Text extracted successfully!\n\n${textContent.length} characters extracted`);
       } else {
         const shouldTryAgain = confirm(`❌ Automatic text extraction failed.\n\nThis can happen with:\n• Complex Word document layouts\n• Password-protected documents\n• Corrupted Word files\n\n🔧 Would you like to try the manual text input method?\n\n(Click OK to manually paste text, or Cancel to skip)`);
 
@@ -208,7 +208,7 @@ export default function CoverLetterTable({
               )
             }));
 
-            alert(`✅ Manual text input successful!\n\n📄 ${manualText.trim().length} characters added`);
+            alert(`Manual text input successful!\n\n${manualText.trim().length} characters added`);
           }
         }
       }
