@@ -227,7 +227,9 @@ const JobDescriptionsPage: React.FC = () => {
     contactName: '',
     contactEmail: '',
     contactPhone: '',
-    impact: '' as 'low' | 'medium' | 'high' | ''
+    impact: '' as 'low' | 'medium' | 'high' | '',
+    applicationDate: '',
+    applicationStatus: '' as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
@@ -272,6 +274,107 @@ const JobDescriptionsPage: React.FC = () => {
     type: 'success' | 'error' | 'warning' | 'info';
     duration?: number;
   }>>([]);
+
+  // Memoized calculations for better performance
+  const statsData = useMemo(() => {
+    // Basic status stats - do in one pass instead of multiple filters
+    const stats = { not_applied: 0, applied: 0, interviewing: 0, rejected: 0, offered: 0, withdrawn: 0 };
+    state.jobDescriptions.forEach(job => {
+      const status = job.applicationStatus || 'not_applied';
+      if (status in stats) {
+        stats[status as keyof typeof stats]++;
+      }
+    });
+    const total = state.jobDescriptions.length;
+
+    // Advanced analytics calculations - optimize with single pass
+    let jobsWithDates = [];
+    const impactStats = { low: 0, medium: 0, high: 0 };
+    const aiStats = { totalTokens: 0, totalCost: 0, parseCount: 0, jobsWithAI: 0 };
+
+    // Single pass through all jobs for multiple calculations
+    for (const job of state.jobDescriptions) {
+      // Collect jobs with dates
+      if (job.uploadDate || job.applicationDate) {
+        jobsWithDates.push(job);
+      }
+
+      // Count impact stats
+      if (job.impact && job.impact in impactStats) {
+        impactStats[job.impact as keyof typeof impactStats]++;
+      }
+
+      // AI stats
+      if (job.aiUsage) {
+        aiStats.totalTokens += job.aiUsage.totalTokens;
+        aiStats.totalCost += job.aiUsage.estimatedCost;
+        aiStats.parseCount += job.aiUsage.parseCount;
+        aiStats.jobsWithAI += 1;
+      }
+    }
+
+    // Only sort the jobs with dates
+    jobsWithDates.sort((a, b) => {
+      const dateA = new Date(a.applicationDate || a.uploadDate);
+      const dateB = new Date(b.applicationDate || b.uploadDate);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    const firstJobDate = jobsWithDates.length > 0 ? new Date(jobsWithDates[0].applicationDate || jobsWithDates[0].uploadDate) : new Date();
+    const daysSinceFirst = Math.floor((new Date().getTime() - firstJobDate.getTime()) / (1000 * 60 * 60 * 24));
+    const avgPerDay = daysSinceFirst > 0 ? (total / daysSinceFirst).toFixed(2) : '0';
+
+    const totalWithImpact = impactStats.low + impactStats.medium + impactStats.high;
+    const impactRatio = totalWithImpact > 0 ? ((impactStats.high / totalWithImpact) * 100).toFixed(0) : '0';
+
+    // Daily velocity data for chart (last 14 days)
+    const dailyData = [];
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const count = state.jobDescriptions.filter(job => {
+        const jobDate = (job.applicationDate || job.uploadDate)?.split('T')[0];
+        return jobDate === dateStr;
+      }).length;
+      dailyData.push({ date: dateStr, count, displayDate: date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
+    }
+
+    // Weekly velocity data for chart (last 8 weeks)
+    const weeklyData = [];
+    for (let i = 7; i >= 0; i--) {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - (i * 7));
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 6);
+
+      const count = state.jobDescriptions.filter(job => {
+        const jobDate = new Date(job.applicationDate || job.uploadDate);
+        return jobDate >= startDate && jobDate <= endDate;
+      }).length;
+
+      const weekNum = Math.floor(endDate.getTime() / (1000 * 60 * 60 * 24 * 7));
+      weeklyData.push({
+        week: `W${weekNum % 52}`,
+        count,
+        startDate: startDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
+        endDate: endDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
+        displayWeek: startDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+      });
+    }
+
+    return {
+      stats,
+      total,
+      daysSinceFirst,
+      avgPerDay,
+      impactStats,
+      impactRatio,
+      aiStats,
+      dailyData,
+      weeklyData
+    };
+  }, [state.jobDescriptions]);
 
   // Generation modal states
   const [showGeneratedModal, setShowGeneratedModal] = useState(false);
@@ -493,7 +596,9 @@ const JobDescriptionsPage: React.FC = () => {
       contactName: job.contact?.name || '',
       contactEmail: job.contact?.email || '',
       contactPhone: job.contact?.phone || '',
-      impact: job.impact || ''
+      impact: job.impact || '',
+      applicationDate: job.applicationDate?.split('T')[0] || '',
+      applicationStatus: job.applicationStatus || ''
     });
     setEditingJobId(jobId);
     setShowAddForm(true);
@@ -522,7 +627,9 @@ const JobDescriptionsPage: React.FC = () => {
       contactName: '',
       contactEmail: '',
       contactPhone: '',
-      impact: ''
+      impact: '',
+      applicationDate: '',
+      applicationStatus: ''
     });
     setShowAddForm(false);
     setFetchError(null);
@@ -580,6 +687,8 @@ const JobDescriptionsPage: React.FC = () => {
             phone: formData.contactPhone.trim() || undefined
           } : undefined,
           impact: formData.impact || undefined,
+          applicationDate: formData.applicationDate || existingJob.applicationDate,
+          applicationStatus: formData.applicationStatus || existingJob.applicationStatus || 'not_applied',
           // Keep existing extractedInfo and keywords if not re-parsed
           extractedInfo: existingJob.extractedInfo || {
             requiredSkills: [],
@@ -645,7 +754,8 @@ const JobDescriptionsPage: React.FC = () => {
           uploadDate: new Date().toISOString(),
           linkedResumeIds: [],
           linkedCoverLetterIds: [],
-          applicationStatus: 'not_applied'
+          applicationStatus: formData.applicationStatus || 'not_applied',
+          applicationDate: formData.applicationDate || undefined
         };
 
         // Parse job description with AI if configured and text is available
@@ -731,7 +841,9 @@ const JobDescriptionsPage: React.FC = () => {
         contactName: '',
         contactEmail: '',
         contactPhone: '',
-        impact: ''
+        impact: '',
+        applicationDate: '',
+        applicationStatus: ''
       });
       setShowAddForm(false);
 
@@ -1629,7 +1741,10 @@ const JobDescriptionsPage: React.FC = () => {
       </div >
 
       {showAddForm && (
-        <div className="add-job-form">
+        <div
+          className="add-job-form"
+          ref={(el) => el?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
           <div className="form-header">
             <h2>{editingJobId ? 'Edit Job Description' : 'Add New Job Description'}</h2>
             <div className="form-header-actions">
@@ -1982,6 +2097,36 @@ AI will automatically fill in the job title and company name fields above!"
             </div>
           </div>
 
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="application-date">Application Date</label>
+              <input
+                id="application-date"
+                type="date"
+                value={formData.applicationDate}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicationDate: e.target.value }))}
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="application-status">Application Status</label>
+              <select
+                id="application-status"
+                value={formData.applicationStatus}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicationStatus: e.target.value as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | '' }))}
+                disabled={isProcessing}
+              >
+                <option value="">Select...</option>
+                <option value="not_applied">Not Applied</option>
+                <option value="applied">Applied</option>
+                <option value="interviewing">Interviewing</option>
+                <option value="rejected">Rejected</option>
+                <option value="offered">Offered</option>
+                <option value="withdrawn">Withdrawn</option>
+              </select>
+            </div>
+          </div>
+
           <div className="form-group">
             <label htmlFor="additional-context">Additional Context (Optional)</label>
             <textarea
@@ -2038,87 +2183,7 @@ AI will automatically fill in the job title and company name fields above!"
         <div className="job-stats-section">
           <div className="stats-container">
             {(() => {
-              // Basic status stats
-              const stats = {
-                not_applied: state.jobDescriptions.filter(job => !job.applicationStatus || job.applicationStatus === 'not_applied').length,
-                applied: state.jobDescriptions.filter(job => job.applicationStatus === 'applied').length,
-                interviewing: state.jobDescriptions.filter(job => job.applicationStatus === 'interviewing').length,
-                rejected: state.jobDescriptions.filter(job => job.applicationStatus === 'rejected').length,
-                offered: state.jobDescriptions.filter(job => job.applicationStatus === 'offered').length,
-                withdrawn: state.jobDescriptions.filter(job => job.applicationStatus === 'withdrawn').length,
-              };
-              const total = state.jobDescriptions.length;
-
-              // Advanced analytics calculations
-              const jobsWithDates = state.jobDescriptions.filter(job => job.uploadDate || job.applicationDate).sort((a, b) => {
-                const dateA = new Date(a.applicationDate || a.uploadDate);
-                const dateB = new Date(b.applicationDate || b.uploadDate);
-                return dateA.getTime() - dateB.getTime();
-              });
-
-              const firstJobDate = jobsWithDates.length > 0 ? new Date(jobsWithDates[0].applicationDate || jobsWithDates[0].uploadDate) : new Date();
-              const daysSinceFirst = Math.floor((new Date().getTime() - firstJobDate.getTime()) / (1000 * 60 * 60 * 24));
-              const avgPerDay = daysSinceFirst > 0 ? (total / daysSinceFirst).toFixed(2) : '0';
-
-              // Impact stats
-              const impactStats = {
-                low: state.jobDescriptions.filter(job => job.impact === 'low').length,
-                medium: state.jobDescriptions.filter(job => job.impact === 'medium').length,
-                high: state.jobDescriptions.filter(job => job.impact === 'high').length,
-              };
-              const totalWithImpact = impactStats.low + impactStats.medium + impactStats.high;
-              const impactRatio = totalWithImpact > 0 ? ((impactStats.high / totalWithImpact) * 100).toFixed(0) : '0';
-
-              // AI Usage and Cost tracking
-              const aiStats = state.jobDescriptions.reduce((acc, job) => {
-                if (job.aiUsage) {
-                  acc.totalTokens += job.aiUsage.totalTokens;
-                  acc.totalCost += job.aiUsage.estimatedCost;
-                  acc.parseCount += job.aiUsage.parseCount;
-                  acc.jobsWithAI += 1;
-                }
-                return acc;
-              }, {
-                totalTokens: 0,
-                totalCost: 0,
-                parseCount: 0,
-                jobsWithAI: 0
-              });
-
-              // Daily velocity data for chart (last 14 days)
-              const dailyData = [];
-              for (let i = 13; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                const dateStr = date.toISOString().split('T')[0];
-                const count = state.jobDescriptions.filter(job => {
-                  const jobDate = (job.applicationDate || job.uploadDate)?.split('T')[0];
-                  return jobDate === dateStr;
-                }).length;
-                dailyData.push({ date: dateStr, count, displayDate: date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
-              }
-
-              // Weekly velocity data (last 8 weeks)
-              const weeklyData = [];
-              for (let i = 7; i >= 0; i--) {
-                const endDate = new Date();
-                endDate.setDate(endDate.getDate() - (i * 7));
-                const startDate = new Date(endDate);
-                startDate.setDate(startDate.getDate() - 6);
-
-                const count = state.jobDescriptions.filter(job => {
-                  const jobDate = new Date(job.applicationDate || job.uploadDate);
-                  return jobDate >= startDate && jobDate <= endDate;
-                }).length;
-
-                const weekNum = Math.floor(endDate.getTime() / (1000 * 60 * 60 * 24 * 7));
-                weeklyData.push({
-                  week: `W${weekNum % 52}`,
-                  count,
-                  startDate: startDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
-                  endDate: endDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
-                });
-              }
+              const { stats, total, daysSinceFirst, avgPerDay, impactStats, impactRatio, aiStats, dailyData, weeklyData } = statsData;
 
               return (
                 <>
