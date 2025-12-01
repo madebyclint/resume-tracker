@@ -1856,8 +1856,8 @@ AI will automatically fill in the job title and company name fields above!"
               >
                 <option value="">Select...</option>
                 <option value="low">Low</option>
-                <option value="medium"><FontAwesomeIcon icon={faThumbsUp} /> Medium</option>
-                <option value="high"><FontAwesomeIcon icon={faFire} /> High</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
               </select>
             </div>
           </div>
