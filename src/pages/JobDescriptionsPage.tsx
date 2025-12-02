@@ -301,9 +301,13 @@ const JobDescriptionsPage: React.FC = () => {
         jobsWithDates.push(job);
       }
 
-      // Count impact stats
+      // Count impact stats - only for jobs that have been at least applied to
       if (job.impact && job.impact in impactStats) {
-        impactStats[job.impact as keyof typeof impactStats]++;
+        const applicationStatus = job.applicationStatus || 'not_applied';
+        // Only include jobs that have been applied to (not just created)
+        if (applicationStatus !== 'not_applied') {
+          impactStats[job.impact as keyof typeof impactStats]++;
+        }
       }
 
       // AI stats
@@ -2190,7 +2194,7 @@ AI will automatically fill in the job title and company name fields above!"
                             <span className="analytics-value">{avgPerDay}</span>
                           </div>
                           <div className="analytics-item">
-                            <span className="analytics-label">Impact Ratio</span>
+                            <span className="analytics-label">Impact Ratio (Applied)</span>
                             <span className="analytics-value">{impactRatio}%</span>
                           </div>
                           <div className="analytics-item">
