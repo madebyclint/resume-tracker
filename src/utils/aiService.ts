@@ -1,4 +1,5 @@
 import { JobDescription } from '../types';
+import { extractKeywordsFromText } from './documentMatcher';
 
 // AI Configuration
 interface AIConfig {
@@ -206,7 +207,17 @@ Extract the following information:
 - responsibilities: Key responsibilities as explicitly stated (limit to 5-8 main points)
 - requirements: Education, experience, and other requirements as explicitly stated
 
-Generate keywords from ONLY the skills, technologies, and domains actually mentioned in the text.
+KEYWORD EXTRACTION: Generate comprehensive keywords from ALL relevant terms mentioned in the text, including:
+- Technologies (JavaScript, React, AWS, Mendix, Salesforce, etc.)
+- Programming languages (Python, Java, C#, etc.) 
+- Frameworks and platforms (Angular, Vue, Spring, .NET, etc.)
+- Development platforms (Mendix, OutSystems, ServiceNow, etc.)
+- Job-related domains (frontend, backend, full-stack, DevOps, etc.)
+- Industry terms (fintech, healthcare, e-commerce, etc.)
+- Certifications and tools mentioned
+- Key business concepts and methodologies (Agile, Scrum, CI/CD, etc.)
+- Company-specific terms and products
+Be inclusive - capture all technical terms, platform names, and relevant business keywords that appear in the job description, even if they're not explicitly categorized as "required" or "preferred" skills.
 
 Return ONLY a valid JSON object with this structure:
 {
@@ -225,7 +236,7 @@ Return ONLY a valid JSON object with this structure:
     "responsibilities": ["Build scalable web applications", "Mentor junior developers"],
     "requirements": ["Bachelor's degree in CS", "5+ years experience"]
   },
-  "keywords": ["JavaScript", "React", "Node.js", "TypeScript", "AWS", "Docker", "SQL", "Senior", "Engineering", "Mentoring"]
+  "keywords": ["JavaScript", "React", "Node.js", "TypeScript", "AWS", "Docker", "SQL", "Senior", "Engineering", "Mentoring", "UI", "Frontend", "Architect", "TechCorp", "AI", "startup", "web applications"]
 }`;
 
 
@@ -398,9 +409,28 @@ ${text}`
       console.log('AI parsed response:', parsed);
       console.log('Extracted applicationId:', parsed.extractedInfo?.applicationId);
       
+      // Supplement AI keywords with local extraction to catch missed terms
+      const localKeywords = extractKeywordsFromText(text, 10);
+      const allSkills = [
+        ...(parsed.extractedInfo.requiredSkills || []),
+        ...(parsed.extractedInfo.preferredSkills || [])
+      ].map(skill => skill.toLowerCase());
+      
+      // Combine AI keywords with local extraction, ensuring important technical terms are included
+      const combinedKeywords = new Set([
+        ...(parsed.keywords || []),
+        ...localKeywords,
+        ...allSkills
+      ]);
+      
+      // Convert back to array and remove duplicates
+      const finalKeywords = Array.from(combinedKeywords)
+        .filter(keyword => keyword && keyword.length > 1)
+        .map(keyword => keyword.toLowerCase());
+      
       return {
         extractedInfo: parsed.extractedInfo,
-        keywords: parsed.keywords,
+        keywords: finalKeywords,
         success: true,
         usage: data.usage ? {
           promptTokens: data.usage.prompt_tokens,
