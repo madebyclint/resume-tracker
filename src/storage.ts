@@ -1,4 +1,4 @@
-import { AppState, Resume, CoverLetter, JobDescription, Chunk } from "./types";
+import { AppState, Resume, CoverLetter, JobDescription } from "./types";
 
 const DB_NAME = "ResumeTrackerDB";
 const DB_VERSION = 4;
@@ -6,7 +6,6 @@ const RESUME_STORE = "resumes";
 const COVER_LETTER_STORE = "coverLetters";
 const JOB_DESCRIPTION_STORE = "jobDescriptions";
 const PDF_STORE = "pdfs";
-const CHUNKS_STORE = "chunks";
 
 interface ResumeMetadata {
   id: string;
@@ -154,14 +153,6 @@ class IndexedDBStorage {
         // Create PDF data store
         if (!db.objectStoreNames.contains(PDF_STORE)) {
           db.createObjectStore(PDF_STORE, { keyPath: "id" });
-        }
-
-        // Create chunks store
-        if (!db.objectStoreNames.contains(CHUNKS_STORE)) {
-          const chunkStore = db.createObjectStore(CHUNKS_STORE, { keyPath: "id" });
-          chunkStore.createIndex("sourceDocId", "sourceDocId", { unique: false });
-          chunkStore.createIndex("type", "type", { unique: false });
-          chunkStore.createIndex("createdAt", "createdAt", { unique: false });
         }
       };
     });
@@ -385,24 +376,13 @@ class IndexedDBStorage {
     await this.init();
     if (!this.db) throw new Error("Database not initialized");
 
-    const transaction = this.db.transaction([COVER_LETTER_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
+    const transaction = this.db.transaction([COVER_LETTER_STORE, PDF_STORE], "readwrite");
     const coverLetterStore = transaction.objectStore(COVER_LETTER_STORE);
     const pdfStore = transaction.objectStore(PDF_STORE);
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-
-    // Delete all chunks associated with this cover letter
-    const chunksIndex = chunkStore.index("sourceDocId");
-    const chunkKeysRequest = chunksIndex.getAllKeys(id);
-    const chunkKeys = await this.promisifyRequest<string[]>(chunkKeysRequest);
-    
-    const deleteChunkPromises = chunkKeys.map(chunkId => 
-      this.promisifyRequest(chunkStore.delete(chunkId))
-    );
 
     await Promise.all([
       this.promisifyRequest(coverLetterStore.delete(id)),
-      this.promisifyRequest(pdfStore.delete(id)),
-      ...deleteChunkPromises
+      this.promisifyRequest(pdfStore.delete(id))
     ]);
   }
 
@@ -410,24 +390,13 @@ class IndexedDBStorage {
     await this.init();
     if (!this.db) throw new Error("Database not initialized");
 
-    const transaction = this.db.transaction([RESUME_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
+    const transaction = this.db.transaction([RESUME_STORE, PDF_STORE], "readwrite");
     const resumeStore = transaction.objectStore(RESUME_STORE);
     const pdfStore = transaction.objectStore(PDF_STORE);
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-
-    // Delete all chunks associated with this resume
-    const chunksIndex = chunkStore.index("sourceDocId");
-    const chunkKeysRequest = chunksIndex.getAllKeys(id);
-    const chunkKeys = await this.promisifyRequest<string[]>(chunkKeysRequest);
-    
-    const deleteChunkPromises = chunkKeys.map(chunkId => 
-      this.promisifyRequest(chunkStore.delete(chunkId))
-    );
 
     await Promise.all([
       this.promisifyRequest(resumeStore.delete(id)),
-      this.promisifyRequest(pdfStore.delete(id)),
-      ...deleteChunkPromises
+      this.promisifyRequest(pdfStore.delete(id))
     ]);
   }
 
@@ -472,108 +441,18 @@ class IndexedDBStorage {
     await this.init();
     if (!this.db) return;
 
-    const transaction = this.db.transaction([RESUME_STORE, COVER_LETTER_STORE, JOB_DESCRIPTION_STORE, PDF_STORE, CHUNKS_STORE], "readwrite");
+    const transaction = this.db.transaction([RESUME_STORE, COVER_LETTER_STORE, JOB_DESCRIPTION_STORE, PDF_STORE], "readwrite");
     const resumeStore = transaction.objectStore(RESUME_STORE);
     const coverLetterStore = transaction.objectStore(COVER_LETTER_STORE);
     const jobDescStore = transaction.objectStore(JOB_DESCRIPTION_STORE);
     const pdfStore = transaction.objectStore(PDF_STORE);
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
 
     await Promise.all([
       this.promisifyRequest(resumeStore.clear()),
       this.promisifyRequest(coverLetterStore.clear()),
       this.promisifyRequest(jobDescStore.clear()),
-      this.promisifyRequest(pdfStore.clear()),
-      this.promisifyRequest(chunkStore.clear()),
+      this.promisifyRequest(pdfStore.clear())
     ]);
-  }
-
-  // Chunk management methods
-  async saveChunk(chunk: Chunk): Promise<void> {
-    await this.init();
-    if (!this.db) throw new Error("Database not initialized");
-
-    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-    
-    return this.promisifyRequest(chunkStore.put(chunk));
-  }
-
-  async saveChunks(chunks: Chunk[]): Promise<void> {
-    await this.init();
-    if (!this.db) throw new Error("Database not initialized");
-
-    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-    
-    const promises = chunks.map(chunk => this.promisifyRequest(chunkStore.put(chunk)));
-    await Promise.all(promises);
-  }
-
-  async getChunksBySourceDoc(sourceDocId: string): Promise<Chunk[]> {
-    await this.init();
-    if (!this.db) return [];
-
-    const transaction = this.db.transaction([CHUNKS_STORE], "readonly");
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-    const index = chunkStore.index("sourceDocId");
-    
-    const chunks = await this.promisifyRequest<Chunk[]>(index.getAll(sourceDocId));
-    return chunks.sort((a, b) => a.order - b.order);
-  }
-
-  async getAllChunks(): Promise<Chunk[]> {
-    await this.init();
-    if (!this.db) return [];
-
-    const transaction = this.db.transaction([CHUNKS_STORE], "readonly");
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-    
-    return this.promisifyRequest<Chunk[]>(chunkStore.getAll());
-  }
-
-  async updateChunk(chunk: Chunk): Promise<void> {
-    await this.init();
-    if (!this.db) throw new Error("Database not initialized");
-
-    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-    
-    return this.promisifyRequest(chunkStore.put(chunk));
-  }
-
-  async deleteChunk(id: string): Promise<void> {
-    await this.init();
-    if (!this.db) throw new Error("Database not initialized");
-
-    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-    
-    return this.promisifyRequest(chunkStore.delete(id));
-  }
-
-  async deleteChunksBySourceDoc(sourceDocId: string): Promise<void> {
-    await this.init();
-    if (!this.db) throw new Error("Database not initialized");
-
-    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-    const index = chunkStore.index("sourceDocId");
-    
-    const chunks = await this.promisifyRequest<Chunk[]>(index.getAll(sourceDocId));
-    const deletePromises = chunks.map(chunk => this.promisifyRequest(chunkStore.delete(chunk.id)));
-    
-    await Promise.all(deletePromises);
-  }
-
-  async deleteAllChunks(): Promise<void> {
-    await this.init();
-    if (!this.db) throw new Error("Database not initialized");
-
-    const transaction = this.db.transaction([CHUNKS_STORE], "readwrite");
-    const chunkStore = transaction.objectStore(CHUNKS_STORE);
-    
-    return this.promisifyRequest(chunkStore.clear());
   }
 
   private promisifyRequest<T = any>(request: IDBRequest): Promise<T> {
@@ -898,78 +777,7 @@ export async function clearAllData(): Promise<void> {
   }
 }
 
-// Chunk management functions
-export async function saveChunk(chunk: Chunk): Promise<void> {
-  try {
-    await storage.saveChunk(chunk);
-  } catch (error) {
-    console.error("Failed to save chunk to IndexedDB", error);
-    throw error;
-  }
-}
 
-export async function saveChunks(chunks: Chunk[]): Promise<void> {
-  try {
-    await storage.saveChunks(chunks);
-  } catch (error) {
-    console.error("Failed to save chunks to IndexedDB", error);
-    throw error;
-  }
-}
-
-export async function getChunksBySourceDoc(sourceDocId: string): Promise<Chunk[]> {
-  try {
-    return await storage.getChunksBySourceDoc(sourceDocId);
-  } catch (error) {
-    console.error("Failed to get chunks from IndexedDB", error);
-    return [];
-  }
-}
-
-export async function getAllChunks(): Promise<Chunk[]> {
-  try {
-    return await storage.getAllChunks();
-  } catch (error) {
-    console.error("Failed to get all chunks from IndexedDB", error);
-    return [];
-  }
-}
-
-export async function updateChunk(chunk: Chunk): Promise<void> {
-  try {
-    await storage.updateChunk(chunk);
-  } catch (error) {
-    console.error("Failed to update chunk in IndexedDB", error);
-    throw error;
-  }
-}
-
-export async function deleteChunk(id: string): Promise<void> {
-  try {
-    await storage.deleteChunk(id);
-  } catch (error) {
-    console.error("Failed to delete chunk from IndexedDB", error);
-    throw error;
-  }
-}
-
-export async function deleteChunksBySourceDoc(sourceDocId: string): Promise<void> {
-  try {
-    await storage.deleteChunksBySourceDoc(sourceDocId);
-  } catch (error) {
-    console.error("Failed to delete chunks by source doc from IndexedDB", error);
-    throw error;
-  }
-}
-
-export async function deleteAllChunks(): Promise<void> {
-  try {
-    await storage.deleteAllChunks();
-  } catch (error) {
-    console.error("Failed to delete all chunks from IndexedDB", error);
-    throw error;
-  }
-}
 
 // Job Description exports
 export async function saveJobDescription(jobDescription: JobDescription): Promise<void> {
@@ -1001,31 +809,28 @@ export async function deleteJobDescription(id: string): Promise<void> {
 // Export all data as JSON for backup purposes
 export async function exportAllDataAsJSON(): Promise<string> {
   try {
-    const [resumes, coverLetters, chunks, jobDescriptions] = await Promise.all([
+    const [resumes, coverLetters, jobDescriptions] = await Promise.all([
       storage.loadResumes(),
       storage.loadCoverLetters(),
-      storage.getAllChunks(),
       storage.loadJobDescriptions()
     ]);
 
     const exportData = {
       exportedAt: new Date().toISOString(),
       version: '1.1', // Bumped version to indicate new data structure
-      resumes: resumes.map(resume => ({
+      resumes: resumes.map((resume: Resume) => ({
         ...resume,
         // Don't include the actual file data in backup to keep size manageable
         fileData: '[FILE_DATA_EXCLUDED]',
       })),
-      coverLetters: coverLetters.map(coverLetter => ({
+      coverLetters: coverLetters.map((coverLetter: CoverLetter) => ({
         ...coverLetter,
         // Don't include the actual file data in backup to keep size manageable
         fileData: '[FILE_DATA_EXCLUDED]',
       })),
-      chunks,
       jobDescriptions,
       totalResumes: resumes.length,
       totalCoverLetters: coverLetters.length,
-      totalChunks: chunks.length,
       totalJobDescriptions: jobDescriptions.length
     };
 
@@ -1036,36 +841,12 @@ export async function exportAllDataAsJSON(): Promise<string> {
   }
 }
 
-// Export chunks only as JSON for backup purposes
-export async function exportChunksAsJSON(): Promise<string> {
-  try {
-    const chunks = await storage.getAllChunks();
-
-    const exportData = {
-      exportedAt: new Date().toISOString(),
-      version: '1.0',
-      chunks,
-      totalChunks: chunks.length,
-      chunkTypes: chunks.reduce((types, chunk) => {
-        types[chunk.type] = (types[chunk.type] || 0) + 1;
-        return types;
-      }, {} as Record<string, number>)
-    };
-
-    return JSON.stringify(exportData, null, 2);
-  } catch (error) {
-    console.error("Failed to export chunks from IndexedDB", error);
-    throw error;
-  }
-}
-
 // Import interface for backup restoration
 export interface ImportResult {
   success: boolean;
   importedCounts: {
     resumes: number;
     coverLetters: number;
-    chunks: number;
     jobDescriptions: number;
   };
   errors: string[];
@@ -1079,7 +860,7 @@ export async function importAllDataFromJSON(jsonString: string, options: {
 } = {}): Promise<ImportResult> {
   const result: ImportResult = {
     success: false,
-    importedCounts: { resumes: 0, coverLetters: 0, chunks: 0, jobDescriptions: 0 },
+    importedCounts: { resumes: 0, coverLetters: 0, jobDescriptions: 0 },
     errors: [],
     warnings: []
   };
@@ -1107,21 +888,18 @@ export async function importAllDataFromJSON(jsonString: string, options: {
     // Get existing data for duplicate checking
     let existingResumeIds: Set<string> = new Set();
     let existingCoverLetterIds: Set<string> = new Set();
-    let existingChunkIds: Set<string> = new Set();
     let existingJobIds: Set<string> = new Set();
 
     if (skipDuplicates && !replaceExisting) {
-      const [resumes, coverLetters, chunks, jobDescriptions] = await Promise.all([
+      const [resumes, coverLetters, jobDescriptions] = await Promise.all([
         storage.loadResumes(),
         storage.loadCoverLetters(), 
-        storage.getAllChunks(),
         storage.loadJobDescriptions()
       ]);
       
-      existingResumeIds = new Set(resumes.map(r => r.id));
-      existingCoverLetterIds = new Set(coverLetters.map(cl => cl.id));
-      existingChunkIds = new Set(chunks.map(c => c.id));
-      existingJobIds = new Set(jobDescriptions.map(j => j.id));
+      existingResumeIds = new Set(resumes.map((r: Resume) => r.id));
+      existingCoverLetterIds = new Set(coverLetters.map((cl: CoverLetter) => cl.id));
+      existingJobIds = new Set(jobDescriptions.map((j: JobDescription) => j.id));
     }
 
     // Import resumes
@@ -1168,22 +946,7 @@ export async function importAllDataFromJSON(jsonString: string, options: {
       }
     }
 
-    // Import chunks
-    if (importData.chunks && Array.isArray(importData.chunks)) {
-      for (const chunk of importData.chunks) {
-        if (skipDuplicates && existingChunkIds.has(chunk.id)) {
-          result.warnings.push(`Skipped duplicate chunk: ${chunk.id}`);
-          continue;
-        }
 
-        try {
-          await storage.saveChunk(chunk);
-          result.importedCounts.chunks++;
-        } catch (error) {
-          result.errors.push(`Failed to import chunk ${chunk.id}: ${error}`);
-        }
-      }
-    }
 
     // Import job descriptions
     if (importData.jobDescriptions && Array.isArray(importData.jobDescriptions)) {
@@ -1211,61 +974,7 @@ export async function importAllDataFromJSON(jsonString: string, options: {
   }
 }
 
-// Migration function to update legacy chunk types and tags
-export async function migrateChunkTypesAndTags(): Promise<{ updated: number; total: number }> {
-  try {
-    const chunks = await storage.getAllChunks();
-    let updatedCount = 0;
 
-    const chunkTypeMap: Record<string, string> = {
-      // Legacy resume types -> new resume types
-      'header': 'cv_header',
-      'summary': 'cv_summary',
-      'skills': 'cv_skills',
-      'experience_section': 'cv_experience_section',
-      'experience_bullet': 'cv_experience_bullet',
-      'mission_fit': 'cv_mission_fit',
-      // Legacy cover letter types -> new cover letter types
-      'cover_letter_intro': 'cl_intro',
-      'cover_letter_body': 'cl_body',
-      'cover_letter_closing': 'cl_closing',
-      'company_research': 'cl_company_research',
-      'skill_demonstration': 'cl_skill_demonstration',
-      'achievement_claim': 'cl_achievement_claim',
-      'motivation_statement': 'cl_motivation_statement',
-      'experience_mapping': 'cl_experience_mapping'
-    };
-
-    for (const chunk of chunks) {
-      const newType = chunkTypeMap[chunk.type];
-      if (newType) {
-        // Update chunk type
-        const updatedChunk = { ...chunk, type: newType as any };
-        
-        // Update tags to include proper prefixes
-        const isResumeType = newType.startsWith('cv_');
-        const prefix = isResumeType ? 'Resume:' : 'Cover Letter:';
-        
-        updatedChunk.tags = chunk.tags.map(tag => {
-          // Skip if already has proper prefix
-          if (tag.startsWith('Resume:') || tag.startsWith('Cover Letter:')) {
-            return tag;
-          }
-          return `${prefix} ${tag}`;
-        });
-
-        // Save the updated chunk
-        await storage.updateChunk(updatedChunk);
-        updatedCount++;
-      }
-    }
-
-    return { updated: updatedCount, total: chunks.length };
-  } catch (error) {
-    console.error("Failed to migrate chunk types and tags:", error);
-    throw error;
-  }
-}
 
 /**
  * Save a generated resume as a new document
@@ -1291,9 +1000,7 @@ export async function saveGeneratedResume(
     uploadDate: new Date().toISOString(),
     fileData: base64Content,
     fileType: 'docx',
-    textContent: content,
-    lastChunkUpdate: new Date().toISOString(),
-    chunkCount: 0
+    textContent: content
   };
 
   await saveResume(newResume);
@@ -1333,8 +1040,6 @@ export async function saveGeneratedCoverLetter(
     fileData: base64Content,
     fileType: 'docx',
     textContent: content,
-    lastChunkUpdate: new Date().toISOString(),
-    chunkCount: 0,
     targetCompany: jobDescription.company,
     targetPosition: jobDescription.title
   };

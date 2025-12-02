@@ -7,8 +7,8 @@ export interface Resume {
   fileData: string; // base64 encoded Word document
   fileType: 'docx'; // only Word documents supported
   textContent?: string; // extracted text for search
-  lastChunkUpdate?: string; // when chunks were last generated
-  chunkCount?: number; // cached count of chunks for this document
+  detectedCompany?: string; // AI-detected current company
+  detectedRole?: string; // AI-detected current role
 }
 
 export interface CoverLetter {
@@ -20,8 +20,8 @@ export interface CoverLetter {
   fileData: string; // base64 encoded Word document
   fileType: 'docx'; // only Word documents supported
   textContent?: string; // extracted text for search
-  lastChunkUpdate?: string; // when chunks were last generated
-  chunkCount?: number; // cached count of chunks for this document
+  detectedCompany?: string; // AI-detected target company
+  detectedRole?: string; // AI-detected target role
   targetCompany?: string; // company this cover letter was written for
   targetPosition?: string; // position this cover letter was written for
 }
@@ -126,55 +126,7 @@ export function isCoverLetter(doc: Document): doc is CoverLetter {
   return 'targetCompany' in doc || 'targetPosition' in doc;
 }
 
-export type ChunkType = 
-  // Resume chunk types
-  | 'cv_header'
-  | 'cv_summary'
-  | 'cv_skills' 
-  | 'cv_experience_section'
-  | 'cv_experience_bullet'
-  | 'cv_mission_fit'
-  // Cover letter chunk types
-  | 'cl_intro'
-  | 'cl_body'
-  | 'cl_closing'
-  | 'cl_company_research'
-  | 'cl_skill_demonstration'
-  | 'cl_achievement_claim'
-  | 'cl_motivation_statement'
-  | 'cl_experience_mapping';
 
-// Semantic relationships for cover letters
-export interface SemanticRelationship {
-  type: 'mentions_company' | 'demonstrates_skill' | 'claims_achievement' | 'supports_requirement' | 'references_experience' | 'shows_motivation';
-  entity: string; // What is being referenced (company name, skill, etc.)
-  context?: string; // Additional context about the relationship
-  confidence?: number; // AI confidence in this relationship (0-1)
-}
-
-export interface Chunk {
-  id: string; // uuid
-  sourceDocId: string; // Document ID this chunk came from
-  type: ChunkType;
-  text: string;
-  tags: string[]; // AI-suggested or manual tags
-  order: number; // Order within the document
-  createdAt: string;
-  updatedAt?: string; // When chunk was last modified
-  approved?: boolean; // Whether the user has approved this chunk
-  parsedBy: 'ai' | 'rules' | 'manual'; // How this chunk was created
-  confidence?: number; // AI confidence score (0-1, if available)
-  // Semantic relationships (primarily for cover letters)
-  semanticRelationships?: SemanticRelationship[];
-  // Document type this chunk came from
-  sourceDocType?: 'resume' | 'cover_letter';
-}
-
-export interface ChunkParseResult {
-  chunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[];
-  success: boolean;
-  error?: string;
-}
 
 export interface AppState {
   resumes: Resume[];

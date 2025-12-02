@@ -1,9 +1,7 @@
-import { useState, useEffect } from "react";
-import { CoverLetter, Chunk, AppState } from "../types";
-import { saveCoverLetter, deleteCoverLetter, saveChunks, getChunksBySourceDoc, deleteChunksBySourceDoc } from "../storage";
+import { useState } from "react";
+import { CoverLetter, AppState } from "../types";
+import { saveCoverLetter, deleteCoverLetter } from "../storage";
 import { formatFileSize, formatDate, extractTextFromDocument } from "../utils/documentUtils";
-import { parseCoverLetterIntoChunks, isAIConfigured, showConfigInstructions } from "../utils/aiService";
-import ChunkReviewModal from "./ChunkReviewModal";
 import ProgressSpinner from "./ProgressSpinner";
 
 interface CoverLetterTableProps {
@@ -22,147 +20,10 @@ export default function CoverLetterTable({
   onShowPreview
 }: CoverLetterTableProps) {
   const [parsingCoverLetterId, setParsingCoverLetterId] = useState<string | null>(null);
-  const [chunkingCoverLetterId, setChunkingCoverLetterId] = useState<string | null>(null);
-  const [chunkReviewModal, setChunkReviewModal] = useState<{
-    isOpen: boolean;
-    chunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[];
-    coverLetterId: string;
-    coverLetterName: string;
-    parsedBy: 'ai';
-  }>({
-    isOpen: false,
-    chunks: [],
-    coverLetterId: '',
-    coverLetterName: '',
-    parsedBy: 'ai'
-  });
-  const [coverLetterChunkCounts, setCoverLetterChunkCounts] = useState<Record<string, number>>({});
 
-  // Load chunk counts for all cover letters
-  useEffect(() => {
-    const loadChunkCounts = async () => {
-      const counts: Record<string, number> = {};
-      for (const coverLetter of coverLetters) {
-        try {
-          const chunks = await getChunksBySourceDoc(coverLetter.id);
-          counts[coverLetter.id] = chunks.length;
-        } catch (error) {
-          console.error(`Failed to load chunks for cover letter ${coverLetter.id}:`, error);
-          counts[coverLetter.id] = 0;
-        }
-      }
-      setCoverLetterChunkCounts(counts);
-    };
 
-    if (coverLetters.length > 0) {
-      loadChunkCounts();
-    }
-  }, [coverLetters]);
 
-  const parseIntoChunks = async (coverLetter: CoverLetter) => {
-    if (!coverLetter.textContent || coverLetter.textContent.trim().length === 0) {
-      alert('No text content available. Please extract text first before parsing into chunks.');
-      return;
-    }
 
-    // Check if AI is configured
-    if (!isAIConfigured()) {
-      showConfigInstructions();
-      return;
-    }
-
-    // Check if re-parsing (chunks already exist)
-    const existingChunkCount = coverLetterChunkCounts[coverLetter.id] || 0;
-    const isReparsing = existingChunkCount > 0;
-
-    if (isReparsing) {
-      const confirmReparse = confirm(
-        `This cover letter already has ${existingChunkCount} parsed chunks.\n\n` +
-        'Re-parsing will replace all existing chunks with new ones.\n\n' +
-        'Do you want to continue?'
-      );
-      if (!confirmReparse) return;
-    }
-
-    setChunkingCoverLetterId(coverLetter.id);
-
-    try {
-      // Use AI semantic parsing for cover letters
-      const result = await parseCoverLetterIntoChunks(coverLetter.textContent);
-
-      if (!result.success) {
-        alert(`Failed to parse chunks: ${result.error}`);
-        return;
-      }
-
-      if (result.chunks.length === 0) {
-        alert('No chunks were generated from the text. The document may not contain parseable content.');
-        return;
-      }
-
-      // Open the review modal
-      setChunkReviewModal({
-        isOpen: true,
-        chunks: result.chunks,
-        coverLetterId: coverLetter.id,
-        coverLetterName: coverLetter.name,
-        parsedBy: 'ai'
-      });
-
-    } catch (error) {
-      console.error('Error parsing chunks:', error);
-      alert('An unexpected error occurred while parsing chunks. Check the console for details.');
-    } finally {
-      setChunkingCoverLetterId(null);
-    }
-  };
-
-  const handleSaveChunks = async (approvedChunks: Omit<Chunk, 'id' | 'sourceDocId' | 'createdAt' | 'approved'>[]) => {
-    try {
-      // Check if we're replacing existing chunks (re-parsing)
-      const existingChunks = await getChunksBySourceDoc(chunkReviewModal.coverLetterId);
-
-      if (existingChunks.length > 0) {
-        // Delete existing chunks first
-        await deleteChunksBySourceDoc(chunkReviewModal.coverLetterId);
-      }
-
-      // Convert to full Chunk objects
-      const chunks: Chunk[] = approvedChunks.map((chunk, index) => ({
-        ...chunk,
-        id: crypto.randomUUID(),
-        sourceDocId: chunkReviewModal.coverLetterId,
-        createdAt: new Date().toISOString(),
-        approved: true,
-        parsedBy: chunkReviewModal.parsedBy,
-        sourceDocType: 'cover_letter'
-      }));
-
-      await saveChunks(chunks);
-
-      // Update chunk count
-      setCoverLetterChunkCounts(prev => ({
-        ...prev,
-        [chunkReviewModal.coverLetterId]: chunks.length
-      }));
-
-      alert(`✅ Successfully saved ${chunks.length} chunks with semantic relationships!`);
-
-    } catch (error) {
-      console.error('Error saving chunks:', error);
-      alert('Failed to save chunks. Check the console for details.');
-    }
-  };
-
-  const handleCloseChunkModal = () => {
-    setChunkReviewModal({
-      isOpen: false,
-      chunks: [],
-      coverLetterId: '',
-      coverLetterName: '',
-      parsedBy: 'ai'
-    });
-  };
 
   const parseText = async (coverLetter: CoverLetter) => {
     setParsingCoverLetterId(coverLetter.id);
@@ -328,6 +189,7 @@ export default function CoverLetterTable({
             <tr>
               <th>Name</th>
               <th>Target</th>
+              <th>AI Detected</th>
               <th>Type</th>
               <th>File Size</th>
               <th>Upload Date</th>
@@ -361,6 +223,23 @@ export default function CoverLetterTable({
                       <span style={{ color: "#9ca3af", fontStyle: "italic" }}>
                         Not specified
                       </span>
+                    )}
+                  </div>
+                </td>
+                <td>
+                  <div style={{ fontSize: "0.75rem" }}>
+                    {coverLetter.detectedCompany && (
+                      <div style={{ color: "#059669", fontWeight: "500", marginBottom: "2px" }}>
+                        🏢 {coverLetter.detectedCompany}
+                      </div>
+                    )}
+                    {coverLetter.detectedRole && (
+                      <div style={{ color: "#7c3aed", fontWeight: "500" }}>
+                        💼 {coverLetter.detectedRole}
+                      </div>
+                    )}
+                    {!coverLetter.detectedCompany && !coverLetter.detectedRole && (
+                      <span style={{ color: "#9ca3af" }}>—</span>
                     )}
                   </div>
                 </td>
@@ -399,18 +278,7 @@ export default function CoverLetterTable({
                       )}
                     </div>
 
-                    {/* Chunk Status */}
-                    <div>
-                      {coverLetterChunkCounts[coverLetter.id] > 0 ? (
-                        <span style={{ color: "#8b5cf6", fontWeight: "600", fontSize: "0.8rem" }}>
-                          {coverLetterChunkCounts[coverLetter.id]} chunks parsed ✓
-                        </span>
-                      ) : (
-                        <span style={{ color: "#6b7280", fontWeight: "600", fontSize: "0.8rem" }}>
-                          No chunks parsed
-                        </span>
-                      )}
-                    </div>
+
                   </div>
                 </td>
                 <td>
@@ -455,29 +323,8 @@ export default function CoverLetterTable({
                       </button>
                     )}
 
-                    {/* Parse into Chunks button - only show if text is extracted */}
-                    {coverLetter.textContent && coverLetter.textContent.trim().length > 0 && (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => parseIntoChunks(coverLetter)}
-                        disabled={chunkingCoverLetterId === coverLetter.id}
-                        style={{
-                          fontSize: "0.75rem",
-                          padding: "0.3rem 0.5rem",
-                          backgroundColor: chunkingCoverLetterId === coverLetter.id ? "#f0f0f0" : "#8b5cf6",
-                          color: chunkingCoverLetterId === coverLetter.id ? "#666" : "white",
-                          border: "none"
-                        }}
-                        title="AI-powered semantic relationship parsing"
-                      >
-                        {chunkingCoverLetterId === coverLetter.id ? (
-                          <ProgressSpinner message="AI Parsing..." size="small" />
-                        ) : (
-                          coverLetterChunkCounts[coverLetter.id] > 0 ? 'Re-parse (AI)' : 'AI Parse'
-                        )}
-                      </button>
-                    )}
+
+
 
                     <button
                       type="button"
@@ -511,14 +358,7 @@ export default function CoverLetterTable({
         </table>
       )}
 
-      {/* Chunk Review Modal */}
-      <ChunkReviewModal
-        isOpen={chunkReviewModal.isOpen}
-        onClose={handleCloseChunkModal}
-        chunks={chunkReviewModal.chunks}
-        onSave={handleSaveChunks}
-        documentName={chunkReviewModal.coverLetterName}
-      />
+
     </section>
   );
 }

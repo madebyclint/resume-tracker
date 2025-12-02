@@ -2,10 +2,9 @@ import React, { useState, useMemo } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription, Resume, CoverLetter } from '../types';
-import { parseJobDescription, generateTailoredResume, generateTailoredCoverLetter, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
+import { parseJobDescription, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
-import { findRelevantResumeChunks, findRelevantCoverLetterChunks } from '../utils/chunkMatcher';
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -388,8 +387,7 @@ const JobDescriptionsPage: React.FC = () => {
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
 
   // Full text generation toggles
-  const [useFullTextForResume, setUseFullTextForResume] = useState(true);
-  const [useFullTextForCoverLetter, setUseFullTextForCoverLetter] = useState(true);
+
 
   // Resume formatter state
   const [resumeInputText, setResumeInputText] = useState('');
@@ -1040,21 +1038,7 @@ const JobDescriptionsPage: React.FC = () => {
       return;
     }
 
-    // Quick diagnostic check
-    try {
-      const { getAllChunks } = await import('../storage');
-      const allChunks = await getAllChunks();
-      console.log('🔍 Diagnostic - Total chunks available:', allChunks.length);
-      console.log('🔍 Diagnostic - Resumes in state:', state.resumes.length);
-      console.log('🔍 Diagnostic - Cover letters in state:', state.coverLetters.length);
 
-      if (allChunks.length === 0) {
-        alert('❌ No content chunks found! Please:\n1. Upload some resumes or cover letters\n2. Make sure they are processed into chunks\n3. Check the Chunk Library page to verify chunks exist');
-        return;
-      }
-    } catch (error) {
-      console.error('Diagnostic check failed:', error);
-    }
 
     setIsGeneratingResume(true);
     setGenerationType('resume');
@@ -1081,36 +1065,14 @@ const JobDescriptionsPage: React.FC = () => {
     try {
       let result;
 
-      if (useFullTextForResume) {
-        // Generate from full resume text
-        console.log('🤖 Generating resume from full text...');
-        const fullResumeText = await getCombinedResumeText();
-        result = await generateTailoredResumeFromFullText(
-          jobDescription,
-          fullResumeText,
-          jobDescription.additionalContext
-        );
-      } else {
-        // Generate from chunks (original method)
-        console.log('🧩 Generating resume from chunks...');
-        const relevantChunks = await findRelevantResumeChunks(jobDescription, 0.1, 15);
-        console.log('🎯 Found relevant resume chunks:', relevantChunks.map(c => ({ type: c.chunk.type, score: c.score })));
-
-        if (relevantChunks.length === 0) {
-          const { getAllChunks } = await import('../storage');
-          const allChunks = await getAllChunks();
-          const resumeTypes = ['cv_header', 'cv_summary', 'cv_skills', 'cv_experience_section', 'cv_experience_bullet', 'cv_mission_fit'];
-          const resumeChunks = allChunks.filter(chunk => resumeTypes.includes(chunk.type));
-
-          throw new Error(`❌ No relevant resume chunks found!\n\nTotal chunks: ${allChunks.length}\nResume chunks: ${resumeChunks.length}\n\nPlease:\n1. Upload and process some resumes\n2. Ensure job description has clear keywords\n3. Check that your resume content matches the job requirements`);
-        }
-
-        result = await generateTailoredResume(
-          jobDescription,
-          relevantChunks,
-          jobDescription.additionalContext
-        );
-      }
+      // Generate from full resume text
+      console.log('🤖 Generating resume from full text...');
+      const fullResumeText = await getCombinedResumeText();
+      result = await generateTailoredResumeFromFullText(
+        jobDescription,
+        fullResumeText,
+        jobDescription.additionalContext
+      );
 
       if (!result.success || !result.content) {
         throw new Error(result.error || 'Failed to generate resume');
@@ -1158,30 +1120,14 @@ const JobDescriptionsPage: React.FC = () => {
     try {
       let result;
 
-      if (useFullTextForCoverLetter) {
-        // Generate from full resume text
-        console.log('🤖 Generating cover letter from full text...');
-        const fullResumeText = await getCombinedResumeText();
-        result = await generateTailoredCoverLetterFromFullText(
-          jobDescription,
-          fullResumeText,
-          jobDescription.additionalContext
-        );
-      } else {
-        // Generate from chunks (original method)
-        console.log('🧩 Generating cover letter from chunks...');
-        const relevantChunks = await findRelevantCoverLetterChunks(jobDescription, 0.1, 15);
-
-        if (relevantChunks.length === 0) {
-          throw new Error('No relevant chunks found. Please ensure you have uploaded and processed some documents.');
-        }
-
-        result = await generateTailoredCoverLetter(
-          jobDescription,
-          relevantChunks,
-          jobDescription.additionalContext
-        );
-      }
+      // Generate from full resume text
+      console.log('🤖 Generating cover letter from full text...');
+      const fullResumeText = await getCombinedResumeText();
+      result = await generateTailoredCoverLetterFromFullText(
+        jobDescription,
+        fullResumeText,
+        jobDescription.additionalContext
+      );
 
       if (!result.success || !result.content) {
         throw new Error(result.error || 'Failed to generate cover letter');
@@ -1671,9 +1617,7 @@ const JobDescriptionsPage: React.FC = () => {
         fileSize: formattedHTML.length,
         uploadDate: new Date().toISOString(),
         fileType: 'docx' as const, // Required by type, even though we're storing HTML
-        textContent: textContent,
-        lastChunkUpdate: new Date().toISOString(),
-        chunkCount: 0
+        textContent: textContent
       };
 
       // Save to storage using the existing storage functions
@@ -2891,46 +2835,9 @@ AI will automatically fill in the job title and company name fields above!"
                       </div>
 
                       <div className="generation-options">
-                        <div className="generation-toggle">
-                          <label className="toggle-label">
-                            <input
-                              type="checkbox"
-                              checked={useFullTextForResume}
-                              onChange={(e) => setUseFullTextForResume(e.target.checked)}
-                              className="toggle-checkbox"
-                            />
-                            <span className="toggle-text">
-                              <FontAwesomeIcon icon={faFileAlt} /> Use Full Text Generation for Resume
-                              <span className="toggle-badge">{useFullTextForResume ? 'ON' : 'OFF'}</span>
-                            </span>
-                          </label>
-                          <div className="toggle-description">
-                            {useFullTextForResume ?
-                              'Generates from complete resume text for better context and flow' :
-                              'Generates from relevant content chunks (original method)'
-                            }
-                          </div>
-                        </div>
-
-                        <div className="generation-toggle">
-                          <label className="toggle-label">
-                            <input
-                              type="checkbox"
-                              checked={useFullTextForCoverLetter}
-                              onChange={(e) => setUseFullTextForCoverLetter(e.target.checked)}
-                              className="toggle-checkbox"
-                            />
-                            <span className="toggle-text">
-                              <FontAwesomeIcon icon={faFileAlt} /> Use Full Text Generation for Cover Letter
-                              <span className="toggle-badge">{useFullTextForCoverLetter ? 'ON' : 'OFF'}</span>
-                            </span>
-                          </label>
-                          <div className="toggle-description">
-                            {useFullTextForCoverLetter ?
-                              'Generates from complete resume text for better context and flow' :
-                              'Generates from relevant content chunks (original method)'
-                            }
-                          </div>
+                        <div className="generation-info">
+                          <FontAwesomeIcon icon={faFileAlt} />
+                          <span>Using full text generation for better context and flow</span>
                         </div>
                       </div>
 

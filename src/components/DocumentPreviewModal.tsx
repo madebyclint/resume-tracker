@@ -72,14 +72,14 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
             <div>
               <strong>Uploaded:</strong> {formatDate(document.uploadDate)}
             </div>
-            {document.lastChunkUpdate && (
+            {document.detectedCompany && (
               <div>
-                <strong>Last Processed:</strong> {formatDate(document.lastChunkUpdate)}
+                <strong>AI Detected Company:</strong> {document.detectedCompany}
               </div>
             )}
-            {document.chunkCount !== undefined && (
+            {document.detectedRole && (
               <div>
-                <strong>Chunks:</strong> {document.chunkCount}
+                <strong>AI Detected Role:</strong> {document.detectedRole}
               </div>
             )}
             {!isResume && (document as CoverLetter).targetCompany && (

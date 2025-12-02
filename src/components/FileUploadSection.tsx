@@ -3,6 +3,7 @@ import { Resume, CoverLetter, AppState } from "../types";
 import { saveResume, saveCoverLetter, debugIndexedDB, clearAllData } from "../storage";
 import { checkForDuplicates } from "../utils/duplicateChecker";
 import { formatFileSize, extractTextFromDocument } from "../utils/documentUtils";
+import { extractDocumentMetadata } from "../utils/aiService";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUpload, faFileAlt } from '@fortawesome/free-solid-svg-icons';
 
@@ -203,6 +204,21 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
           const textContent = await extractTextFromDocument(resume);
           resume.textContent = textContent;
 
+          // Extract AI metadata (company and role detection)
+          try {
+            console.log('Extracting AI metadata for resume...');
+            const metadata = await extractDocumentMetadata(textContent, 'resume');
+            if (metadata.success) {
+              resume.detectedCompany = metadata.detectedCompany;
+              resume.detectedRole = metadata.detectedRole;
+              console.log('AI detected:', { company: metadata.detectedCompany, role: metadata.detectedRole });
+            } else {
+              console.warn('AI metadata extraction failed:', metadata.error);
+            }
+          } catch (metadataError) {
+            console.warn('Error during AI metadata extraction:', metadataError);
+          }
+
           // Save resume to IndexedDB immediately
           try {
             await saveResume(resume);
@@ -239,6 +255,21 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
           // Extract text content for search
           const textContent = await extractTextFromDocument(coverLetter);
           coverLetter.textContent = textContent;
+
+          // Extract AI metadata (company and role detection)
+          try {
+            console.log('Extracting AI metadata for cover letter...');
+            const metadata = await extractDocumentMetadata(textContent, 'cover_letter');
+            if (metadata.success) {
+              coverLetter.detectedCompany = metadata.detectedCompany;
+              coverLetter.detectedRole = metadata.detectedRole;
+              console.log('AI detected:', { company: metadata.detectedCompany, role: metadata.detectedRole });
+            } else {
+              console.warn('AI metadata extraction failed:', metadata.error);
+            }
+          } catch (metadataError) {
+            console.warn('Error during AI metadata extraction:', metadataError);
+          }
 
           // Save cover letter to IndexedDB immediately
           try {
