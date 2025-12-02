@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Resume, CoverLetter, AppState } from "../types";
 import { saveResume, saveCoverLetter, debugIndexedDB, clearAllData } from "../storage";
 import { checkForDuplicates } from "../utils/duplicateChecker";
-import { formatFileSize, extractTextFromDocument } from "../utils/documentUtils";
+import { formatFileSize, extractTextFromDocument, extractDocumentContent } from "../utils/documentUtils";
 import { checkStorageCapacity, estimateAppStorageUsage } from "../utils/storageUtils";
 import { extractDocumentMetadata } from "../utils/aiService";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -214,14 +214,15 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
             textContent: '',
           };
 
-          // Extract text content for search
-          const textContent = await extractTextFromDocument(resume);
-          resume.textContent = textContent;
+          // Extract both text and markdown content
+          const { text, markdown } = await extractDocumentContent(resume);
+          resume.textContent = text;
+          resume.markdownContent = markdown;
 
           // Extract AI metadata (company and role detection)
           try {
             console.log('Extracting AI metadata for resume...');
-            const metadata = await extractDocumentMetadata(textContent, 'resume');
+            const metadata = await extractDocumentMetadata(text, 'resume');
             if (metadata.success) {
               resume.detectedCompany = metadata.detectedCompany;
               resume.detectedRole = metadata.detectedRole;
@@ -266,14 +267,15 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
             targetPosition: targetPosition?.trim() || undefined,
           };
 
-          // Extract text content for search
-          const textContent = await extractTextFromDocument(coverLetter);
-          coverLetter.textContent = textContent;
+          // Extract both text and markdown content
+          const { text, markdown } = await extractDocumentContent(coverLetter);
+          coverLetter.textContent = text;
+          coverLetter.markdownContent = markdown;
 
           // Extract AI metadata (company and role detection)
           try {
             console.log('Extracting AI metadata for cover letter...');
-            const metadata = await extractDocumentMetadata(textContent, 'cover_letter');
+            const metadata = await extractDocumentMetadata(text, 'cover_letter');
             if (metadata.success) {
               coverLetter.detectedCompany = metadata.detectedCompany;
               coverLetter.detectedRole = metadata.detectedRole;

@@ -7,6 +7,7 @@ export interface Resume {
   fileData: string; // base64 encoded Word document
   fileType: 'docx'; // only Word documents supported
   textContent?: string; // extracted text for search
+  markdownContent?: string; // extracted markdown for export/display
   detectedCompany?: string; // AI-detected current company
   detectedRole?: string; // AI-detected current role
 }
@@ -20,6 +21,7 @@ export interface CoverLetter {
   fileData: string; // base64 encoded Word document
   fileType: 'docx'; // only Word documents supported
   textContent?: string; // extracted text for search
+  markdownContent?: string; // extracted markdown for export/display
   detectedCompany?: string; // AI-detected target company
   detectedRole?: string; // AI-detected target role
   targetCompany?: string; // company this cover letter was written for

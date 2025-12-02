@@ -251,7 +251,7 @@ const JobDescriptionsPage: React.FC = () => {
 
   // Toast helper functions
   const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration = 4000) => {
-    const id = Date.now().toString();
+    const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newToast = { id, message, type, duration };
     setToasts(prev => [...prev, newToast]);
 
@@ -298,6 +298,20 @@ const JobDescriptionsPage: React.FC = () => {
       setIsImporting(true);
       try {
         const jsonString = await file.text();
+
+        // Validate JSON before importing
+        let parsedData;
+        try {
+          parsedData = JSON.parse(jsonString);
+        } catch (parseError) {
+          throw new Error(`Invalid JSON format: ${parseError instanceof Error ? parseError.message : 'Unknown parsing error'}`);
+        }
+
+        // Check for basic structure
+        if (!parsedData || typeof parsedData !== 'object') {
+          throw new Error('Invalid backup file structure');
+        }
+
         const result = await importAllDataFromJSON(jsonString, {
           replaceExisting: false,
           skipDuplicates: true

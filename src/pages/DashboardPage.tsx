@@ -60,6 +60,20 @@ export default function DashboardPage() {
       setIsImporting(true);
       try {
         const jsonString = await file.text();
+
+        // Validate JSON before importing
+        let parsedData;
+        try {
+          parsedData = JSON.parse(jsonString);
+        } catch (parseError) {
+          throw new Error(`Invalid JSON format: ${parseError instanceof Error ? parseError.message : 'Unknown parsing error'}`);
+        }
+
+        // Check for basic structure
+        if (!parsedData || typeof parsedData !== 'object') {
+          throw new Error('Invalid backup file structure');
+        }
+
         const result = await importAllDataFromJSON(jsonString, {
           replaceExisting: false,
           skipDuplicates: true
@@ -103,20 +117,18 @@ export default function DashboardPage() {
       />
 
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         marginBottom: '1rem',
         padding: '1rem',
         backgroundColor: '#f8f9fa',
         borderRadius: '8px',
         border: '1px solid #dee2e6'
       }}>
-        <StatsSection
-          resumes={state.resumes}
-          coverLetters={state.coverLetters}
-        />
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          marginBottom: '1rem',
+          gap: '0.5rem'
+        }}>
           <button
             onClick={handleExportData}
             disabled={isExporting}
@@ -158,6 +170,10 @@ export default function DashboardPage() {
             {isImporting ? 'Importing...' : 'Import Data'}
           </button>
         </div>
+        <StatsSection
+          resumes={state.resumes}
+          coverLetters={state.coverLetters}
+        />
       </div>
 
       <ResumeTable

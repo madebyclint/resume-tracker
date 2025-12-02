@@ -817,16 +817,20 @@ export async function exportAllDataAsJSON(): Promise<string> {
 
     const exportData = {
       exportedAt: new Date().toISOString(),
-      version: '1.1', // Bumped version to indicate new data structure
+      version: '1.2', // Bumped version to include markdown content
       resumes: resumes.map((resume: Resume) => ({
         ...resume,
-        // Don't include the actual file data in backup to keep size manageable
+        // Include markdown content but exclude binary file data to keep size manageable
         fileData: '[FILE_DATA_EXCLUDED]',
+        // Keep markdown content for import/restore functionality
+        markdownContent: resume.markdownContent || '[NO_MARKDOWN_CONTENT]',
       })),
       coverLetters: coverLetters.map((coverLetter: CoverLetter) => ({
         ...coverLetter,
-        // Don't include the actual file data in backup to keep size manageable
+        // Include markdown content but exclude binary file data to keep size manageable  
         fileData: '[FILE_DATA_EXCLUDED]',
+        // Keep markdown content for import/restore functionality
+        markdownContent: coverLetter.markdownContent || '[NO_MARKDOWN_CONTENT]',
       })),
       jobDescriptions,
       totalResumes: resumes.length,
@@ -911,8 +915,27 @@ export async function importAllDataFromJSON(jsonString: string, options: {
         }
         
         if (resume.fileData === '[FILE_DATA_EXCLUDED]') {
-          result.warnings.push(`Resume ${resume.name} skipped - no file data in backup`);
-          continue;
+          // Try to use markdown content, fall back to text content
+          const contentToUse = resume.markdownContent && resume.markdownContent !== '[NO_MARKDOWN_CONTENT]' 
+            ? resume.markdownContent 
+            : resume.textContent;
+          
+          if (!contentToUse) {
+            result.warnings.push(`Resume ${resume.name} skipped - no content available in backup`);
+            continue;
+          }
+          
+          // Create a placeholder file data for content-only imports
+          const contentType = resume.markdownContent && resume.markdownContent !== '[NO_MARKDOWN_CONTENT]' ? 'markdown' : 'plain';
+          // Use safer encoding that handles Unicode characters
+          const encodedContent = btoa(unescape(encodeURIComponent(contentToUse)));
+          resume.fileData = `data:text/${contentType};base64,` + encodedContent;
+          resume.fileType = 'docx'; // Keep original type for compatibility
+          
+          // Ensure markdown content exists for future exports
+          if (!resume.markdownContent || resume.markdownContent === '[NO_MARKDOWN_CONTENT]') {
+            resume.markdownContent = resume.textContent || '';
+          }
         }
 
         try {
@@ -933,8 +956,27 @@ export async function importAllDataFromJSON(jsonString: string, options: {
         }
         
         if (coverLetter.fileData === '[FILE_DATA_EXCLUDED]') {
-          result.warnings.push(`Cover letter ${coverLetter.name} skipped - no file data in backup`);
-          continue;
+          // Try to use markdown content, fall back to text content
+          const contentToUse = coverLetter.markdownContent && coverLetter.markdownContent !== '[NO_MARKDOWN_CONTENT]' 
+            ? coverLetter.markdownContent 
+            : coverLetter.textContent;
+          
+          if (!contentToUse) {
+            result.warnings.push(`Cover letter ${coverLetter.name} skipped - no content available in backup`);
+            continue;
+          }
+          
+          // Create a placeholder file data for content-only imports
+          const contentType = coverLetter.markdownContent && coverLetter.markdownContent !== '[NO_MARKDOWN_CONTENT]' ? 'markdown' : 'plain';
+          // Use safer encoding that handles Unicode characters
+          const encodedContent = btoa(unescape(encodeURIComponent(contentToUse)));
+          coverLetter.fileData = `data:text/${contentType};base64,` + encodedContent;
+          coverLetter.fileType = 'docx'; // Keep original type for compatibility
+          
+          // Ensure markdown content exists for future exports
+          if (!coverLetter.markdownContent || coverLetter.markdownContent === '[NO_MARKDOWN_CONTENT]') {
+            coverLetter.markdownContent = coverLetter.textContent || '';
+          }
         }
 
         try {
@@ -969,7 +1011,26 @@ export async function importAllDataFromJSON(jsonString: string, options: {
     return result;
 
   } catch (error) {
-    result.errors.push(`Failed to parse or import data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    let errorMessage = 'Failed to parse or import data: ';
+    if (error instanceof SyntaxError) {
+      errorMessage += `JSON parsing error: ${error.message}. Check if the file is valid JSON.`;
+    } else if (error instanceof Error) {
+      errorMessage += error.message;
+    } else {
+      errorMessage += 'Unknown error';
+    }
+    
+    // Add some debugging info
+    const jsonPreview = jsonString.length > 100 ? jsonString.substring(0, 100) + '...' : jsonString;
+    console.error('Import error details:', {
+      error,
+      jsonLength: jsonString.length,
+      jsonPreview: jsonPreview,
+      firstChar: jsonString.charCodeAt(0),
+      lastChar: jsonString.charCodeAt(jsonString.length - 1)
+    });
+    
+    result.errors.push(errorMessage);
     return result;
   }
 }
