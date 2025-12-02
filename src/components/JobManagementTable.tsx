@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie } from '@fortawesome/free-solid-svg-icons';
 import StatusDropdown from './StatusDropdown';
 
 interface JobManagementTableProps {
@@ -217,6 +217,84 @@ ${job.rawText}`;
       // Fallback for older browsers
       const textArea = document.createElement('textarea');
       textArea.value = chatPrompt;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+      } catch (fallbackErr) {
+        console.error('Fallback copy failed:', fallbackErr);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
+  // Copy hiring manager message for LinkedIn
+  const handleCopyHiringManagerMessage = async (job: any) => {
+    // Extract hiring manager information - look in multiple places
+    const hiringManagerName = job.contact?.name || job.contactPerson || job.secondaryContact || 'Hiring Manager';
+    const companyName = job.company;
+    const jobTitle = job.title || job.extractedInfo?.role || 'the position';
+
+    // Get company description if available and clean it up
+    const companyDescription = job.extractedInfo?.companyDescription;
+    let companyContext = '';
+    if (companyDescription) {
+      // Try to extract what the company does from the description
+      const lowerDesc = companyDescription.toLowerCase();
+      if (lowerDesc.includes('restaurant') || lowerDesc.includes('food')) {
+        companyContext = ' for restaurants and food service businesses';
+      } else if (lowerDesc.includes('small business') || lowerDesc.includes('sme')) {
+        companyContext = ' for small businesses';
+      } else if (lowerDesc.includes('bank') || lowerDesc.includes('financial')) {
+        companyContext = ' in the financial sector';
+      } else if (lowerDesc.includes('healthcare') || lowerDesc.includes('medical')) {
+        companyContext = ' in healthcare';
+      } else {
+        // Extract first meaningful phrase about what they do
+        const match = companyDescription.match(/(?:for|helping|serving|building for) ([^.]+)/i);
+        if (match) {
+          companyContext = ` for ${match[1].toLowerCase()}`;
+        }
+      }
+    }
+
+    // Generate a personalized message based on the template you provided
+    const hiringManagerMessage = `Please type up a message for the hiring manager per LinkedIn:
+
+${hiringManagerName}${job.contactPerson !== hiringManagerName && job.contactPerson ? ` (${job.contactPerson})` : ''}
+Job poster
+
+**Subject Line:** Re: ${jobTitle} Application - Frontend Engineering Background
+
+**Message Template for ${companyName} - ${jobTitle}:**
+
+Hi ${hiringManagerName},
+
+I just applied for the ${jobTitle} role and wanted to reach out directly. ${companyName}'s mission really resonates with me — I'm looking for work where the engineering has clear real-world impact${companyContext ? `, and ${companyContext.replace(' for', 'helping')} feels incredibly meaningful` : ', and your work seems to align perfectly with that'}.
+
+In my recent role, I led frontend architecture at WaFd Bank and helped rebuild our mobile app in React Native, working closely with product, design, and operations to create secure, reliable, and intuitive workflows. I enjoy high-ownership environments and partnering across functions to bring clarity to complex systems, which seems to align well with how ${companyName} builds.
+
+If you have a moment, I'd appreciate a quick look at my application. I'd love the chance to contribute to the mission and support the team as ${companyName} continues to scale.
+
+Thank you,
+Clint`;
+
+    try {
+      await navigator.clipboard.writeText(hiringManagerMessage);
+      // Show brief success feedback
+      const button = document.activeElement as HTMLButtonElement;
+      if (button) {
+        const originalText = button.innerHTML;
+        button.innerHTML = '✅';
+        setTimeout(() => {
+          button.innerHTML = originalText;
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('Failed to copy hiring manager message:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = hiringManagerMessage;
       document.body.appendChild(textArea);
       textArea.select();
       try {
@@ -660,6 +738,16 @@ ${job.rawText}`;
                           title="Copy for chat (with resume instructions)"
                         >
                           <FontAwesomeIcon icon={faComment} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyHiringManagerMessage(job);
+                          }}
+                          className="action-btn copy-hiring-manager-btn"
+                          title="Copy LinkedIn message for hiring manager"
+                        >
+                          <FontAwesomeIcon icon={faUserTie} />
                         </button>
                         <button
                           onClick={(e) => {

@@ -2137,13 +2137,13 @@ AI will automatically fill in the job title and company name fields above!"
 
           <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
             <div className="form-group">
-              <label htmlFor="contact-name">Contact Name</label>
+              <label htmlFor="contact-name">Contact Name (Recruiter/Hiring Manager)</label>
               <input
                 id="contact-name"
                 type="text"
                 value={formData.contactName}
                 onChange={(e) => setFormData(prev => ({ ...prev, contactName: e.target.value }))}
-                placeholder="e.g., Jane Smith"
+                placeholder="e.g., Jane Smith (for LinkedIn messaging)"
                 disabled={isProcessing}
               />
             </div>

@@ -369,6 +369,15 @@
   background: rgba(253, 126, 20, 0.2);
 }
 
+.copy-hiring-manager-btn {
+  color: #0066cc;
+  background: rgba(0, 102, 204, 0.1);
+}
+
+.copy-hiring-manager-btn:hover {
+  background: rgba(0, 102, 204, 0.2);
+}
+
 .source-badge {
   display: inline-flex;
   align-items: center;
