@@ -99,7 +99,63 @@ export const logStatusChange = (
 };
 
 /**
- * Gets analytics data from activity logs
+ * Analyzes status history to determine the meaningful journey for analytics
+ * Filters out rapid back-and-forth changes and focuses on significant progressions
+ */
+export const getCleanedStatusJourney = (job: JobDescription) => {
+  if (!job.statusHistory || job.statusHistory.length === 0) {
+    const currentStatus = job.applicationStatus || 'not_applied';
+    const legitimateStatuses = ['applied', 'interviewing', 'rejected', 'offered', 'withdrawn'];
+    
+    return {
+      hasProgressed: legitimateStatuses.includes(currentStatus),
+      finalStatus: currentStatus,
+      everInterviewed: currentStatus === 'interviewing',
+      everRejected: currentStatus === 'rejected',
+      everOffered: currentStatus === 'offered',
+      statusChangeCount: 0,
+      rapidChanges: 0,
+      uniqueStatusCount: currentStatus === 'not_applied' ? 0 : 1
+    };
+  }
+
+  const history = job.statusHistory;
+  const currentStatus = job.applicationStatus || 'not_applied';
+  
+  // Detect rapid changes (multiple changes within 1 hour)
+  let rapidChanges = 0;
+  for (let i = 1; i < history.length; i++) {
+    const timeDiff = new Date(history[i].date).getTime() - new Date(history[i-1].date).getTime();
+    if (timeDiff < 60 * 60 * 1000) { // 1 hour in milliseconds
+      rapidChanges++;
+    }
+  }
+
+  // Track unique statuses reached (ignoring rapid back-and-forth)
+  const uniqueStatuses = new Set(history.map(h => h.status));
+  const everInterviewed = uniqueStatuses.has('interviewing');
+  const everRejected = uniqueStatuses.has('rejected');
+  const everOffered = uniqueStatuses.has('offered');
+
+  // Determine if this represents a legitimate application attempt
+  const legitimateStatuses = ['applied', 'interviewing', 'rejected', 'offered', 'withdrawn'];
+  const hasLegitimateProgression = legitimateStatuses.includes(currentStatus) || 
+    [...uniqueStatuses].some(status => legitimateStatuses.includes(status));
+
+  return {
+    hasProgressed: hasLegitimateProgression,
+    finalStatus: currentStatus,
+    everInterviewed,
+    everRejected,
+    everOffered,
+    statusChangeCount: history.length,
+    rapidChanges,
+    uniqueStatusCount: uniqueStatuses.size
+  };
+};
+
+/**
+ * Gets enhanced analytics data that considers status history patterns
  * NOTE: This includes ALL jobs (active, archived, duplicates) for complete historical analysis
  */
 export const getAnalytics = (jobs: JobDescription[]) => {
@@ -122,12 +178,41 @@ export const getAnalytics = (jobs: JobDescription[]) => {
       totalActivities: 0,
       statusChanges: 0,
       interviewStageChanges: 0,
-      notesAdded: 0
+      notesAdded: 0,
+      rapidStatusChanges: 0,
+      jobsWithStatusCorrections: 0
+    },
+    journeyAnalysis: {
+      jobsWithMultipleStatusChanges: 0,
+      averageStatusChangesPerJob: 0,
+      jobsThatReachedInterview: 0,
+      jobsThatWereRejected: 0,
+      jobsThatWereOffered: 0,
+      correctionsDetected: 0
     }
   };
 
-  // Count current status distribution
-  jobs.forEach(job => {
+  let totalStatusChanges = 0;
+  let totalRapidChanges = 0;
+  let jobsWithCorrections = 0;
+
+  // Enhanced analysis using status history
+  const journeyData = jobs.map(job => {
+    const journey = getCleanedStatusJourney(job);
+    
+    // Track corrections (rapid changes likely indicate user corrections)
+    if (journey.rapidChanges > 0) {
+      totalRapidChanges += journey.rapidChanges;
+      jobsWithCorrections++;
+    }
+    
+    totalStatusChanges += journey.statusChangeCount;
+    
+    return { job, journey };
+  });
+
+  // Count current status distribution (but flag jobs with corrections)
+  journeyData.forEach(({ job, journey }) => {
     const status = job.applicationStatus || 'not_applied';
     analytics.statusDistribution[status] = (analytics.statusDistribution[status] || 0) + 1;
     
@@ -155,21 +240,72 @@ export const getAnalytics = (jobs: JobDescription[]) => {
     }
   });
 
-  // Calculate conversion rates
-  const appliedJobs = jobs.filter(j => j.applicationStatus && j.applicationStatus !== 'not_applied');
-  const interviewingJobs = jobs.filter(j => j.applicationStatus === 'interviewing');
-  const hiredJobs = jobs.filter(j => j.applicationStatus === 'offered');
-  const rejectedJobs = jobs.filter(j => j.applicationStatus === 'rejected');
+  // Journey analysis (using same legitimate jobs filter)
+  const legitimateJourneyData = journeyData.filter(({ job, journey }) => 
+    !job.duplicateOfId && 
+    job.applicationStatus !== 'duplicate' && 
+    journey.hasProgressed
+  );
 
+  analytics.journeyAnalysis.jobsWithMultipleStatusChanges = legitimateJourneyData.filter(
+    ({ journey }) => journey.statusChangeCount > 1
+  ).length;
+  
+  analytics.journeyAnalysis.averageStatusChangesPerJob = totalStatusChanges / legitimateJourneyData.length || 0;
+  
+  analytics.journeyAnalysis.jobsThatReachedInterview = legitimateJourneyData.filter(
+    ({ journey }) => journey.everInterviewed
+  ).length;
+  
+  analytics.journeyAnalysis.jobsThatWereRejected = legitimateJourneyData.filter(
+    ({ journey }) => journey.everRejected
+  ).length;
+  
+  analytics.journeyAnalysis.jobsThatWereOffered = legitimateJourneyData.filter(
+    ({ journey }) => journey.everOffered
+  ).length;
+  
+  analytics.activitySummary.rapidStatusChanges = totalRapidChanges;
+  analytics.activitySummary.jobsWithStatusCorrections = jobsWithCorrections;
+  analytics.journeyAnalysis.correctionsDetected = totalRapidChanges;
+
+  // Calculate proper conversion rates based on meaningful job progressions
+  // Only count jobs that actually went through the application process (exclude duplicates, etc.)
+  const legitimateJobs = journeyData.filter(({ job, journey }) => 
+    !job.duplicateOfId && 
+    job.applicationStatus !== 'duplicate' && 
+    journey.hasProgressed
+  );
+
+  const appliedJobs = legitimateJobs; // All jobs that progressed past not_applied
+  const interviewedJobs = legitimateJobs.filter(({ journey }) => journey.everInterviewed);
+  const hiredJobs = legitimateJobs.filter(({ journey }) => journey.everOffered);
+  const rejectedJobs = legitimateJobs.filter(({ journey }) => journey.everRejected);
+
+  // Applied-based conversion rates (out of all applied jobs)
   if (appliedJobs.length > 0) {
-    analytics.conversionRates.appliedToInterview = (interviewingJobs.length / appliedJobs.length) * 100;
+    analytics.conversionRates.appliedToInterview = (interviewedJobs.length / appliedJobs.length) * 100;
     analytics.conversionRates.appliedToHired = (hiredJobs.length / appliedJobs.length) * 100;
     analytics.conversionRates.appliedToRejected = (rejectedJobs.length / appliedJobs.length) * 100;
   }
 
-  if (interviewingJobs.length > 0) {
-    analytics.conversionRates.interviewToHired = (hiredJobs.length / interviewingJobs.length) * 100;
-    analytics.conversionRates.interviewToRejected = (rejectedJobs.length / interviewingJobs.length) * 100;
+  // Interview-based conversion rates (out of jobs that reached interview stage)
+  // Only count jobs that went from interview to final outcome (not currently interviewing)
+  const interviewsWithOutcomes = interviewedJobs.filter(({ journey, job }) => {
+    const currentStatus = job.applicationStatus;
+    return currentStatus === 'offered' || currentStatus === 'rejected' || currentStatus === 'withdrawn';
+  });
+
+  if (interviewsWithOutcomes.length > 0) {
+    const interviewToOffered = interviewsWithOutcomes.filter(({ journey }) => journey.everOffered).length;
+    const interviewToRejected = interviewsWithOutcomes.filter(({ journey }) => journey.everRejected).length;
+    
+    analytics.conversionRates.interviewToHired = (interviewToOffered / interviewsWithOutcomes.length) * 100;
+    analytics.conversionRates.interviewToRejected = (interviewToRejected / interviewsWithOutcomes.length) * 100;
+  } else if (interviewedJobs.length > 0) {
+    // If no interviews have concluded yet, show 0% for both
+    analytics.conversionRates.interviewToHired = 0;
+    analytics.conversionRates.interviewToRejected = 0;
   }
 
   return analytics;
@@ -177,6 +313,7 @@ export const getAnalytics = (jobs: JobDescription[]) => {
 
 /**
  * Gets funnel analytics showing progression through stages
+ * Enhanced to include status correction indicators
  * NOTE: This includes ALL jobs (active, archived, duplicates) for complete historical analysis
  */
 export const getFunnelAnalytics = (jobs: JobDescription[]) => {
@@ -192,10 +329,25 @@ export const getFunnelAnalytics = (jobs: JobDescription[]) => {
     rejected: 0,
     withdrawn: 0,
     duplicate: 0,
-    archived: 0
+    archived: 0,
+    // Enhanced metrics
+    statusCorrections: 0,
+    multipleStatusChanges: 0
   };
 
   jobs.forEach(job => {
+    const journey = getCleanedStatusJourney(job);
+    
+    // Track jobs with corrections
+    if (journey.rapidChanges > 0) {
+      funnel.statusCorrections++;
+    }
+    
+    if (journey.statusChangeCount > 1) {
+      funnel.multipleStatusChanges++;
+    }
+
+    // Current status distribution (same as before)
     switch (job.applicationStatus) {
       case 'not_applied':
         funnel.notApplied++;
@@ -244,4 +396,100 @@ export const getFunnelAnalytics = (jobs: JobDescription[]) => {
   });
 
   return funnel;
+};
+
+/**
+ * Gets a human-readable summary of status change issues for a job
+ */
+export const getStatusChangesSummary = (job: JobDescription): string | null => {
+  if (!job.statusHistory || job.statusHistory.length <= 1) {
+    return null;
+  }
+
+  const journey = getCleanedStatusJourney(job);
+  
+  if (journey.rapidChanges === 0) {
+    return null;
+  }
+
+  const corrections = [];
+  
+  // Find rapid changes
+  for (let i = 1; i < job.statusHistory.length; i++) {
+    const current = job.statusHistory[i];
+    const previous = job.statusHistory[i - 1];
+    const timeDiff = new Date(current.date).getTime() - new Date(previous.date).getTime();
+    
+    if (timeDiff < 60 * 60 * 1000) { // Less than 1 hour
+      corrections.push(
+        `Changed from ${previous.status} to ${current.status} within ${Math.round(timeDiff / (1000 * 60))} minutes`
+      );
+    }
+  }
+
+  if (corrections.length === 0) {
+    return null;
+  }
+
+  return `Status corrections detected:\n${corrections.join('\n')}\n\nThis may indicate accidental status changes that could affect analytics accuracy.`;
+};
+
+/**
+ * Cleans up rapid status changes in a job's history
+ * Removes status changes that were reversed within 1 hour (likely corrections)
+ * Returns a cleaned version of the job
+ */
+export const cleanStatusHistory = (job: JobDescription): JobDescription => {
+  if (!job.statusHistory || job.statusHistory.length <= 1) {
+    return job;
+  }
+
+  const cleanedHistory = [];
+  const cleanedActivityLog = job.activityLog ? [...job.activityLog] : [];
+  
+  for (let i = 0; i < job.statusHistory.length; i++) {
+    const current = job.statusHistory[i];
+    const next = job.statusHistory[i + 1];
+    
+    // If this is the last entry, always keep it
+    if (!next) {
+      cleanedHistory.push(current);
+      continue;
+    }
+    
+    // Check if the next change happens within 1 hour and reverts this change
+    const timeDiff = new Date(next.date).getTime() - new Date(current.date).getTime();
+    const isRapidReversal = timeDiff < 60 * 60 * 1000;
+    
+    if (isRapidReversal) {
+      // Skip this entry (it's likely a correction)
+      // Also remove corresponding activity log entries
+      const currentTime = current.date;
+      for (let j = cleanedActivityLog.length - 1; j >= 0; j--) {
+        if (cleanedActivityLog[j].timestamp === currentTime && 
+            cleanedActivityLog[j].type === 'status_change') {
+          cleanedActivityLog.splice(j, 1);
+        }
+      }
+    } else {
+      cleanedHistory.push(current);
+    }
+  }
+  
+  return {
+    ...job,
+    statusHistory: cleanedHistory,
+    activityLog: cleanedActivityLog
+  };
+};
+
+/**
+ * Cleans all jobs with rapid status changes
+ * Returns array of cleaned jobs
+ */
+export const cleanAllJobsStatusHistory = (jobs: JobDescription[]): JobDescription[] => {
+  return jobs.map(job => {
+    const journey = getCleanedStatusJourney(job);
+    return journey.rapidChanges > 0 ? cleanStatusHistory(job) : job;
+  });
 };

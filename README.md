@@ -93,9 +93,23 @@ src/
 - **Good for**: Nuanced content classification, quality assessment, semantic grouping
 - **Requires**: OpenAI API key configuration
 
+## Analytics Features
+- **📊 Application Funnel**: Visual progression through application stages
+- **📈 Conversion Rates**: Success metrics at each stage (applied → interview → hired)
+- **🔄 Journey Analysis**: Tracks comprehensive application history including status corrections
+- **⚠️ Status Change Detection**: Automatically detects and flags rapid status changes that may indicate user corrections or data entry mistakes
+- **📋 Activity Summary**: Complete audit trail of all status changes and activities
+
+### Status Change Intelligence
+The app automatically detects when jobs have had rapid status changes (within 1 hour), which often indicates:
+- Accidental status updates that were quickly corrected
+- Data entry mistakes during bulk updates
+- Testing or exploring the interface
+
+Jobs with detected corrections are marked with a ⚠️ icon and provide detailed information about what changes occurred. The analytics system accounts for these corrections to provide more accurate conversion rates and funnel analysis.
+
 ## Next Steps: Phase 2
 - **📋 Job Description Analysis**: Parse and analyze job postings
 - **🎯 Chunk Matching**: Match relevant chunks to JD requirements  
 - **📝 Resume Generation**: Assemble tailored resumes from selected chunks
-- **📊 Application Tracking**: Track applications and success metrics
 - **📤 Export/Import**: Data backup and portability features

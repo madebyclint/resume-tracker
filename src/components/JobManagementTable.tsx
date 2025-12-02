@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import StatusDropdown from './StatusDropdown';
+import { getCleanedStatusJourney, getStatusChangesSummary } from '../utils/activityLogger';
 
 interface JobManagementTableProps {
   jobs: JobDescription[];
@@ -673,9 +674,24 @@ Clint`;
                   onClick={() => onSelect(job.id)}
                 >
                   <td className="id-cell" style={{ textAlign: 'center', fontWeight: 'bold' }}>
-                    <span className="job-id" title={`UUID: ${job.id}`}>
-                      {job.sequentialId || 'N/A'}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <span className="job-id" title={`UUID: ${job.id}`}>
+                        {job.sequentialId || 'N/A'}
+                      </span>
+                      {(() => {
+                        // Create a clean job object without the computed fields that cause type issues
+                        const { daysSinceApplication, daysInCurrentStatus, ...cleanJob } = job;
+                        const journey = getCleanedStatusJourney(cleanJob as JobDescription);
+                        const summary = getStatusChangesSummary(cleanJob as JobDescription);
+                        return journey.rapidChanges > 0 ? (
+                          <FontAwesomeIcon
+                            icon={faExclamationTriangle}
+                            style={{ color: '#ffc107', fontSize: '10px' }}
+                            title={summary || `Status corrections detected: ${journey.rapidChanges} rapid changes. This may affect analytics accuracy.`}
+                          />
+                        ) : null;
+                      })()}
+                    </div>
                   </td>
                   <td className="company-position-cell">
                     <div className="company-name">

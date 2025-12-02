@@ -109,6 +109,45 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ jobs }) => {
               <span>Notes Added:</span>
               <span className="stat-value">{analytics.activitySummary.notesAdded}</span>
             </div>
+            {analytics.activitySummary.rapidStatusChanges > 0 && (
+              <div className="stat-item warning">
+                <span>Status Corrections:</span>
+                <span className="stat-value">{analytics.activitySummary.rapidStatusChanges}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Journey Analysis */}
+        <div className="analytics-card journey-card">
+          <h4>Application Journey Analysis</h4>
+          <div className="journey-stats">
+            <div className="stat-item">
+              <span>Jobs w/ Multiple Changes:</span>
+              <span className="stat-value">{analytics.journeyAnalysis.jobsWithMultipleStatusChanges}</span>
+            </div>
+            <div className="stat-item">
+              <span>Avg Changes per Job:</span>
+              <span className="stat-value">{analytics.journeyAnalysis.averageStatusChangesPerJob.toFixed(1)}</span>
+            </div>
+            <div className="stat-item">
+              <span>Ever Interviewed:</span>
+              <span className="stat-value success">{analytics.journeyAnalysis.jobsThatReachedInterview}</span>
+            </div>
+            <div className="stat-item">
+              <span>Ever Rejected:</span>
+              <span className="stat-value rejected">{analytics.journeyAnalysis.jobsThatWereRejected}</span>
+            </div>
+            <div className="stat-item">
+              <span>Ever Offered:</span>
+              <span className="stat-value success">{analytics.journeyAnalysis.jobsThatWereOffered}</span>
+            </div>
+            {analytics.journeyAnalysis.correctionsDetected > 0 && (
+              <div className="stat-item warning">
+                <span>Corrections Detected:</span>
+                <span className="stat-value">{analytics.journeyAnalysis.correctionsDetected}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
