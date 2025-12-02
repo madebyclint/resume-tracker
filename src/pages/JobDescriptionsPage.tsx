@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription, Resume, CoverLetter } from '../types';
@@ -6,6 +6,7 @@ import { parseJobDescription, generateTailoredResumeFromFullText, generateTailor
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter, exportAllDataAsJSON, importAllDataFromJSON } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
 import { logStatusChange, logActivity } from '../utils/activityLogger';
+import { extensionService, ExtensionJobData, ExtensionService } from '../utils/extensionService';
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -248,6 +249,52 @@ const JobDescriptionsPage: React.FC = () => {
   } | null>(null);
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [tempNotes, setTempNotes] = useState('');
+
+  // Extension listener for job data from browser extension
+  useEffect(() => {
+    const handleExtensionJobData = (extensionData: ExtensionJobData) => {
+      try {
+        // Convert extension data to job description format
+        const jobDescription = ExtensionService.convertToJobDescription(extensionData);
+
+        // Add to state
+        setState(prevState => ({
+          ...prevState,
+          jobDescriptions: [...prevState.jobDescriptions, jobDescription]
+        }));
+
+        // Log activity and save to storage
+        const jobWithActivity = logActivity(jobDescription, 'field_updated', {
+          field: 'imported',
+          toValue: true,
+          details: `Imported from ${extensionData.source} via browser extension`
+        });
+
+        // Save to storage
+        saveJobDescription(jobWithActivity);
+
+        // Show success toast
+        showToast(
+          `Job "${jobDescription.title}" imported from browser extension!`,
+          'success',
+          5000
+        );
+
+        console.log('Successfully imported job from extension:', jobDescription);
+      } catch (error) {
+        console.error('Error importing job from extension:', error);
+        showToast('Failed to import job from browser extension', 'error');
+      }
+    };
+
+    // Add listener to extension service
+    extensionService.addJobDataListener(handleExtensionJobData);
+
+    // Cleanup listener on unmount
+    return () => {
+      extensionService.removeJobDataListener(handleExtensionJobData);
+    };
+  }, [setState]);
 
   // Toast helper functions
   const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration = 4000) => {
