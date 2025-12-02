@@ -148,6 +148,12 @@ DoubleKnot Creative  •  Seattle WA  •  2010 to 2014
 * Focused on simple interactions, clean layout, and rapid iteration.
 * Demonstrated strong 0 to 1 delivery and product-minded engineering.
 
+### Resume Tracker: AI-Assisted Job Application Manager (2025)
+
+* Built an AI-enhanced application tracking system with automated job description parsing and data extraction.
+* Designed clean UI patterns and streamlined workflows using AI-accelerated development cycles.
+* Delivered end-to-end product execution with prompt-assisted coding and rapid iteration.
+
 ## EDUCATION AND CERTIFICATIONS
 
 * Mendix Intermediate Developer Certification
@@ -178,6 +184,7 @@ DoubleKnot Creative  •  Seattle WA  •  2010 to 2014
 - Label this thread as: ${dynamicLabel}
 - Please use most recent resumes in project as base unless gaps exist - then use other resumes for examples of experience to fill gaps.
 - Tailor experience and skills to best match the job description provided.
+- Please include all examples from Selected Projects that are relevant to the job description.
 - Only ONE divider line, placed immediately after the header and nowhere else in the document.
 - Header compressed with bullet separators.
 - Skills section using bullet points with bold category labels.
