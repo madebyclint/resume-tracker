@@ -414,20 +414,21 @@ const JobDescriptionsPage: React.FC = () => {
     const totalWithImpact = impactStats.low + impactStats.medium + impactStats.high;
     const impactRatio = totalWithImpact > 0 ? ((impactStats.high / totalWithImpact) * 100).toFixed(0) : '0';
 
-    // Daily velocity data for chart (last 14 days)
+    // Daily velocity data for chart (last 14 days) - tracking resume applications
     const dailyData = [];
     for (let i = 13; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
+      // Count job applications that have linked resumes and were applied on this date
       const count = state.jobDescriptions.filter(job => {
-        const jobDate = (job.applicationDate || job.uploadDate)?.split('T')[0];
-        return jobDate === dateStr;
+        const applicationDate = job.applicationDate?.split('T')[0];
+        return applicationDate === dateStr && job.linkedResumeIds && job.linkedResumeIds.length > 0;
       }).length;
       dailyData.push({ date: dateStr, count, displayDate: date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
     }
 
-    // Weekly velocity data for chart (last 8 weeks)
+    // Weekly velocity data for chart (last 8 weeks) - tracking resume applications
     const weeklyData = [];
     for (let i = 7; i >= 0; i--) {
       const endDate = new Date();
@@ -435,9 +436,13 @@ const JobDescriptionsPage: React.FC = () => {
       const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - 6);
 
+      // Count job applications that have linked resumes and were applied in this week
       const count = state.jobDescriptions.filter(job => {
-        const jobDate = new Date(job.applicationDate || job.uploadDate);
-        return jobDate >= startDate && jobDate <= endDate;
+        if (!job.applicationDate || !job.linkedResumeIds || job.linkedResumeIds.length === 0) {
+          return false;
+        }
+        const applicationDate = new Date(job.applicationDate);
+        return applicationDate >= startDate && applicationDate <= endDate;
       }).length;
 
       const weekNum = Math.floor(endDate.getTime() / (1000 * 60 * 60 * 24 * 7));
@@ -2371,7 +2376,7 @@ AI will automatically fill in the job title and company name fields above!"
 
                       <div className="charts-section">
                         <div className="charts-header">
-                          <h4>📈 Velocity Charts</h4>
+                          <h4>📈 Resume Application Velocity</h4>
                           <div className="chart-type-toggle">
                             <button
                               className={`chart-toggle-btn ${chartType === 'bar' ? 'active' : ''}`}
@@ -2389,7 +2394,7 @@ AI will automatically fill in the job title and company name fields above!"
                         </div>
 
                         <div className="chart-container">
-                          <h4>Daily Velocity (Last 14 Days)</h4>
+                          <h4>Daily Resume Applications (Last 14 Days)</h4>
                           {chartType === 'bar' ? (
                             <div className="mini-chart daily-chart bar-chart">
                               {dailyData.map((day, idx) => (
@@ -2400,7 +2405,7 @@ AI will automatically fill in the job title and company name fields above!"
                                       height: `${Math.max(day.count * 20, 4)}px`,
                                       backgroundColor: day.count > 0 ? '#007bff' : '#e9ecef'
                                     }}
-                                    title={`${day.displayDate}: ${day.count} applications`}
+                                    title={`${day.displayDate}: ${day.count} resume applications`}
                                   ></div>
                                   <span className="chart-label">{day.displayDate}</span>
                                 </div>
@@ -2454,7 +2459,7 @@ AI will automatically fill in the job title and company name fields above!"
                                     stroke="#ffffff"
                                     strokeWidth="2"
                                   >
-                                    <title>{`${day.displayDate}: ${day.count} applications`}</title>
+                                    <title>{`${day.displayDate}: ${day.count} resume applications`}</title>
                                   </circle>
                                 ))}
                               </svg>
@@ -2468,7 +2473,7 @@ AI will automatically fill in the job title and company name fields above!"
                         </div>
 
                         <div className="chart-container">
-                          <h4>Weekly Velocity (Last 8 Weeks)</h4>
+                          <h4>Weekly Resume Applications (Last 8 Weeks)</h4>
                           {chartType === 'bar' ? (
                             <div className="mini-chart weekly-chart bar-chart">
                               {weeklyData.map((week, idx) => (
@@ -2479,7 +2484,7 @@ AI will automatically fill in the job title and company name fields above!"
                                       height: `${Math.max(week.count * 8, 4)}px`,
                                       backgroundColor: week.count > 0 ? '#28a745' : '#e9ecef'
                                     }}
-                                    title={`Week ${week.week} (${week.startDate}-${week.endDate}): ${week.count} applications`}
+                                    title={`Week ${week.week} (${week.startDate}-${week.endDate}): ${week.count} resume applications`}
                                   ></div>
                                   <span className="chart-label">{week.week}</span>
                                 </div>
@@ -2533,7 +2538,7 @@ AI will automatically fill in the job title and company name fields above!"
                                     stroke="#ffffff"
                                     strokeWidth="2"
                                   >
-                                    <title>{`Week ${week.week} (${week.startDate}-${week.endDate}): ${week.count} applications`}</title>
+                                    <title>{`Week ${week.week} (${week.startDate}-${week.endDate}): ${week.count} resume applications`}</title>
                                   </circle>
                                 ))}
                               </svg>

@@ -187,6 +187,7 @@ DoubleKnot Creative  •  Seattle WA  •  2010 to 2014
 - Please include all examples from Selected Projects that are relevant to the job description.
 - Only ONE divider line, placed immediately after the header and nowhere else in the document.
 - Header compressed with bullet separators.
+- Header job title needs to match job description title if possible.
 - Skills section using bullet points with bold category labels.
 - No em dashes, no Unicode, and no fancy characters.
 - Do NOT insert any additional dividers or horizontal rules anywhere else in the resume.
