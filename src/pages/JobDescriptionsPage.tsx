@@ -13,6 +13,7 @@ import remarkBreaks from 'remark-breaks';
 import GeneratedContentModal from '../components/GeneratedContentModal';
 import ValidationMessage from '../components/ValidationMessage';
 import CSVImportModal from '../components/CSVImportModal';
+import StorageMonitor from '../components/StorageMonitor';
 import JobManagementTable from '../components/JobManagementTable';
 import StatusDropdown from '../components/StatusDropdown';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
@@ -2224,6 +2225,10 @@ AI will automatically fill in the job title and company name fields above!"
                             </div>
                           </div>
                         </div>
+                      </div>
+
+                      <div className="storage-monitor-section" style={{ marginBottom: '1.5rem' }}>
+                        <StorageMonitor />
                       </div>
 
                       <div className="impact-section">

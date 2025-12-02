@@ -1,5 +1,6 @@
 import { Resume, CoverLetter } from "../types";
 import { formatFileSize, formatDate } from "../utils/documentUtils";
+import StorageMonitor from "./StorageMonitor";
 
 interface StatsSectionProps {
   resumes: Resume[];
@@ -39,6 +40,7 @@ export default function StatsSection({ resumes, coverLetters }: StatsSectionProp
           }
         </strong>
       </div>
+      <StorageMonitor />
     </section>
   );
 }

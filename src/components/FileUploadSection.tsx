@@ -3,6 +3,7 @@ import { Resume, CoverLetter, AppState } from "../types";
 import { saveResume, saveCoverLetter, debugIndexedDB, clearAllData } from "../storage";
 import { checkForDuplicates } from "../utils/duplicateChecker";
 import { formatFileSize, extractTextFromDocument } from "../utils/documentUtils";
+import { checkStorageCapacity, estimateAppStorageUsage } from "../utils/storageUtils";
 import { extractDocumentMetadata } from "../utils/aiService";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUpload, faFileAlt } from '@fortawesome/free-solid-svg-icons';
@@ -116,6 +117,19 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
       const fileType: 'docx' = 'docx';
 
       // Check file size (warn about very large files)
+      // Check storage capacity before processing
+      const storageCheck = await checkStorageCapacity(file.size);
+
+      if (!storageCheck.canUpload) {
+        alert(`❌ Cannot upload ${file.name}: ${storageCheck.error}`);
+        continue;
+      }
+
+      if (storageCheck.warning) {
+        const shouldContinue = confirm(`⚠️ ${file.name}: ${storageCheck.warning}\n\nContinue with upload?`);
+        if (!shouldContinue) continue;
+      }
+
       if (file.size > 10 * 1024 * 1024) { // 10MB - IndexedDB can handle larger files
         const shouldContinue = confirm(`${file.name} is ${formatFileSize(file.size)}. Very large files may impact performance. Continue?`);
         if (!shouldContinue) continue;
@@ -387,6 +401,21 @@ export default function FileUploadSection({ state, setState, syncWithStorage }: 
           border: "1px solid #cbd5e0"
         }}>
           <strong>Debug Info:</strong> {debugInfo}
+
+          {/* Add storage usage estimate */}
+          <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#4a5568" }}>
+            {(() => {
+              const usage = estimateAppStorageUsage(state.resumes, state.coverLetters);
+              return (
+                <div>
+                  <strong>App Storage Usage:</strong> {formatFileSize(usage.estimatedStorageSize)}
+                  <span style={{ color: "#718096", marginLeft: "0.5rem" }}>
+                    ({usage.documentCount} documents, {formatFileSize(usage.totalFileSize)} raw)
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
     </section>
