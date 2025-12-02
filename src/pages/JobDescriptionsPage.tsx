@@ -411,6 +411,9 @@ const JobDescriptionsPage: React.FC = () => {
     const daysSinceFirst = Math.floor((new Date().getTime() - firstJobDate.getTime()) / (1000 * 60 * 60 * 24));
     const avgPerDay = daysSinceFirst > 0 ? (total / daysSinceFirst).toFixed(2) : '0';
 
+    // Calculate total applications (all statuses except not_applied)
+    const totalApplications = stats.applied + stats.interviewing + stats.rejected + stats.offered + stats.withdrawn;
+
     const totalWithImpact = impactStats.low + impactStats.medium + impactStats.high;
     const impactRatio = totalWithImpact > 0 ? ((impactStats.high / totalWithImpact) * 100).toFixed(0) : '0';
 
@@ -420,10 +423,14 @@ const JobDescriptionsPage: React.FC = () => {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
-      // Count job applications that have linked resumes and were applied on this date
+      // Count job applications that have linked resumes, were applied on this date, and have any status except 'not_applied'
       const count = state.jobDescriptions.filter(job => {
         const applicationDate = job.applicationDate?.split('T')[0];
-        return applicationDate === dateStr && job.linkedResumeIds && job.linkedResumeIds.length > 0;
+        const status = job.applicationStatus || 'not_applied';
+        return applicationDate === dateStr &&
+          job.linkedResumeIds &&
+          job.linkedResumeIds.length > 0 &&
+          status !== 'not_applied';
       }).length;
       dailyData.push({ date: dateStr, count, displayDate: date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
     }
@@ -436,9 +443,13 @@ const JobDescriptionsPage: React.FC = () => {
       const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - 6);
 
-      // Count job applications that have linked resumes and were applied in this week
+      // Count job applications that have linked resumes, were applied in this week, and have any status except 'not_applied'
       const count = state.jobDescriptions.filter(job => {
         if (!job.applicationDate || !job.linkedResumeIds || job.linkedResumeIds.length === 0) {
+          return false;
+        }
+        const status = job.applicationStatus || 'not_applied';
+        if (status === 'not_applied') {
           return false;
         }
         const applicationDate = new Date(job.applicationDate);
@@ -458,6 +469,7 @@ const JobDescriptionsPage: React.FC = () => {
     return {
       stats,
       total,
+      totalApplications,
       daysSinceFirst,
       avgPerDay,
       impactStats,
@@ -2262,7 +2274,7 @@ AI will automatically fill in the job title and company name fields above!"
         <div className="job-stats-section">
           <div className="stats-container">
             {(() => {
-              const { stats, total, daysSinceFirst, avgPerDay, impactStats, impactRatio, aiStats, dailyData, weeklyData } = statsData;
+              const { stats, total, totalApplications, daysSinceFirst, avgPerDay, impactStats, impactRatio, aiStats, dailyData, weeklyData } = statsData;
 
               return (
                 <>
@@ -2270,6 +2282,7 @@ AI will automatically fill in the job title and company name fields above!"
                     <h3>Application Status Overview</h3>
                     <div className="stats-header-controls">
                       <span className="total-count">Total Jobs: {total}</span>
+                      <span className="total-count" style={{ marginLeft: "1rem", color: "#007bff", fontWeight: "600" }}>Applied: {totalApplications}</span>
                       <button
                         className="expand-stats-btn"
                         onClick={() => setShowExpandedStats(!showExpandedStats)}
@@ -2316,16 +2329,20 @@ AI will automatically fill in the job title and company name fields above!"
                             <span className="analytics-value">{daysSinceFirst}</span>
                           </div>
                           <div className="analytics-item">
-                            <span className="analytics-label">Avg Per Day</span>
-                            <span className="analytics-value">{avgPerDay}</span>
+                            <span className="analytics-label">Total Applications</span>
+                            <span className="analytics-value">{totalApplications}</span>
                           </div>
                           <div className="analytics-item">
-                            <span className="analytics-label">Impact Ratio (Applied)</span>
+                            <span className="analytics-label">Pending (Applied Status)</span>
+                            <span className="analytics-value">{stats.applied}</span>
+                          </div>
+                          <div className="analytics-item">
+                            <span className="analytics-label">High Impact Ratio</span>
                             <span className="analytics-value">{impactRatio}%</span>
                           </div>
                           <div className="analytics-item">
                             <span className="analytics-label">Success Rate</span>
-                            <span className="analytics-value">{stats.applied > 0 ? ((stats.offered / stats.applied) * 100).toFixed(0) : '0'}%</span>
+                            <span className="analytics-value">{totalApplications > 0 ? ((stats.offered / totalApplications) * 100).toFixed(0) : '0'}%</span>
                           </div>
                         </div>
 
