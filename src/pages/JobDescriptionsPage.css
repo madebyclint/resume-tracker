@@ -513,6 +513,7 @@
 .resume-matching-section,
 .keywords-section {
   margin-bottom: 30px;
+  margin-top: 30px;
 }
 
 .job-info-section h3,
@@ -3454,4 +3455,32 @@
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Section header with toggle */
+.section-header-with-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-header-with-toggle h3 {
+  margin: 0;
+}
+
+.toggle-button {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #495057;
+  transition: all 0.2s;
+}
+
+.toggle-button:hover {
+  background: #e9ecef;
+  color: #212529;
 }

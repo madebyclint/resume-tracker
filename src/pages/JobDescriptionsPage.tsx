@@ -256,9 +256,12 @@ const JobDescriptionsPage: React.FC = () => {
 
   // Filter state
   const [showArchivedJobs, setShowArchivedJobs] = useState(false);
-  const [hideRejectedJobs, setHideRejectedJobs] = useState(false);
+  const [hideRejectedJobs, setHideRejectedJobs] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicateSearchQuery, setDuplicateSearchQuery] = useState('');
+
+  // Document matching toggle state
+  const [showDocumentMatching, setShowDocumentMatching] = useState<Record<string, boolean>>({});
 
   // Extension listener for job data from browser extension
   useEffect(() => {
@@ -3280,82 +3283,113 @@ AI will automatically fill in the job title and company name fields above!"
                     </div> */}
 
                       <div className="resume-matching-section">
-                        <h3>Document Matching</h3>
-                        {documentMatches.length > 0 ? (
-                          <div className="resume-matches">
-                            {documentMatches.map((match: DocumentMatch) => (
-                              <div key={match.documentId} className="resume-match">
-                                <div className="match-header">
-                                  <span className="resume-name">
-                                    {match.documentName}
-                                    <span className="document-type-badge">
-                                      <FontAwesomeIcon icon={faFileAlt} />
-                                    </span>
-                                  </span>
-                                  <span className="match-score">
-                                    {Math.round(match.matchScore * 100)}% match
-                                  </span>
-                                  <div className="match-actions">
-                                    <button
-                                      className="preview-button"
-                                      onClick={() => {
-                                        const document = match.documentType === 'resume'
-                                          ? state.resumes.find(r => r.id === match.documentId)
-                                          : state.coverLetters.find(cl => cl.id === match.documentId);
+                        <div className="section-header-with-toggle">
+                          <h3>Document Matching</h3>
+                          <button
+                            className="toggle-button"
+                            onClick={() => {
+                              const hasLinkedDocuments = selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0;
+                              setShowDocumentMatching(prev => ({
+                                ...prev,
+                                [selectedJob.id]: !prev[selectedJob.id]
+                              }));
+                            }}
+                            title={(() => {
+                              const hasLinkedDocuments = selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0;
+                              const isVisible = showDocumentMatching[selectedJob.id] ?? !hasLinkedDocuments;
+                              return isVisible ? 'Hide document matching' : 'Show document matching';
+                            })()}
+                          >
+                            {(() => {
+                              const hasLinkedDocuments = selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0;
+                              const isVisible = showDocumentMatching[selectedJob.id] ?? !hasLinkedDocuments;
+                              return isVisible ? '▼' : '▶';
+                            })()}
+                          </button>
+                        </div>
+                        {(() => {
+                          const hasLinkedDocuments = selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0;
+                          const isVisible = showDocumentMatching[selectedJob.id] ?? !hasLinkedDocuments;
+                          return isVisible;
+                        })() && (
+                            <>
+                              {documentMatches.length > 0 ? (
+                                <div className="resume-matches">
+                                  {documentMatches.map((match: DocumentMatch) => (
+                                    <div key={match.documentId} className="resume-match">
+                                      <div className="match-header">
+                                        <span className="resume-name">
+                                          {match.documentName}
+                                          <span className="document-type-badge">
+                                            <FontAwesomeIcon icon={faFileAlt} />
+                                          </span>
+                                        </span>
+                                        <span className="match-score">
+                                          {Math.round(match.matchScore * 100)}% match
+                                        </span>
+                                        <div className="match-actions">
+                                          <button
+                                            className="preview-button"
+                                            onClick={() => {
+                                              const document = match.documentType === 'resume'
+                                                ? state.resumes.find(r => r.id === match.documentId)
+                                                : state.coverLetters.find(cl => cl.id === match.documentId);
 
-                                        if (document) {
-                                          const isLinked = match.documentType === 'resume'
-                                            ? selectedJob.linkedResumeIds.includes(match.documentId)
-                                            : selectedJob.linkedCoverLetterIds.includes(match.documentId);
+                                              if (document) {
+                                                const isLinked = match.documentType === 'resume'
+                                                  ? selectedJob.linkedResumeIds.includes(match.documentId)
+                                                  : selectedJob.linkedCoverLetterIds.includes(match.documentId);
 
-                                          const onLink = () => {
-                                            if (match.documentType === 'resume') {
-                                              handleLinkResume(selectedJob.id, match.documentId);
-                                            } else {
-                                              handleLinkCoverLetter(selectedJob.id, match.documentId);
-                                            }
-                                          };
+                                                const onLink = () => {
+                                                  if (match.documentType === 'resume') {
+                                                    handleLinkResume(selectedJob.id, match.documentId);
+                                                  } else {
+                                                    handleLinkCoverLetter(selectedJob.id, match.documentId);
+                                                  }
+                                                };
 
-                                          handlePreviewDocument(document);
-                                        }
-                                      }}
-                                      title="Preview document content"
-                                    >
-                                      👁️ Preview
-                                    </button>
-                                    <button
-                                      className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                        (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
-                                        ? 'linked' : ''
-                                        }`}
-                                      onClick={() => {
-                                        if (match.documentType === 'resume') {
-                                          handleLinkResume(selectedJob.id, match.documentId);
-                                        } else {
-                                          handleLinkCoverLetter(selectedJob.id, match.documentId);
-                                        }
-                                      }}
-                                    >
-                                      {((match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                        (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId)))
-                                        ? 'Unlink' : 'Link'}
-                                    </button>
-                                  </div>
+                                                handlePreviewDocument(document);
+                                              }
+                                            }}
+                                            title="Preview document content"
+                                          >
+                                            👁️ Preview
+                                          </button>
+                                          <button
+                                            className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
+                                              (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
+                                              ? 'linked' : ''
+                                              }`}
+                                            onClick={() => {
+                                              if (match.documentType === 'resume') {
+                                                handleLinkResume(selectedJob.id, match.documentId);
+                                              } else {
+                                                handleLinkCoverLetter(selectedJob.id, match.documentId);
+                                              }
+                                            }}
+                                          >
+                                            {((match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
+                                              (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId)))
+                                              ? 'Unlink' : 'Link'}
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <div className="matched-keywords">
+                                        <strong>Matched keywords:</strong> {match.matchedKeywords.join(', ')}
+                                      </div>
+                                      {match.skillMatches.length > 0 && (
+                                        <div className="skill-matches">
+                                          <strong>Skill matches:</strong> {match.skillMatches.join(', ')}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
-                                <div className="matched-keywords">
-                                  <strong>Matched keywords:</strong> {match.matchedKeywords.join(', ')}
-                                </div>
-                                {match.skillMatches.length > 0 && (
-                                  <div className="skill-matches">
-                                    <strong>Skill matches:</strong> {match.skillMatches.join(', ')}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="no-matches">No matching documents found based on keywords and skills.</p>
-                        )}
+                              ) : (
+                                <p className="no-matches">No matching documents found based on keywords and skills.</p>
+                              )}
+                            </>
+                          )}
                       </div>
 
                       <div className="keywords-section">
