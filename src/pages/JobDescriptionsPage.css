@@ -3246,9 +3246,30 @@
 .job-filters {
   display: flex;
   gap: 20px;
+  align-items: center;
   padding: 15px 0;
   border-bottom: 1px solid #e0e0e0;
   margin-bottom: 20px;
+}
+
+.search-container {
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .filter-checkbox {
@@ -3257,6 +3278,7 @@
   gap: 8px;
   cursor: pointer;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .filter-checkbox input[type="checkbox"] {
@@ -3412,4 +3434,24 @@
 .company-name {
   color: #6c757d;
   font-size: 14px;
+}
+
+/* Duplicate search styles */
+.duplicate-search-container {
+  margin-bottom: 16px;
+}
+
+.duplicate-search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+}
+
+.duplicate-search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }

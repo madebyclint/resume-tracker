@@ -257,6 +257,8 @@ const JobDescriptionsPage: React.FC = () => {
   // Filter state
   const [showArchivedJobs, setShowArchivedJobs] = useState(false);
   const [hideRejectedJobs, setHideRejectedJobs] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [duplicateSearchQuery, setDuplicateSearchQuery] = useState('');
 
   // Extension listener for job data from browser extension
   useEffect(() => {
@@ -1095,6 +1097,7 @@ const JobDescriptionsPage: React.FC = () => {
 
   const handleMarkDuplicate = async (jobId: string) => {
     setDuplicateJobId(jobId);
+    setDuplicateSearchQuery('');
     setShowDuplicateModal(true);
   };
 
@@ -2750,6 +2753,15 @@ AI will automatically fill in the job title and company name fields above!"
             ) : (
               <>
                 <div className="job-filters">
+                  <div className="search-container">
+                    <input
+                      type="text"
+                      placeholder="Search jobs (company, title, role...)"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="search-input"
+                    />
+                  </div>
                   <label className="filter-checkbox">
                     <input
                       type="checkbox"
@@ -2785,6 +2797,20 @@ AI will automatically fill in the job title and company name fields above!"
                       if (hideRejectedJobs) {
                         filteredJobs = filteredJobs.filter(job =>
                           job.applicationStatus !== 'rejected'
+                        );
+                      }
+
+                      // Apply search filter
+                      if (searchQuery.trim()) {
+                        const query = searchQuery.toLowerCase().trim();
+                        filteredJobs = filteredJobs.filter(job =>
+                          job.company.toLowerCase().includes(query) ||
+                          job.title.toLowerCase().includes(query) ||
+                          (job.role && job.role.toLowerCase().includes(query)) ||
+                          (job.extractedInfo.role && job.extractedInfo.role.toLowerCase().includes(query)) ||
+                          (job.location && job.location.toLowerCase().includes(query)) ||
+                          (job.extractedInfo.location && job.extractedInfo.location.toLowerCase().includes(query)) ||
+                          (job.source && job.source.toLowerCase().includes(query))
                         );
                       }
 
@@ -3896,10 +3922,34 @@ AI will automatically fill in the job title and company name fields above!"
             </div>
             <div className="modal-body">
               <p>Select the original job that this is a duplicate of:</p>
+              <div className="duplicate-search-container">
+                <input
+                  type="text"
+                  placeholder="Search original jobs (company, title, role...)"
+                  value={duplicateSearchQuery}
+                  onChange={(e) => setDuplicateSearchQuery(e.target.value)}
+                  className="duplicate-search-input"
+                />
+              </div>
               <div className="duplicate-job-list">
-                {state.jobDescriptions
-                  .filter(job => job.id !== duplicateJobId && job.applicationStatus !== 'duplicate')
-                  .map(job => (
+                {(() => {
+                  let availableJobs = state.jobDescriptions
+                    .filter(job => job.id !== duplicateJobId && job.applicationStatus !== 'duplicate');
+
+                  // Apply search filter to duplicate modal
+                  if (duplicateSearchQuery.trim()) {
+                    const query = duplicateSearchQuery.toLowerCase().trim();
+                    availableJobs = availableJobs.filter(job =>
+                      job.company.toLowerCase().includes(query) ||
+                      job.title.toLowerCase().includes(query) ||
+                      (job.role && job.role.toLowerCase().includes(query)) ||
+                      (job.extractedInfo.role && job.extractedInfo.role.toLowerCase().includes(query)) ||
+                      (job.location && job.location.toLowerCase().includes(query)) ||
+                      (job.extractedInfo.location && job.extractedInfo.location.toLowerCase().includes(query))
+                    );
+                  }
+
+                  return availableJobs.map(job => (
                     <div
                       key={job.id}
                       className="duplicate-job-option"
@@ -3914,8 +3964,8 @@ AI will automatically fill in the job title and company name fields above!"
                         {job.applicationStatus || 'not_applied'}
                       </div>
                     </div>
-                  ))
-                }
+                  ));
+                })()}
               </div>
             </div>
           </div>
