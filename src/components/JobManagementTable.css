@@ -608,3 +608,87 @@
     max-width: 140px;
   }
 }
+
+/* Enhanced Status Dropdown Styles */
+.status-select {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  color: #333;
+}
+
+.status-select:hover {
+  border-color: #80bdff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+}
+
+/* Status-specific colors */
+.status-select.status-not_applied {
+  background: #f8f9fa;
+  color: #6c757d;
+  border-color: #ced4da;
+}
+
+.status-select.status-applied {
+  background: #e7f3ff;
+  color: #0066cc;
+  border-color: #b3d9ff;
+}
+
+.status-select.status-interviewing {
+  background: #fff3cd;
+  color: #856404;
+  border-color: #ffeaa7;
+}
+
+.status-select.status-rejected {
+  background: #f8d7da;
+  color: #721c24;
+  border-color: #f1b0b7;
+}
+
+.status-select.status-offered {
+  background: #d4edda;
+  color: #155724;
+  border-color: #c3e6cb;
+}
+
+.status-select.status-withdrawn {
+  background: #e2e3e5;
+  color: #383d41;
+  border-color: #c6c8ca;
+}
+
+/* OptGroup styling for interview stages */
+.status-select optgroup {
+  font-weight: 600;
+  color: #495057;
+  background: #f8f9fa;
+  padding: 4px 0;
+}
+
+.status-select option {
+  padding: 6px 12px;
+  font-size: 13px;
+  background: white;
+  color: #333;
+}
+
+/* Job details status dropdown */
+.job-details-status.status-select {
+  min-width: 180px;
+  font-size: 14px;
+  padding: 8px 12px;
+}

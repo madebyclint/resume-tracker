@@ -78,6 +78,7 @@ export interface JobDescription {
   
   // CRM-like tracking fields
   applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn';
+  interviewStage?: 'screening' | 'first_interview' | 'followup_interview' | 'final_round' | 'assessment'; // sub-status for interviewing
   applicationDate?: string; // when application was submitted
   submissionDate?: string; // alias for applicationDate for clarity
   lastActivityDate?: string; // last time status changed or any activity occurred
@@ -94,8 +95,20 @@ export interface JobDescription {
   // Timeline tracking
   statusHistory?: Array<{
     status: JobDescription['applicationStatus'];
+    interviewStage?: JobDescription['interviewStage'];
     date: string;
     notes?: string;
+  }>;
+  
+  // Activity logging for analytics
+  activityLog?: Array<{
+    id: string;
+    timestamp: string;
+    type: 'status_change' | 'interview_stage_change' | 'note_added' | 'document_linked' | 'field_updated';
+    fromValue?: any;
+    toValue?: any;
+    field?: string; // for field_updated type
+    details?: string;
   }>;
   
   // Quick stats

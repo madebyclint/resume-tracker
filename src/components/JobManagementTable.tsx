@@ -3,12 +3,13 @@ import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie } from '@fortawesome/free-solid-svg-icons';
+import StatusDropdown from './StatusDropdown';
 
 interface JobManagementTableProps {
   jobs: JobDescription[];
   onEdit: (jobId: string) => void;
   onDelete: (jobId: string) => void;
-  onStatusChange: (jobId: string, status: JobDescription['applicationStatus']) => void;
+  onStatusChange: (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage']) => void;
   onSelect: (jobId: string) => void;
   selectedJobId: string | null;
 }
@@ -667,21 +668,13 @@ ${job.rawText}`;
                     </div>
                   </td>
                   <td className="status-cell">
-                    <select
-                      value={job.applicationStatus || 'not_applied'}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        onStatusChange(job.id, e.target.value as JobDescription['applicationStatus']);
+                    <StatusDropdown
+                      job={job as JobDescription}
+                      onStatusChange={(jobId, status, interviewStage) => {
+                        onStatusChange(jobId, status, interviewStage);
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className={`status-select status-${job.applicationStatus || 'not_applied'}`}
-                    >
-                      <option value="not_applied">Not Applied</option>
-                      <option value="applied">Applied</option>
-                      <option value="interviewing">Interviewing</option>
-                      <option value="rejected">Rejected</option>
-                      <option value="offered">Offered</option>
-                    </select>
+                    />
                   </td>
                   <td className={`days-cell ${getDaysClass(job.daysSinceApplication)}`}>
                     {formatDate(job.applicationDate)} ({job.daysSinceApplication !== null ? `${job.daysSinceApplication}d` : '-'})

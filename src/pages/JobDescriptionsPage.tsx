@@ -5,6 +5,7 @@ import { JobDescription, Resume, CoverLetter } from '../types';
 import { parseJobDescription, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
+import { logStatusChange, logActivity } from '../utils/activityLogger';
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -13,6 +14,8 @@ import GeneratedContentModal from '../components/GeneratedContentModal';
 import ValidationMessage from '../components/ValidationMessage';
 import CSVImportModal from '../components/CSVImportModal';
 import JobManagementTable from '../components/JobManagementTable';
+import StatusDropdown from '../components/StatusDropdown';
+import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
 import './JobDescriptionsPage.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -204,7 +207,7 @@ const getImpactColor = (impact: any) => {
 
 const JobDescriptionsPage: React.FC = () => {
   const { state, setState } = useAppState();
-  const [activeTab, setActiveTab] = useState<'job-descriptions' | 'resume-formatter'>('job-descriptions');
+  const [activeTab, setActiveTab] = useState<'job-descriptions' | 'resume-formatter' | 'analytics'>('job-descriptions');
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -922,25 +925,16 @@ const JobDescriptionsPage: React.FC = () => {
     }
   };
 
-  const handleStatusChange = async (jobId: string, status: JobDescription['applicationStatus']) => {
+  const handleStatusChange = async (
+    jobId: string,
+    status: JobDescription['applicationStatus'],
+    interviewStage?: JobDescription['interviewStage']
+  ) => {
     const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
     if (!jobDescription) return;
 
-    const now = new Date().toISOString();
-    const updatedJobDescription: JobDescription = {
-      ...jobDescription,
-      applicationStatus: status,
-      applicationDate: status === 'applied' && !jobDescription.applicationDate ? now : jobDescription.applicationDate,
-      lastActivityDate: now,
-      statusHistory: [
-        ...(jobDescription.statusHistory || []),
-        {
-          status,
-          date: now,
-          notes: `Status changed to ${status}`
-        }
-      ]
-    };
+    // Use the activity logger to create an updated job with proper logging
+    const updatedJobDescription = logStatusChange(jobDescription, status, interviewStage);
 
     try {
       await saveJobDescription(updatedJobDescription);
@@ -967,11 +961,16 @@ const JobDescriptionsPage: React.FC = () => {
       ? `${jobDescription.notes}\n${newNote}`
       : newNote;
 
-    const updatedJobDescription: JobDescription = {
+    // Use activity logging to track note addition
+    const jobWithNotes = {
       ...jobDescription,
-      notes: updatedNotes,
-      lastActivityDate: new Date().toISOString()
+      notes: updatedNotes
     };
+
+    const updatedJobDescription = logActivity(jobWithNotes, 'note_added', {
+      details: `Added note: ${noteText}`,
+      toValue: noteText
+    });
 
     try {
       await saveJobDescription(updatedJobDescription);
@@ -1661,6 +1660,12 @@ const JobDescriptionsPage: React.FC = () => {
             onClick={() => setActiveTab('resume-formatter')}
           >
             Resume Formatter
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            <FontAwesomeIcon icon={faChartBar} /> Analytics
           </button>
         </div>
         {activeTab === 'job-descriptions' && (
@@ -2503,16 +2508,11 @@ AI will automatically fill in the job title and company name fields above!"
 
                     <div className="status-selector">
                       <label>Application Status:</label>
-                      <select
-                        value={selectedJob.applicationStatus || 'not_applied'}
-                        onChange={(e) => handleStatusChange(selectedJob.id, e.target.value as JobDescription['applicationStatus'])}
-                      >
-                        <option value="not_applied">Not Applied</option>
-                        <option value="applied">Applied</option>
-                        <option value="interviewing">Interviewing</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="offered">Offered</option>
-                      </select>
+                      <StatusDropdown
+                        job={selectedJob}
+                        onStatusChange={handleStatusChange}
+                        className="job-details-status"
+                      />
                     </div>
 
                     <div className="job-info-section">
@@ -3465,6 +3465,13 @@ AI will automatically fill in the job title and company name fields above!"
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Analytics Tab */}
+      {activeTab === 'analytics' && (
+        <div className="analytics-content">
+          <AnalyticsDashboard jobs={state.jobDescriptions} />
         </div>
       )}
 
