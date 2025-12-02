@@ -33,6 +33,8 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
       case 'rejected': return 'Rejected';
       case 'offered': return 'Offered';
       case 'withdrawn': return 'Withdrawn';
+      case 'duplicate': return 'Duplicate';
+      case 'archived': return 'Archived';
       default: return 'Not Applied';
     }
   };
@@ -76,6 +78,11 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
       <option value="rejected">Rejected</option>
       <option value="offered">Offered</option>
       <option value="withdrawn">Withdrawn</option>
+
+      <optgroup label="Special States">
+        <option value="duplicate">📋 Duplicate</option>
+        <option value="archived">📁 Archived</option>
+      </optgroup>
     </select>
   );
 };

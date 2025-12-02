@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink } from '@fortawesome/free-solid-svg-icons';
 import StatusDropdown from './StatusDropdown';
 
 interface JobManagementTableProps {
   jobs: JobDescription[];
   onEdit: (jobId: string) => void;
   onDelete: (jobId: string) => void;
+  onArchive: (jobId: string) => void;
+  onUnarchive: (jobId: string) => void;
+  onMarkDuplicate: (jobId: string) => void;
   onStatusChange: (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage']) => void;
   onSelect: (jobId: string) => void;
   selectedJobId: string | null;
@@ -47,6 +50,9 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
   jobs,
   onEdit,
   onDelete,
+  onArchive,
+  onUnarchive,
+  onMarkDuplicate,
   onStatusChange,
   onSelect,
   selectedJobId
@@ -750,6 +756,41 @@ Clint`;
                         >
                           <FontAwesomeIcon icon={faUserTie} />
                         </button>
+                        {job.applicationStatus !== 'duplicate' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onMarkDuplicate(job.id);
+                            }}
+                            className="action-btn duplicate-btn"
+                            title="Mark as duplicate"
+                          >
+                            <FontAwesomeIcon icon={faLink} />
+                          </button>
+                        )}
+                        {(job.isArchived || job.applicationStatus === 'archived') ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUnarchive(job.id);
+                            }}
+                            className="action-btn unarchive-btn"
+                            title="Unarchive job"
+                          >
+                            <FontAwesomeIcon icon={faBoxOpen} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onArchive(job.id);
+                            }}
+                            className="action-btn archive-btn"
+                            title="Archive job"
+                          >
+                            <FontAwesomeIcon icon={faArchive} />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

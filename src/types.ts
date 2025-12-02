@@ -79,8 +79,13 @@ export interface JobDescription {
   linkedCoverLetterIds: string[]; // manually connected cover letters
   
   // CRM-like tracking fields
-  applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn';
+  applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived';
   interviewStage?: 'screening' | 'first_interview' | 'followup_interview' | 'final_round' | 'assessment'; // sub-status for interviewing
+  
+  // Archive and duplicate handling
+  isArchived?: boolean; // Explicitly archived by user (different from status)
+  duplicateOfId?: string; // ID of the original JD this is a duplicate of
+  linkedDuplicateIds?: string[]; // IDs of JDs that are duplicates of this one
   applicationDate?: string; // when application was submitted
   submissionDate?: string; // alias for applicationDate for clarity
   lastActivityDate?: string; // last time status changed or any activity occurred

@@ -3241,3 +3241,175 @@
     min-width: 200px;
   }
 }
+
+/* Filter styles */
+.job-filters {
+  display: flex;
+  gap: 20px;
+  padding: 15px 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  margin: 0;
+}
+
+/* Duplicate sections styles */
+.duplicate-info-section,
+.linked-duplicates-section {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.duplicate-info-section h3,
+.linked-duplicates-section h3 {
+  margin: 0 0 12px 0;
+  color: #495057;
+  font-size: 16px;
+}
+
+.original-job-link,
+.duplicate-job-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.duplicate-job-item:last-child {
+  margin-bottom: 0;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #007bff;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.link-button:hover {
+  color: #0056b3;
+}
+
+.job-number {
+  font-size: 12px;
+  color: #6c757d;
+  margin-left: 8px;
+}
+
+.duplicate-status {
+  font-size: 12px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.duplicate-jobs-list {
+  margin-top: 12px;
+}
+
+/* Modal styles for duplicate selection */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #6c757d;
+}
+
+.modal-close:hover {
+  color: #000;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.duplicate-job-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.duplicate-job-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.duplicate-job-option:hover {
+  background-color: #f8f9fa;
+}
+
+.duplicate-job-option:last-child {
+  margin-bottom: 0;
+}
+
+.job-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.company-name {
+  color: #6c757d;
+  font-size: 14px;
+}

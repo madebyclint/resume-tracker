@@ -100,6 +100,7 @@ export const logStatusChange = (
 
 /**
  * Gets analytics data from activity logs
+ * NOTE: This includes ALL jobs (active, archived, duplicates) for complete historical analysis
  */
 export const getAnalytics = (jobs: JobDescription[]) => {
   const analytics = {
@@ -176,6 +177,7 @@ export const getAnalytics = (jobs: JobDescription[]) => {
 
 /**
  * Gets funnel analytics showing progression through stages
+ * NOTE: This includes ALL jobs (active, archived, duplicates) for complete historical analysis
  */
 export const getFunnelAnalytics = (jobs: JobDescription[]) => {
   const funnel = {
@@ -188,7 +190,9 @@ export const getFunnelAnalytics = (jobs: JobDescription[]) => {
     assessment: 0,
     offered: 0,
     rejected: 0,
-    withdrawn: 0
+    withdrawn: 0,
+    duplicate: 0,
+    archived: 0
   };
 
   jobs.forEach(job => {
@@ -229,6 +233,12 @@ export const getFunnelAnalytics = (jobs: JobDescription[]) => {
         break;
       case 'withdrawn':
         funnel.withdrawn++;
+        break;
+      case 'duplicate':
+        funnel.duplicate++;
+        break;
+      case 'archived':
+        funnel.archived++;
         break;
     }
   });

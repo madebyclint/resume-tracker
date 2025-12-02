@@ -233,7 +233,7 @@ const JobDescriptionsPage: React.FC = () => {
     contactPhone: '',
     impact: '' as 'low' | 'medium' | 'high' | '',
     applicationDate: '',
-    applicationStatus: '' as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | ''
+    applicationStatus: '' as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived' | ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
@@ -249,6 +249,14 @@ const JobDescriptionsPage: React.FC = () => {
   } | null>(null);
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [tempNotes, setTempNotes] = useState('');
+
+  // Duplicate job handling
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateJobId, setDuplicateJobId] = useState<string | null>(null);
+
+  // Filter state
+  const [showArchivedJobs, setShowArchivedJobs] = useState(false);
+  const [hideRejectedJobs, setHideRejectedJobs] = useState(false);
 
   // Extension listener for job data from browser extension
   useEffect(() => {
@@ -407,23 +415,34 @@ const JobDescriptionsPage: React.FC = () => {
 
   // Memoized calculations for better performance
   const statsData = useMemo(() => {
+    // Filter active jobs for stats (exclude archived and duplicate JDs)
+    const activeJobs = state.jobDescriptions.filter(job => {
+      // Exclude if explicitly archived
+      if (job.isArchived) return false;
+      // Exclude if status is archived
+      if (job.applicationStatus === 'archived') return false;
+      // Exclude if it's a duplicate
+      if (job.applicationStatus === 'duplicate' || job.duplicateOfId) return false;
+      return true;
+    });
+
     // Basic status stats - do in one pass instead of multiple filters
     const stats = { not_applied: 0, applied: 0, interviewing: 0, rejected: 0, offered: 0, withdrawn: 0 };
-    state.jobDescriptions.forEach(job => {
+    activeJobs.forEach(job => {
       const status = job.applicationStatus || 'not_applied';
       if (status in stats) {
         stats[status as keyof typeof stats]++;
       }
     });
-    const total = state.jobDescriptions.length;
+    const total = activeJobs.length;
 
     // Advanced analytics calculations - optimize with single pass
     let jobsWithDates = [];
     const impactStats = { low: 0, medium: 0, high: 0 };
     const aiStats = { totalTokens: 0, totalCost: 0, parseCount: 0, jobsWithAI: 0 };
 
-    // Single pass through all jobs for multiple calculations
-    for (const job of state.jobDescriptions) {
+    // Single pass through active jobs for multiple calculations (stats use active jobs only)
+    for (const job of activeJobs) {
       // Collect jobs with dates
       if (job.uploadDate || job.applicationDate) {
         jobsWithDates.push(job);
@@ -470,8 +489,8 @@ const JobDescriptionsPage: React.FC = () => {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
-      // Count job applications that have linked resumes, were applied on this date, and have any status except 'not_applied'
-      const count = state.jobDescriptions.filter(job => {
+      // Count job applications that have linked resumes, were applied on this date, and have any status except 'not_applied' (active jobs only)
+      const count = activeJobs.filter(job => {
         const applicationDate = job.applicationDate?.split('T')[0];
         const status = job.applicationStatus || 'not_applied';
         return applicationDate === dateStr &&
@@ -490,8 +509,8 @@ const JobDescriptionsPage: React.FC = () => {
       const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - 6);
 
-      // Count job applications that have linked resumes, were applied in this week, and have any status except 'not_applied'
-      const count = state.jobDescriptions.filter(job => {
+      // Count job applications that have linked resumes, were applied in this week, and have any status except 'not_applied' (active jobs only)
+      const count = activeJobs.filter(job => {
         if (!job.applicationDate || !job.linkedResumeIds || job.linkedResumeIds.length === 0) {
           return false;
         }
@@ -1021,6 +1040,101 @@ const JobDescriptionsPage: React.FC = () => {
     } catch (error) {
       console.error('Error deleting job description:', error);
       showToast('Failed to delete job description. Please try again.', 'error');
+    }
+  };
+
+  const handleArchiveJob = async (id: string) => {
+    try {
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: prev.jobDescriptions.map(job =>
+          job.id === id
+            ? {
+              ...logActivity(job, 'status_change', {
+                fromValue: job.applicationStatus || 'not_applied',
+                toValue: 'archived',
+                field: 'applicationStatus'
+              }),
+              isArchived: true,
+              applicationStatus: 'archived' as JobDescription['applicationStatus']
+            }
+            : job
+        )
+      }));
+      showToast('Job archived successfully', 'success');
+    } catch (error) {
+      console.error('Error archiving job:', error);
+      showToast('Failed to archive job. Please try again.', 'error');
+    }
+  };
+
+  const handleUnarchiveJob = async (id: string) => {
+    try {
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: prev.jobDescriptions.map(job =>
+          job.id === id
+            ? {
+              ...logActivity(job, 'status_change', {
+                fromValue: 'archived',
+                toValue: 'not_applied',
+                field: 'applicationStatus'
+              }),
+              isArchived: false,
+              applicationStatus: 'not_applied' as JobDescription['applicationStatus']
+            }
+            : job
+        )
+      }));
+      showToast('Job unarchived successfully', 'success');
+    } catch (error) {
+      console.error('Error unarchiving job:', error);
+      showToast('Failed to unarchive job. Please try again.', 'error');
+    }
+  };
+
+  const handleMarkDuplicate = async (jobId: string) => {
+    setDuplicateJobId(jobId);
+    setShowDuplicateModal(true);
+  };
+
+  const handleConfirmDuplicate = async (originalJobId: string) => {
+    if (!duplicateJobId) return;
+
+    try {
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: prev.jobDescriptions.map(job => {
+          if (job.id === duplicateJobId) {
+            // Mark as duplicate and archive
+            return {
+              ...logActivity(job, 'status_change', {
+                fromValue: job.applicationStatus || 'not_applied',
+                toValue: 'duplicate',
+                field: 'applicationStatus',
+                details: `Marked as duplicate of job ${originalJobId}`
+              }),
+              applicationStatus: 'duplicate' as JobDescription['applicationStatus'],
+              duplicateOfId: originalJobId,
+              isArchived: true
+            };
+          } else if (job.id === originalJobId) {
+            // Add to linked duplicates
+            return {
+              ...job,
+              linkedDuplicateIds: [...(job.linkedDuplicateIds || []), duplicateJobId]
+            };
+          }
+          return job;
+        })
+      }));
+
+      setShowDuplicateModal(false);
+      setDuplicateJobId(null);
+      showToast('Job marked as duplicate and archived', 'success');
+    } catch (error) {
+      console.error('Error marking job as duplicate:', error);
+      showToast('Failed to mark job as duplicate. Please try again.', 'error');
     }
   };
 
@@ -2251,7 +2365,7 @@ AI will automatically fill in the job title and company name fields above!"
               <select
                 id="application-status"
                 value={formData.applicationStatus}
-                onChange={(e) => setFormData(prev => ({ ...prev, applicationStatus: e.target.value as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | '' }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicationStatus: e.target.value as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived' | '' }))}
                 disabled={isProcessing}
               >
                 <option value="">Select...</option>
@@ -2261,6 +2375,8 @@ AI will automatically fill in the job title and company name fields above!"
                 <option value="rejected">Rejected</option>
                 <option value="offered">Offered</option>
                 <option value="withdrawn">Withdrawn</option>
+                <option value="duplicate">Duplicate</option>
+                <option value="archived">Archived</option>
               </select>
             </div>
           </div>
@@ -2632,374 +2748,465 @@ AI will automatically fill in the job title and company name fields above!"
                 <p>No job descriptions yet. Add one to get started!</p>
               </div>
             ) : (
-              <div className={`jobs-layout ${selectedJob ? 'split-view' : 'full-width'}`}>
-                <JobManagementTable
-                  jobs={state.jobDescriptions}
-                  onEdit={handleEditJobDescription}
-                  onDelete={handleDeleteJobDescription}
-                  onStatusChange={handleStatusChange}
-                  onSelect={setSelectedJobId}
-                  selectedJobId={selectedJobId}
-                />
+              <>
+                <div className="job-filters">
+                  <label className="filter-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={showArchivedJobs}
+                      onChange={(e) => setShowArchivedJobs(e.target.checked)}
+                    />
+                    Show archived jobs
+                  </label>
+                  <label className="filter-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={hideRejectedJobs}
+                      onChange={(e) => setHideRejectedJobs(e.target.checked)}
+                    />
+                    Hide rejected applications
+                  </label>
+                </div>
+                <div className={`jobs-layout ${selectedJob ? 'split-view' : 'full-width'}`}>
+                  <JobManagementTable
+                    jobs={(() => {
+                      let filteredJobs = state.jobDescriptions;
 
-                {selectedJob && (
-                  <div className="job-details">
-                    <div className="job-details-header">
-                      <div className="job-title-section">
-                        <h2>{selectedJob.title}</h2>
-                        <div className="document-link-indicator">
+                      // Filter out archived/duplicates if not showing archived
+                      if (!showArchivedJobs) {
+                        filteredJobs = filteredJobs.filter(job =>
+                          !job.isArchived &&
+                          job.applicationStatus !== 'archived' &&
+                          job.applicationStatus !== 'duplicate'
+                        );
+                      }
+
+                      // Filter out rejected if hiding rejected
+                      if (hideRejectedJobs) {
+                        filteredJobs = filteredJobs.filter(job =>
+                          job.applicationStatus !== 'rejected'
+                        );
+                      }
+
+                      return filteredJobs;
+                    })()}
+                    onEdit={handleEditJobDescription}
+                    onDelete={handleDeleteJobDescription}
+                    onArchive={handleArchiveJob}
+                    onUnarchive={handleUnarchiveJob}
+                    onMarkDuplicate={handleMarkDuplicate}
+                    onStatusChange={handleStatusChange}
+                    onSelect={setSelectedJobId}
+                    selectedJobId={selectedJobId}
+                  />
+
+                  {selectedJob && (
+                    <div className="job-details">
+                      <div className="job-details-header">
+                        <div className="job-title-section">
+                          <h2>{selectedJob.title}</h2>
+                          <div className="document-link-indicator">
+                            <button
+                              className={`paperclip-button ${selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0
+                                ? 'no-documents'
+                                : 'has-documents'
+                                }`}
+                              onClick={() => setShowDocumentLinkingModal(true)}
+                              title={
+                                selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0
+                                  ? 'No documents linked. Click to search and link documents.'
+                                  : `${selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length} document(s) linked: ${[
+                                    ...selectedJob.linkedResumeIds.map(id => {
+                                      const resume = state.resumes.find(r => r.id === id);
+                                      return resume ? `📄 ${resume.name || resume.fileName}` : '';
+                                    }),
+                                    ...selectedJob.linkedCoverLetterIds.map(id => {
+                                      const coverLetter = state.coverLetters.find(cl => cl.id === id);
+                                      return coverLetter ? `📝 ${coverLetter.name || coverLetter.fileName}` : '';
+                                    })
+                                  ].filter(Boolean).join('\n')}`
+                              }
+                            >
+                              <FontAwesomeIcon icon={faPaperclip} />
+                              {selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0 ? (
+                                <FontAwesomeIcon icon={faPlus} className="add-icon" />
+                              ) : (
+                                <span className="document-count">
+                                  {selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length}
+                                </span>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="job-actions">
                           <button
-                            className={`paperclip-button ${selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0
-                              ? 'no-documents'
-                              : 'has-documents'
-                              }`}
-                            onClick={() => setShowDocumentLinkingModal(true)}
-                            title={
-                              selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0
-                                ? 'No documents linked. Click to search and link documents.'
-                                : `${selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length} document(s) linked: ${[
-                                  ...selectedJob.linkedResumeIds.map(id => {
-                                    const resume = state.resumes.find(r => r.id === id);
-                                    return resume ? `📄 ${resume.name || resume.fileName}` : '';
-                                  }),
-                                  ...selectedJob.linkedCoverLetterIds.map(id => {
-                                    const coverLetter = state.coverLetters.find(cl => cl.id === id);
-                                    return coverLetter ? `📝 ${coverLetter.name || coverLetter.fileName}` : '';
-                                  })
-                                ].filter(Boolean).join('\n')}`
-                            }
+                            className="close-split-button"
+                            onClick={() => setSelectedJobId(null)}
+                            title="Close details panel"
                           >
-                            <FontAwesomeIcon icon={faPaperclip} />
-                            {selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0 ? (
-                              <FontAwesomeIcon icon={faPlus} className="add-icon" />
+                            ✕
+                          </button>
+                          <button
+                            className="edit-button"
+                            onClick={() => handleEditJobDescription(selectedJob.id)}
+                            disabled={showAddForm}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="delete-button"
+                            onClick={() => handleDeleteJobDescription(selectedJob.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="status-selector">
+                        <label>Application Status:</label>
+                        <StatusDropdown
+                          job={selectedJob}
+                          onStatusChange={handleStatusChange}
+                          className="job-details-status"
+                        />
+                      </div>
+
+                      {/* Show duplicate information */}
+                      {selectedJob.duplicateOfId && (
+                        <div className="duplicate-info-section">
+                          <h3>Duplicate Information</h3>
+                          <p>This job is marked as a duplicate of:</p>
+                          {(() => {
+                            const originalJob = state.jobDescriptions.find(j => j.id === selectedJob.duplicateOfId);
+                            return originalJob ? (
+                              <div className="original-job-link">
+                                <button
+                                  onClick={() => setSelectedJobId(originalJob.id)}
+                                  className="link-button"
+                                >
+                                  <strong>{originalJob.title}</strong> - {originalJob.company}
+                                  {originalJob.sequentialId && <span className="job-number">#{originalJob.sequentialId}</span>}
+                                </button>
+                              </div>
                             ) : (
-                              <span className="document-count">
-                                {selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length}
-                              </span>
-                            )}
-                          </button>
+                              <p>Original job not found</p>
+                            );
+                          })()}
                         </div>
-                      </div>
-                      <div className="job-actions">
-                        <button
-                          className="close-split-button"
-                          onClick={() => setSelectedJobId(null)}
-                          title="Close details panel"
-                        >
-                          ✕
-                        </button>
-                        <button
-                          className="edit-button"
-                          onClick={() => handleEditJobDescription(selectedJob.id)}
-                          disabled={showAddForm}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="delete-button"
-                          onClick={() => handleDeleteJobDescription(selectedJob.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
+                      )}
 
-                    <div className="status-selector">
-                      <label>Application Status:</label>
-                      <StatusDropdown
-                        job={selectedJob}
-                        onStatusChange={handleStatusChange}
-                        className="job-details-status"
-                      />
-                    </div>
-
-                    <div className="job-info-section">
-                      <h3>Extracted Information</h3>
-                      <div className="info-grid">
-                        <div className="info-item">
-                          <strong>Role:</strong> {selectedJob.extractedInfo.role || 'Not extracted'}
-                        </div>
-                        {selectedJob.extractedInfo.companyDescription && (
-                          <div className="info-item" style={{ gridColumn: '1 / -1' }}>
-                            <strong>Company Description:</strong>
-                            <div style={{
-                              marginTop: '4px',
-                              padding: '8px',
-                              backgroundColor: '#f8f9fa',
-                              borderRadius: '4px',
-                              fontSize: '14px',
-                              fontStyle: 'italic',
-                              color: '#495057'
-                            }}>
-                              {selectedJob.extractedInfo.companyDescription}
-                            </div>
+                      {/* Show linked duplicates */}
+                      {selectedJob.linkedDuplicateIds && selectedJob.linkedDuplicateIds.length > 0 && (
+                        <div className="linked-duplicates-section">
+                          <h3>Linked Duplicates ({selectedJob.linkedDuplicateIds.length})</h3>
+                          <p>The following jobs are marked as duplicates of this one:</p>
+                          <div className="duplicate-jobs-list">
+                            {selectedJob.linkedDuplicateIds.map(duplicateId => {
+                              const duplicateJob = state.jobDescriptions.find(j => j.id === duplicateId);
+                              return duplicateJob ? (
+                                <div key={duplicateId} className="duplicate-job-item">
+                                  <button
+                                    onClick={() => setSelectedJobId(duplicateJob.id)}
+                                    className="link-button"
+                                  >
+                                    <strong>{duplicateJob.title}</strong> - {duplicateJob.company}
+                                    {duplicateJob.sequentialId && <span className="job-number">#{duplicateJob.sequentialId}</span>}
+                                  </button>
+                                  <span className="duplicate-status">Duplicate (Archived)</span>
+                                </div>
+                              ) : null;
+                            })}
                           </div>
-                        )}
-                        <div className="info-item">
-                          <strong>Location:</strong> {selectedJob.location || selectedJob.extractedInfo.location || 'Not specified'}
                         </div>
-                        <div className="info-item">
-                          <strong>Work Arrangement:</strong> {selectedJob.workArrangement || 'Not specified'}
-                        </div>
-                        <div className="info-item">
-                          <strong>Impact Level:</strong>
-                          {selectedJob.impact ? (
-                            <span style={{ marginLeft: '8px' }}>
-                              <FontAwesomeIcon
-                                icon={getImpactIcon(selectedJob.impact) || faMinus}
-                                style={{ color: getImpactColor(selectedJob.impact), marginRight: '6px' }}
-                              />
-                              {typeof selectedJob.impact === 'string' ?
-                                selectedJob.impact.charAt(0).toUpperCase() + selectedJob.impact.slice(1) :
-                                'High'}
-                            </span>
-                          ) : (
-                            <span style={{ marginLeft: '8px', color: '#6c757d' }}>Not specified</span>
-                          )}
-                        </div>
-                        <div className="info-item">
-                          <strong>Salary Range:</strong> {
-                            selectedJob.salaryRange ||
-                            selectedJob.extractedInfo.salaryRange ||
-                            (selectedJob.salaryMin && selectedJob.salaryMax ?
-                              `$${selectedJob.salaryMin.toLocaleString()} - $${selectedJob.salaryMax.toLocaleString()}` :
-                              'Not specified')
-                          }
-                        </div>
-                        {selectedJob.extractedInfo.applicantCount && (
+                      )}
+
+                      <div className="job-info-section">
+                        <h3>Extracted Information</h3>
+                        <div className="info-grid">
                           <div className="info-item">
-                            <strong>Applicants:</strong> <span className="applicant-count">{selectedJob.extractedInfo.applicantCount}</span>
+                            <strong>Role:</strong> {selectedJob.extractedInfo.role || 'Not extracted'}
+                          </div>
+                          {selectedJob.extractedInfo.companyDescription && (
+                            <div className="info-item" style={{ gridColumn: '1 / -1' }}>
+                              <strong>Company Description:</strong>
+                              <div style={{
+                                marginTop: '4px',
+                                padding: '8px',
+                                backgroundColor: '#f8f9fa',
+                                borderRadius: '4px',
+                                fontSize: '14px',
+                                fontStyle: 'italic',
+                                color: '#495057'
+                              }}>
+                                {selectedJob.extractedInfo.companyDescription}
+                              </div>
+                            </div>
+                          )}
+                          <div className="info-item">
+                            <strong>Location:</strong> {selectedJob.location || selectedJob.extractedInfo.location || 'Not specified'}
+                          </div>
+                          <div className="info-item">
+                            <strong>Work Arrangement:</strong> {selectedJob.workArrangement || 'Not specified'}
+                          </div>
+                          <div className="info-item">
+                            <strong>Impact Level:</strong>
+                            {selectedJob.impact ? (
+                              <span style={{ marginLeft: '8px' }}>
+                                <FontAwesomeIcon
+                                  icon={getImpactIcon(selectedJob.impact) || faMinus}
+                                  style={{ color: getImpactColor(selectedJob.impact), marginRight: '6px' }}
+                                />
+                                {typeof selectedJob.impact === 'string' ?
+                                  selectedJob.impact.charAt(0).toUpperCase() + selectedJob.impact.slice(1) :
+                                  'High'}
+                              </span>
+                            ) : (
+                              <span style={{ marginLeft: '8px', color: '#6c757d' }}>Not specified</span>
+                            )}
+                          </div>
+                          <div className="info-item">
+                            <strong>Salary Range:</strong> {
+                              selectedJob.salaryRange ||
+                              selectedJob.extractedInfo.salaryRange ||
+                              (selectedJob.salaryMin && selectedJob.salaryMax ?
+                                `$${selectedJob.salaryMin.toLocaleString()} - $${selectedJob.salaryMax.toLocaleString()}` :
+                                'Not specified')
+                            }
+                          </div>
+                          {selectedJob.extractedInfo.applicantCount && (
+                            <div className="info-item">
+                              <strong>Applicants:</strong> <span className="applicant-count">{selectedJob.extractedInfo.applicantCount}</span>
+                            </div>
+                          )}
+                          {selectedJob.aiUsage && (
+                            <div className="info-item ai-usage-item" style={{ gridColumn: '1 / -1' }}>
+                              <strong>AI Parsing Cost:</strong>
+                              <div style={{
+                                marginTop: '4px',
+                                padding: '8px',
+                                backgroundColor: '#fff3cd',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                border: '1px solid #ffeaa7'
+                              }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                                  <span><strong>Tokens:</strong> {selectedJob.aiUsage.totalTokens.toLocaleString()}</span>
+                                  <span><strong>Cost:</strong> ${selectedJob.aiUsage.estimatedCost.toFixed(4)}</span>
+                                  <span><strong>Parses:</strong> {selectedJob.aiUsage.parseCount}</span>
+                                  <span><strong>Last Parse:</strong> {selectedJob.aiUsage.lastParseDate ? new Date(selectedJob.aiUsage.lastParseDate).toLocaleDateString() : 'Unknown'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {(selectedJob.source1 || selectedJob.source2) && (
+                          <div className="job-sources-section">
+                            <h4>Sources</h4>
+                            {selectedJob.source1 && (
+                              <div className="source-item">
+                                <strong>Source 1 ({selectedJob.source1.type}):</strong>
+                                {selectedJob.source1.type === 'url' ? (
+                                  <a href={selectedJob.source1.content} target="_blank" rel="noopener noreferrer">
+                                    {selectedJob.source1.content} ↗
+                                  </a>
+                                ) : (
+                                  <span>{selectedJob.source1.content}</span>
+                                )}
+                              </div>
+                            )}
+                            {selectedJob.source2 && (
+                              <div className="source-item">
+                                <strong>Source 2 ({selectedJob.source2.type}):</strong>
+                                {selectedJob.source2.type === 'url' ? (
+                                  <a href={selectedJob.source2.content} target="_blank" rel="noopener noreferrer">
+                                    {selectedJob.source2.content} ↗
+                                  </a>
+                                ) : (
+                                  <span>{selectedJob.source2.content}</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
-                        {selectedJob.aiUsage && (
-                          <div className="info-item ai-usage-item" style={{ gridColumn: '1 / -1' }}>
-                            <strong>AI Parsing Cost:</strong>
-                            <div style={{
-                              marginTop: '4px',
-                              padding: '8px',
-                              backgroundColor: '#fff3cd',
-                              borderRadius: '4px',
-                              fontSize: '12px',
-                              border: '1px solid #ffeaa7'
-                            }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
-                                <span><strong>Tokens:</strong> {selectedJob.aiUsage.totalTokens.toLocaleString()}</span>
-                                <span><strong>Cost:</strong> ${selectedJob.aiUsage.estimatedCost.toFixed(4)}</span>
-                                <span><strong>Parses:</strong> {selectedJob.aiUsage.parseCount}</span>
-                                <span><strong>Last Parse:</strong> {selectedJob.aiUsage.lastParseDate ? new Date(selectedJob.aiUsage.lastParseDate).toLocaleDateString() : 'Unknown'}</span>
-                              </div>
-                            </div>
+
+                        {selectedJob.contact && (selectedJob.contact.name || selectedJob.contact.email || selectedJob.contact.phone) && (
+                          <div className="job-contact-section">
+                            <h4>Contact Information</h4>
+                            {selectedJob.contact.name && (
+                              <div><strong>Name:</strong> {selectedJob.contact.name}</div>
+                            )}
+                            {selectedJob.contact.email && (
+                              <div><strong>Email:</strong> <a href={`mailto:${selectedJob.contact.email}`}>{selectedJob.contact.email}</a></div>
+                            )}
+                            {selectedJob.contact.phone && (
+                              <div><strong>Phone:</strong> <a href={`tel:${selectedJob.contact.phone}`}>{selectedJob.contact.phone}</a></div>
+                            )}
                           </div>
                         )}
-                      </div>
 
-                      {(selectedJob.source1 || selectedJob.source2) && (
-                        <div className="job-sources-section">
-                          <h4>Sources</h4>
-                          {selectedJob.source1 && (
-                            <div className="source-item">
-                              <strong>Source 1 ({selectedJob.source1.type}):</strong>
-                              {selectedJob.source1.type === 'url' ? (
-                                <a href={selectedJob.source1.content} target="_blank" rel="noopener noreferrer">
-                                  {selectedJob.source1.content} ↗
-                                </a>
-                              ) : (
-                                <span>{selectedJob.source1.content}</span>
-                              )}
-                            </div>
-                          )}
-                          {selectedJob.source2 && (
-                            <div className="source-item">
-                              <strong>Source 2 ({selectedJob.source2.type}):</strong>
-                              {selectedJob.source2.type === 'url' ? (
-                                <a href={selectedJob.source2.content} target="_blank" rel="noopener noreferrer">
-                                  {selectedJob.source2.content} ↗
-                                </a>
-                              ) : (
-                                <span>{selectedJob.source2.content}</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {selectedJob.contact && (selectedJob.contact.name || selectedJob.contact.email || selectedJob.contact.phone) && (
-                        <div className="job-contact-section">
-                          <h4>Contact Information</h4>
-                          {selectedJob.contact.name && (
-                            <div><strong>Name:</strong> {selectedJob.contact.name}</div>
-                          )}
-                          {selectedJob.contact.email && (
-                            <div><strong>Email:</strong> <a href={`mailto:${selectedJob.contact.email}`}>{selectedJob.contact.email}</a></div>
-                          )}
-                          {selectedJob.contact.phone && (
-                            <div><strong>Phone:</strong> <a href={`tel:${selectedJob.contact.phone}`}>{selectedJob.contact.phone}</a></div>
-                          )}
-                        </div>
-                      )}
-
-                      {selectedJob.url && (
-                        <div className="job-url-section">
-                          <strong>Job Listing:</strong>
-                          <a
-                            href={selectedJob.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="job-url-link"
-                          >
-                            View Original Posting ↗
-                          </a>
-                        </div>
-                      )}
-
-                      {selectedJob.extractedInfo.requiredSkills.length > 0 && (
-                        <div className="skills-section">
-                          <strong>Required Skills:</strong>
-                          <div className="skills-list">
-                            {selectedJob.extractedInfo.requiredSkills.map((skill, idx) => (
-                              <span key={idx} className="skill-tag required">{skill}</span>
-                            ))}
+                        {selectedJob.url && (
+                          <div className="job-url-section">
+                            <strong>Job Listing:</strong>
+                            <a
+                              href={selectedJob.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="job-url-link"
+                            >
+                              View Original Posting ↗
+                            </a>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {selectedJob.extractedInfo.preferredSkills.length > 0 && (
-                        <div className="skills-section">
-                          <strong>Preferred Skills:</strong>
-                          <div className="skills-list">
-                            {selectedJob.extractedInfo.preferredSkills.map((skill, idx) => (
-                              <span key={idx} className="skill-tag preferred">{skill}</span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Linked Documents Summary */}
-                    {(selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0) && (
-                      <div className="linked-documents-summary">
-                        <h3>Linked Documents ({selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length})</h3>
-                        <div className="document-summary-list">
-                          {selectedJob.linkedResumeIds.map(resumeId => {
-                            const resume = state.resumes.find(r => r.id === resumeId);
-                            return resume ? (
-                              <div key={resume.id} className="document-summary-item">
-                                <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
-                                <span className="document-name">{resume.name || resume.fileName}</span>
-                                <span className="document-type">Resume</span>
-                              </div>
-                            ) : null;
-                          })}
-                          {selectedJob.linkedCoverLetterIds.map(coverLetterId => {
-                            const coverLetter = state.coverLetters.find(cl => cl.id === coverLetterId);
-                            return coverLetter ? (
-                              <div key={coverLetter.id} className="document-summary-item">
-                                <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
-                                <span className="document-name">{coverLetter.name || coverLetter.fileName}</span>
-                                <span className="document-type">Cover Letter</span>
-                              </div>
-                            ) : null;
-                          })}
-                        </div>
-                        <p className="document-summary-note">
-                          <FontAwesomeIcon icon={faPaperclip} /> Click the paperclip icon next to the job title to manage linked documents.
-                        </p>
-                      </div>
-                    )}
-
-                    {selectedJob.additionalContext && (
-                      <div className="additional-context-section">
-                        <h3>Additional Context</h3>
-                        <div className="context-content">
-                          <p>{selectedJob.additionalContext}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Enhanced Notes Section */}
-                    <div className="notes-section">
-                      <div className="notes-header">
-                        <h3>Notes</h3>
-                        <div className="notes-actions">
-                          <div className="quick-notes">
-                            <button
-                              className="quick-note-btn"
-                              onClick={() => handleQuickNote(selectedJob.id, 'Applied')}
-                              title="Mark as applied"
-                            >
-                              <FontAwesomeIcon icon={faFileAlt} /> Applied
-                            </button>
-                            <button
-                              className="quick-note-btn"
-                              onClick={() => handleQuickNote(selectedJob.id, 'Interview scheduled')}
-                              title="Note interview scheduled"
-                            >
-                              📅 Interview
-                            </button>
-                            <button
-                              className="quick-note-btn"
-                              onClick={() => handleQuickNote(selectedJob.id, 'Follow up needed')}
-                              title="Mark for follow up"
-                            >
-                              🔔 Follow up
-                            </button>
-                            <button
-                              className="quick-note-btn"
-                              onClick={() => handleQuickNote(selectedJob.id, 'Rejected')}
-                              title="Mark as rejected"
-                            >
-                              <FontAwesomeIcon icon={faTimes} /> Rejected
-                            </button>
-                          </div>
-                          <button
-                            className="edit-notes-btn"
-                            onClick={() => handleEditNotes(selectedJob.id)}
-                          >
-                            ✏️ Edit
-                          </button>
-                        </div>
-                      </div>
-
-                      {editingNotesId === selectedJob.id ? (
-                        <div className="notes-editing">
-                          <textarea
-                            value={tempNotes}
-                            onChange={(e) => setTempNotes(e.target.value)}
-                            placeholder="Add your notes here..."
-                            rows={4}
-                            className="notes-textarea"
-                          />
-                          <div className="notes-edit-actions">
-                            <button
-                              className="save-notes-btn"
-                              onClick={() => handleSaveNotes(selectedJob.id)}
-                            >
-                              Save
-                            </button>
-                            <button
-                              className="cancel-notes-btn"
-                              onClick={() => handleCancelNotesEdit()}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="notes-display">
-                          {selectedJob.notes ? (
-                            <div className="notes-content">
-                              {selectedJob.notes.split('\n').map((line, index) => (
-                                <p key={index}>{line}</p>
+                        {selectedJob.extractedInfo.requiredSkills.length > 0 && (
+                          <div className="skills-section">
+                            <strong>Required Skills:</strong>
+                            <div className="skills-list">
+                              {selectedJob.extractedInfo.requiredSkills.map((skill, idx) => (
+                                <span key={idx} className="skill-tag required">{skill}</span>
                               ))}
                             </div>
-                          ) : (
-                            <p className="no-notes">No notes yet. Use quick actions above or click Edit to add notes.</p>
-                          )}
+                          </div>
+                        )}
+
+                        {selectedJob.extractedInfo.preferredSkills.length > 0 && (
+                          <div className="skills-section">
+                            <strong>Preferred Skills:</strong>
+                            <div className="skills-list">
+                              {selectedJob.extractedInfo.preferredSkills.map((skill, idx) => (
+                                <span key={idx} className="skill-tag preferred">{skill}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Linked Documents Summary */}
+                      {(selectedJob.linkedResumeIds.length > 0 || selectedJob.linkedCoverLetterIds.length > 0) && (
+                        <div className="linked-documents-summary">
+                          <h3>Linked Documents ({selectedJob.linkedResumeIds.length + selectedJob.linkedCoverLetterIds.length})</h3>
+                          <div className="document-summary-list">
+                            {selectedJob.linkedResumeIds.map(resumeId => {
+                              const resume = state.resumes.find(r => r.id === resumeId);
+                              return resume ? (
+                                <div key={resume.id} className="document-summary-item">
+                                  <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
+                                  <span className="document-name">{resume.name || resume.fileName}</span>
+                                  <span className="document-type">Resume</span>
+                                </div>
+                              ) : null;
+                            })}
+                            {selectedJob.linkedCoverLetterIds.map(coverLetterId => {
+                              const coverLetter = state.coverLetters.find(cl => cl.id === coverLetterId);
+                              return coverLetter ? (
+                                <div key={coverLetter.id} className="document-summary-item">
+                                  <FontAwesomeIcon icon={faFileAlt} className="document-icon" />
+                                  <span className="document-name">{coverLetter.name || coverLetter.fileName}</span>
+                                  <span className="document-type">Cover Letter</span>
+                                </div>
+                              ) : null;
+                            })}
+                          </div>
+                          <p className="document-summary-note">
+                            <FontAwesomeIcon icon={faPaperclip} /> Click the paperclip icon next to the job title to manage linked documents.
+                          </p>
                         </div>
                       )}
-                    </div>
 
-                    {/* <div className="generation-section">
+                      {selectedJob.additionalContext && (
+                        <div className="additional-context-section">
+                          <h3>Additional Context</h3>
+                          <div className="context-content">
+                            <p>{selectedJob.additionalContext}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Enhanced Notes Section */}
+                      <div className="notes-section">
+                        <div className="notes-header">
+                          <h3>Notes</h3>
+                          <div className="notes-actions">
+                            <div className="quick-notes">
+                              <button
+                                className="quick-note-btn"
+                                onClick={() => handleQuickNote(selectedJob.id, 'Applied')}
+                                title="Mark as applied"
+                              >
+                                <FontAwesomeIcon icon={faFileAlt} /> Applied
+                              </button>
+                              <button
+                                className="quick-note-btn"
+                                onClick={() => handleQuickNote(selectedJob.id, 'Interview scheduled')}
+                                title="Note interview scheduled"
+                              >
+                                📅 Interview
+                              </button>
+                              <button
+                                className="quick-note-btn"
+                                onClick={() => handleQuickNote(selectedJob.id, 'Follow up needed')}
+                                title="Mark for follow up"
+                              >
+                                🔔 Follow up
+                              </button>
+                              <button
+                                className="quick-note-btn"
+                                onClick={() => handleQuickNote(selectedJob.id, 'Rejected')}
+                                title="Mark as rejected"
+                              >
+                                <FontAwesomeIcon icon={faTimes} /> Rejected
+                              </button>
+                            </div>
+                            <button
+                              className="edit-notes-btn"
+                              onClick={() => handleEditNotes(selectedJob.id)}
+                            >
+                              ✏️ Edit
+                            </button>
+                          </div>
+                        </div>
+
+                        {editingNotesId === selectedJob.id ? (
+                          <div className="notes-editing">
+                            <textarea
+                              value={tempNotes}
+                              onChange={(e) => setTempNotes(e.target.value)}
+                              placeholder="Add your notes here..."
+                              rows={4}
+                              className="notes-textarea"
+                            />
+                            <div className="notes-edit-actions">
+                              <button
+                                className="save-notes-btn"
+                                onClick={() => handleSaveNotes(selectedJob.id)}
+                              >
+                                Save
+                              </button>
+                              <button
+                                className="cancel-notes-btn"
+                                onClick={() => handleCancelNotesEdit()}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="notes-display">
+                            {selectedJob.notes ? (
+                              <div className="notes-content">
+                                {selectedJob.notes.split('\n').map((line, index) => (
+                                  <p key={index}>{line}</p>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="no-notes">No notes yet. Use quick actions above or click Edit to add notes.</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* <div className="generation-section">
                       <h3>AI Document Generation</h3>
                       <div className="generation-buttons">
                         <button
@@ -3046,96 +3253,97 @@ AI will automatically fill in the job title and company name fields above!"
                       </p>
                     </div> */}
 
-                    <div className="resume-matching-section">
-                      <h3>Document Matching</h3>
-                      {documentMatches.length > 0 ? (
-                        <div className="resume-matches">
-                          {documentMatches.map((match: DocumentMatch) => (
-                            <div key={match.documentId} className="resume-match">
-                              <div className="match-header">
-                                <span className="resume-name">
-                                  {match.documentName}
-                                  <span className="document-type-badge">
-                                    <FontAwesomeIcon icon={faFileAlt} />
+                      <div className="resume-matching-section">
+                        <h3>Document Matching</h3>
+                        {documentMatches.length > 0 ? (
+                          <div className="resume-matches">
+                            {documentMatches.map((match: DocumentMatch) => (
+                              <div key={match.documentId} className="resume-match">
+                                <div className="match-header">
+                                  <span className="resume-name">
+                                    {match.documentName}
+                                    <span className="document-type-badge">
+                                      <FontAwesomeIcon icon={faFileAlt} />
+                                    </span>
                                   </span>
-                                </span>
-                                <span className="match-score">
-                                  {Math.round(match.matchScore * 100)}% match
-                                </span>
-                                <div className="match-actions">
-                                  <button
-                                    className="preview-button"
-                                    onClick={() => {
-                                      const document = match.documentType === 'resume'
-                                        ? state.resumes.find(r => r.id === match.documentId)
-                                        : state.coverLetters.find(cl => cl.id === match.documentId);
+                                  <span className="match-score">
+                                    {Math.round(match.matchScore * 100)}% match
+                                  </span>
+                                  <div className="match-actions">
+                                    <button
+                                      className="preview-button"
+                                      onClick={() => {
+                                        const document = match.documentType === 'resume'
+                                          ? state.resumes.find(r => r.id === match.documentId)
+                                          : state.coverLetters.find(cl => cl.id === match.documentId);
 
-                                      if (document) {
-                                        const isLinked = match.documentType === 'resume'
-                                          ? selectedJob.linkedResumeIds.includes(match.documentId)
-                                          : selectedJob.linkedCoverLetterIds.includes(match.documentId);
+                                        if (document) {
+                                          const isLinked = match.documentType === 'resume'
+                                            ? selectedJob.linkedResumeIds.includes(match.documentId)
+                                            : selectedJob.linkedCoverLetterIds.includes(match.documentId);
 
-                                        const onLink = () => {
-                                          if (match.documentType === 'resume') {
-                                            handleLinkResume(selectedJob.id, match.documentId);
-                                          } else {
-                                            handleLinkCoverLetter(selectedJob.id, match.documentId);
-                                          }
-                                        };
+                                          const onLink = () => {
+                                            if (match.documentType === 'resume') {
+                                              handleLinkResume(selectedJob.id, match.documentId);
+                                            } else {
+                                              handleLinkCoverLetter(selectedJob.id, match.documentId);
+                                            }
+                                          };
 
-                                        handlePreviewDocument(document);
-                                      }
-                                    }}
-                                    title="Preview document content"
-                                  >
-                                    👁️ Preview
-                                  </button>
-                                  <button
-                                    className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                      (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
-                                      ? 'linked' : ''
-                                      }`}
-                                    onClick={() => {
-                                      if (match.documentType === 'resume') {
-                                        handleLinkResume(selectedJob.id, match.documentId);
-                                      } else {
-                                        handleLinkCoverLetter(selectedJob.id, match.documentId);
-                                      }
-                                    }}
-                                  >
-                                    {((match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
-                                      (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId)))
-                                      ? 'Unlink' : 'Link'}
-                                  </button>
+                                          handlePreviewDocument(document);
+                                        }
+                                      }}
+                                      title="Preview document content"
+                                    >
+                                      👁️ Preview
+                                    </button>
+                                    <button
+                                      className={`link-button ${(match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
+                                        (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId))
+                                        ? 'linked' : ''
+                                        }`}
+                                      onClick={() => {
+                                        if (match.documentType === 'resume') {
+                                          handleLinkResume(selectedJob.id, match.documentId);
+                                        } else {
+                                          handleLinkCoverLetter(selectedJob.id, match.documentId);
+                                        }
+                                      }}
+                                    >
+                                      {((match.documentType === 'resume' && selectedJob.linkedResumeIds.includes(match.documentId)) ||
+                                        (match.documentType === 'cover_letter' && selectedJob.linkedCoverLetterIds.includes(match.documentId)))
+                                        ? 'Unlink' : 'Link'}
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="matched-keywords">
-                                <strong>Matched keywords:</strong> {match.matchedKeywords.join(', ')}
-                              </div>
-                              {match.skillMatches.length > 0 && (
-                                <div className="skill-matches">
-                                  <strong>Skill matches:</strong> {match.skillMatches.join(', ')}
+                                <div className="matched-keywords">
+                                  <strong>Matched keywords:</strong> {match.matchedKeywords.join(', ')}
                                 </div>
-                              )}
-                            </div>
+                                {match.skillMatches.length > 0 && (
+                                  <div className="skill-matches">
+                                    <strong>Skill matches:</strong> {match.skillMatches.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="no-matches">No matching documents found based on keywords and skills.</p>
+                        )}
+                      </div>
+
+                      <div className="keywords-section">
+                        <h3>Keywords ({selectedJob.keywords.length})</h3>
+                        <div className="keywords-list">
+                          {selectedJob.keywords.map((keyword, idx) => (
+                            <span key={idx} className="keyword-tag">{keyword}</span>
                           ))}
                         </div>
-                      ) : (
-                        <p className="no-matches">No matching documents found based on keywords and skills.</p>
-                      )}
-                    </div>
-
-                    <div className="keywords-section">
-                      <h3>Keywords ({selectedJob.keywords.length})</h3>
-                      <div className="keywords-list">
-                        {selectedJob.keywords.map((keyword, idx) => (
-                          <span key={idx} className="keyword-tag">{keyword}</span>
-                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         )
@@ -3670,6 +3878,47 @@ AI will automatically fill in the job title and company name fields above!"
       {activeTab === 'analytics' && (
         <div className="analytics-content">
           <AnalyticsDashboard jobs={state.jobDescriptions} />
+        </div>
+      )}
+
+      {/* Duplicate Job Modal */}
+      {showDuplicateModal && duplicateJobId && (
+        <div className="modal-overlay" onClick={() => setShowDuplicateModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Mark as Duplicate</h3>
+              <button
+                className="modal-close"
+                onClick={() => setShowDuplicateModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>Select the original job that this is a duplicate of:</p>
+              <div className="duplicate-job-list">
+                {state.jobDescriptions
+                  .filter(job => job.id !== duplicateJobId && job.applicationStatus !== 'duplicate')
+                  .map(job => (
+                    <div
+                      key={job.id}
+                      className="duplicate-job-option"
+                      onClick={() => handleConfirmDuplicate(job.id)}
+                    >
+                      <div className="job-info">
+                        <strong>{job.title}</strong>
+                        <span className="company-name">{job.company}</span>
+                        {job.sequentialId && <span className="job-number">#{job.sequentialId}</span>}
+                      </div>
+                      <div className="job-status">
+                        {job.applicationStatus || 'not_applied'}
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

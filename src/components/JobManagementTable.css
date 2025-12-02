@@ -378,6 +378,33 @@
   background: rgba(0, 102, 204, 0.2);
 }
 
+.duplicate-btn {
+  color: #ff8c00;
+  background: rgba(255, 140, 0, 0.1);
+}
+
+.duplicate-btn:hover {
+  background: rgba(255, 140, 0, 0.2);
+}
+
+.archive-btn {
+  color: #6c757d;
+  background: rgba(108, 117, 125, 0.1);
+}
+
+.archive-btn:hover {
+  background: rgba(108, 117, 125, 0.2);
+}
+
+.unarchive-btn {
+  color: #28a745;
+  background: rgba(40, 167, 69, 0.1);
+}
+
+.unarchive-btn:hover {
+  background: rgba(40, 167, 69, 0.2);
+}
+
 .source-badge {
   display: inline-flex;
   align-items: center;
