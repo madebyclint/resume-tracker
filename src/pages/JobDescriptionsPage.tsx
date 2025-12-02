@@ -3,7 +3,7 @@ import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription, Resume, CoverLetter } from '../types';
 import { parseJobDescription, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
-import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter } from '../storage';
+import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter, exportAllDataAsJSON, importAllDataFromJSON } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
 import { logStatusChange, logActivity } from '../utils/activityLogger';
 
@@ -20,7 +20,7 @@ import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
 import './JobDescriptionsPage.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faTimes, faEdit, faCopy, faTable, faFileAlt, faFileImport, faChartBar, faDollarSign, faSync, faArrowUp, faArrowDown, faCheck, faExclamationTriangle, faPaperclip, faPlus, faSearch, faEye } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faTimes, faEdit, faCopy, faTable, faFileAlt, faFileImport, faChartBar, faDollarSign, faSync, faArrowUp, faArrowDown, faCheck, faExclamationTriangle, faPaperclip, faPlus, faSearch, faEye, faDownload, faUpload } from '@fortawesome/free-solid-svg-icons';
 
 // Remove the local interface since we're using the one from documentMatcher
 
@@ -264,6 +264,70 @@ const JobDescriptionsPage: React.FC = () => {
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
+
+  const handleExportData = async () => {
+    setIsExporting(true);
+    try {
+      const jsonData = await exportAllDataAsJSON();
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `resume-tracker-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('Data exported successfully!', 'success');
+    } catch (error) {
+      console.error('Export failed:', error);
+      showToast('Failed to export data. Please try again.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement)?.files?.[0];
+      if (!file) return;
+
+      setIsImporting(true);
+      try {
+        const jsonString = await file.text();
+        const result = await importAllDataFromJSON(jsonString, {
+          replaceExisting: false,
+          skipDuplicates: true
+        });
+
+        if (result.success || result.importedCounts.resumes > 0 || result.importedCounts.coverLetters > 0 || result.importedCounts.jobDescriptions > 0) {
+          // Refresh state by reloading from storage
+          const { loadState } = await import('../storage');
+          const newState = await loadState();
+          setState(newState);
+
+          const imported = result.importedCounts;
+          let message = `Successfully imported: ${imported.resumes} resumes, ${imported.coverLetters} cover letters, ${imported.jobDescriptions} job descriptions.`;
+          showToast(message, 'success');
+
+          if (result.warnings.length > 0) {
+            result.warnings.forEach(warning => showToast(warning, 'warning'));
+          }
+        } else {
+          showToast(`Import failed: ${result.errors.join(', ')}`, 'error');
+        }
+      } catch (error) {
+        console.error('Import failed:', error);
+        showToast('Failed to import data. Please check the file format and try again.', 'error');
+      } finally {
+        setIsImporting(false);
+      }
+    };
+    input.click();
+  };
   const [showExpandedStats, setShowExpandedStats] = useState(false);
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [aiParseCache, setAiParseCache] = useState<Map<string, {
@@ -277,6 +341,8 @@ const JobDescriptionsPage: React.FC = () => {
     type: 'success' | 'error' | 'warning' | 'info';
     duration?: number;
   }>>([]);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Memoized calculations for better performance
   const statsData = useMemo(() => {
@@ -1689,6 +1755,46 @@ const JobDescriptionsPage: React.FC = () => {
               title="Import job applications from CSV file"
             >
               <FontAwesomeIcon icon={faFileImport} /> Import CSV
+            </button>
+            <button
+              className="export-button"
+              onClick={handleExportData}
+              disabled={isExporting || showAddForm}
+              title="Export all data as backup file"
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <FontAwesomeIcon icon={faDownload} /> {isExporting ? 'Exporting...' : 'Export Data'}
+            </button>
+            <button
+              className="import-button"
+              onClick={handleImportData}
+              disabled={isImporting || showAddForm}
+              title="Import data from backup file"
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <FontAwesomeIcon icon={faUpload} /> {isImporting ? 'Importing...' : 'Import Data'}
             </button>
           </div>
         )}
