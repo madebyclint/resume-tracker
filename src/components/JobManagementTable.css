@@ -766,3 +766,34 @@
   font-size: 14px;
   padding: 8px 12px;
 }
+
+/* Smart date display styling */
+.date-cell-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.date-display {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.primary-date {
+  font-weight: 500;
+  color: #374151;
+  font-size: 13px;
+}
+
+.secondary-date {
+  font-size: 12px;
+  color: #6b7280;
+  opacity: 0.8;
+}
+
+.days-indicator {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}

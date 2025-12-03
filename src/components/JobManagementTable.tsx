@@ -416,13 +416,26 @@ Clint`;
   const [showFilters, setShowFilters] = useState(false);
 
   // Calculate computed fields for each job
-  const jobsWithComputedFields = jobs.map(job => ({
-    ...job,
-    daysSinceApplication: job.applicationDate ?
-      Math.ceil((new Date().getTime() - new Date(job.applicationDate).getTime()) / (1000 * 60 * 60 * 24)) : null,
-    daysInCurrentStatus: job.lastActivityDate ?
-      Math.ceil((new Date().getTime() - new Date(job.lastActivityDate).getTime()) / (1000 * 60 * 60 * 24)) : null
-  }));
+  const jobsWithComputedFields = jobs.map(job => {
+    const applicationDate = job.applicationDate ? new Date(job.applicationDate) : null;
+    const lastActivityDate = job.lastActivityDate ? new Date(job.lastActivityDate) : null;
+
+    // Use the most recent date for calculating "freshness" for color coding
+    const mostRecentDate = lastActivityDate && applicationDate ?
+      (lastActivityDate > applicationDate ? lastActivityDate : applicationDate) :
+      lastActivityDate || applicationDate;
+
+    return {
+      ...job,
+      daysSinceApplication: job.applicationDate ?
+        Math.ceil((new Date().getTime() - new Date(job.applicationDate).getTime()) / (1000 * 60 * 60 * 24)) : null,
+      daysInCurrentStatus: job.lastActivityDate ?
+        Math.ceil((new Date().getTime() - new Date(job.lastActivityDate).getTime()) / (1000 * 60 * 60 * 24)) : null,
+      daysSinceMostRecentActivity: mostRecentDate ?
+        Math.ceil((new Date().getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24)) : null,
+      mostRecentActivityDate: mostRecentDate
+    };
+  });
 
   // Filter jobs
   const filteredJobs = jobsWithComputedFields.filter(job => {
@@ -465,8 +478,9 @@ Clint`;
         bValue = b.applicationStatus || 'not_applied';
         break;
       case 'applicationDate':
-        aValue = a.applicationDate ? new Date(a.applicationDate).getTime() : 0;
-        bValue = b.applicationDate ? new Date(b.applicationDate).getTime() : 0;
+        // Sort by most recent activity date to match the display
+        aValue = a.mostRecentActivityDate ? a.mostRecentActivityDate.getTime() : 0;
+        bValue = b.mostRecentActivityDate ? b.mostRecentActivityDate.getTime() : 0;
         break;
       case 'lastActivityDate':
         aValue = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
@@ -514,6 +528,33 @@ Clint`;
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  const formatSmartDate = (job: any) => {
+    const applicationDate = job.applicationDate ? new Date(job.applicationDate) : null;
+    const lastActivityDate = job.lastActivityDate ? new Date(job.lastActivityDate) : null;
+
+    if (!applicationDate && !lastActivityDate) {
+      return 'No dates';
+    }
+
+    if (!lastActivityDate || (applicationDate && applicationDate >= lastActivityDate)) {
+      // Only application date or application is more recent
+      return `Applied: ${formatDate(job.applicationDate)}`;
+    }
+
+    if (!applicationDate) {
+      // Only activity date
+      return `Activity: ${formatDate(job.lastActivityDate)}`;
+    }
+
+    // Both dates exist and activity is more recent
+    return (
+      <div className="date-display">
+        <div className="primary-date">Activity: {formatDate(job.lastActivityDate)}</div>
+        <div className="secondary-date">Applied: {formatDate(job.applicationDate)}</div>
+      </div>
+    );
   };
 
   const formatSalary = (job: any) => {
@@ -642,7 +683,7 @@ Clint`;
                   className={`sortable-header ${sortField === 'applicationDate' ? 'active' : ''}`}
                   onClick={() => handleSort('applicationDate')}
                 >
-                  Applied
+                  Last Activity
                   <span className={`sort-indicator ${sortField === 'applicationDate' ? 'active' : ''}`}>
                     {getSortIcon('applicationDate')}
                   </span>
@@ -846,8 +887,13 @@ Clint`;
                       onClick={(e) => e.stopPropagation()}
                     />
                   </td>
-                  <td className={`days-cell ${getDaysClass(job.daysSinceApplication)}`}>
-                    {formatDate(job.applicationDate)} ({job.daysSinceApplication !== null ? `${job.daysSinceApplication}d` : '-'})
+                  <td className={`days-cell ${getDaysClass(job.daysSinceMostRecentActivity)}`}>
+                    <div className="date-cell-content">
+                      {formatSmartDate(job)}
+                      <div className="days-indicator">
+                        ({job.daysSinceMostRecentActivity !== null ? `${job.daysSinceMostRecentActivity}d ago` : '-'})
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ))

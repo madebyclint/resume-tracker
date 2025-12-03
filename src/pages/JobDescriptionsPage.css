@@ -2462,6 +2462,29 @@
   }
 }
 
+/* Reminder Settings Modal */
+.reminder-settings-modal {
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.reminder-settings-modal .action-reminder-panel.settings-only {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  margin: 0;
+}
+
+.reminder-settings-modal .settings-panel {
+  position: static;
+  background: transparent;
+  backdrop-filter: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
 /* Toast System */
 .toast-container {
   position: fixed;

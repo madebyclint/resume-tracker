@@ -18,10 +18,11 @@ import StorageMonitor from '../components/StorageMonitor';
 import JobManagementTable from '../components/JobManagementTable';
 import StatusDropdown from '../components/StatusDropdown';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import ActionReminderPanel from '../components/ActionReminderPanel';
 
 import './JobDescriptionsPage.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faTimes, faEdit, faCopy, faTable, faFileAlt, faFileImport, faChartBar, faDollarSign, faSync, faArrowUp, faArrowDown, faCheck, faExclamationTriangle, faPaperclip, faPlus, faSearch, faEye, faDownload, faUpload } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faTimes, faEdit, faCopy, faTable, faFileAlt, faFileImport, faChartBar, faDollarSign, faSync, faArrowUp, faArrowDown, faCheck, faExclamationTriangle, faPaperclip, faPlus, faSearch, faEye, faDownload, faUpload, faCog } from '@fortawesome/free-solid-svg-icons';
 
 // Remove the local interface since we're using the one from documentMatcher
 
@@ -210,6 +211,7 @@ const getImpactColor = (impact: any) => {
 const JobDescriptionsPage: React.FC = () => {
   const { state, setState } = useAppState();
   const [activeTab, setActiveTab] = useState<'job-descriptions' | 'resume-formatter' | 'analytics'>('job-descriptions');
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -2028,9 +2030,28 @@ const JobDescriptionsPage: React.FC = () => {
             >
               <FontAwesomeIcon icon={faUpload} /> {isImporting ? 'Importing...' : 'Import Data'}
             </button>
+            <button
+              className="settings-button"
+              onClick={() => setShowReminderSettings(!showReminderSettings)}
+              title="Action Reminder Settings"
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <FontAwesomeIcon icon={faCog} /> Reminder Settings
+            </button>
           </div>
         )}
-      </div >
+      </div>
 
       {showAddForm && (
         <div
@@ -2824,6 +2845,37 @@ AI will automatically fill in the job title and company name fields above!"
                     Show only waiting for response
                   </label>
                 </div>
+
+                {/* Action Reminder Panel */}
+                <ActionReminderPanel
+                  jobs={(() => {
+                    let filteredJobs = state.jobDescriptions;
+
+                    // Filter out archived/duplicates for reminders
+                    filteredJobs = filteredJobs.filter(job =>
+                      !job.isArchived &&
+                      job.applicationStatus !== 'archived' &&
+                      job.applicationStatus !== 'duplicate'
+                    );
+
+                    return filteredJobs;
+                  })()}
+                  onJobUpdate={(updatedJob) => {
+                    setState(prev => ({
+                      ...prev,
+                      jobDescriptions: prev.jobDescriptions.map(jd =>
+                        jd.id === updatedJob.id ? updatedJob : jd
+                      )
+                    }));
+
+                    // Save to storage
+                    saveJobDescription(updatedJob).catch(error => {
+                      console.error('Error saving job description:', error);
+                      showToast('Failed to save job description. Please try again.', 'error');
+                    });
+                  }}
+                />
+
                 <div className={`jobs-layout ${selectedJob ? 'split-view' : 'full-width'}`}>
                   <JobManagementTable
                     jobs={(() => {
@@ -4056,6 +4108,47 @@ AI will automatically fill in the job title and company name fields above!"
         </div>
       )}
 
+      {/* Reminder Settings Modal */}
+      {showReminderSettings && (
+        <div className="modal-overlay" onClick={() => setShowReminderSettings(false)}>
+          <div className="modal-content reminder-settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Action Reminder Settings</h2>
+              <button
+                className="modal-close-btn"
+                onClick={() => setShowReminderSettings(false)}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <ActionReminderPanel
+                jobs={state.jobDescriptions.filter(job =>
+                  !job.isArchived &&
+                  job.applicationStatus !== 'archived' &&
+                  job.applicationStatus !== 'duplicate'
+                )}
+                onJobUpdate={(updatedJob) => {
+                  setState(prev => ({
+                    ...prev,
+                    jobDescriptions: prev.jobDescriptions.map(jd =>
+                      jd.id === updatedJob.id ? updatedJob : jd
+                    )
+                  }));
+
+                  // Save to storage
+                  saveJobDescription(updatedJob).catch(error => {
+                    console.error('Error saving job description:', error);
+                    showToast('Failed to save job description. Please try again.', 'error');
+                  });
+                }}
+                showSettingsOnly={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast Container */}
       <div className="toast-container">
         {toasts.map(toast => (
@@ -4079,7 +4172,7 @@ AI will automatically fill in the job title and company name fields above!"
           </div>
         ))}
       </div>
-    </div >
+    </div>
   );
 };
 

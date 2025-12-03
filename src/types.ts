@@ -123,6 +123,10 @@ export interface JobDescription {
   daysSinceApplication?: number; // computed field
   daysInCurrentStatus?: number; // computed field
   
+  // Action reminders and tracking
+  completedActions?: Record<string, string>; // actionType -> timestamp when completed
+  snoozedUntil?: Record<string, string>; // actionId -> timestamp when snooze expires
+  
   // AI Usage tracking
   aiUsage?: {
     totalTokens: number;
