@@ -2,9 +2,10 @@ import { useState } from "react";
 import { AppStateProvider, useAppState } from "./state/AppStateContext";
 import DashboardPage from "./pages/DashboardPage";
 import JobDescriptionsPage from "./pages/JobDescriptionsPage";
+import ResumeFormatterPage from "./pages/ResumeFormatterPage";
 import "./App.css";
 
-type Page = 'dashboard' | 'jobs';
+type Page = 'dashboard' | 'jobs' | 'resume-formatter';
 
 function AppShell() {
   const [currentPage, setCurrentPage] = useState<Page>('jobs');
@@ -14,6 +15,8 @@ function AppShell() {
     switch (currentPage) {
       case 'jobs':
         return <JobDescriptionsPage />;
+      case 'resume-formatter':
+        return <ResumeFormatterPage />;
       case 'dashboard':
       default:
         return <DashboardPage />;
@@ -38,6 +41,13 @@ function AppShell() {
             style={{ cursor: 'pointer' }}
           >
             📝 Job Descriptions
+          </div>
+          <div
+            className={`nav-item ${currentPage === 'resume-formatter' ? 'active' : ''}`}
+            onClick={() => setCurrentPage('resume-formatter')}
+            style={{ cursor: 'pointer' }}
+          >
+            📄 Resume Formatter
           </div>
         </nav>
       </aside>
