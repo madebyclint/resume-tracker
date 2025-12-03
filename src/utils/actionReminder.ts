@@ -11,6 +11,8 @@ export interface ActionItem {
   actionType: ActionType;
   urgency: 'low' | 'medium' | 'high';
   message: string;
+  suggestions: string[];
+  currentSuggestionIndex: number;
   daysSince: number;
   canSnooze: boolean;
 }
@@ -80,6 +82,52 @@ export const calculateAgingStats = (jobs: JobDescription[]): AgingStats => {
   });
   
   return stats;
+};
+
+/**
+ * Generate actionable suggestions for each action type
+ */
+export const generateActionSuggestions = (
+  actionType: ActionType,
+  company: string,
+  status: JobDescription['applicationStatus']
+): string[] => {
+  const suggestions = {
+    followup: [
+      `Send a polite email: "Hi [Name], I wanted to follow up on my application for [Position]. I'm still very interested and would love to discuss how I can contribute to [Company]."`,
+      `Connect with the hiring manager on LinkedIn and send a brief message about your continued interest`,
+      `Call their main number and ask to speak with HR about your application status`,
+      `Check if they have a careers portal where you can message the recruiter directly`,
+      `Research the company's recent news and reference it in your follow-up: "I saw [Company] just announced [news]. This makes me even more excited about the [Position] role."`,
+      `Send a brief video message through LinkedIn or email introducing yourself and reiterating your interest`
+    ],
+    thankyou: [
+      `Send within 24 hours: "Thank you for taking the time to meet with me today. I enjoyed learning about [specific topic discussed] and am excited about the opportunity to [specific contribution]."`,
+      `Email each interviewer individually with personalized notes referencing your conversation`,
+      `Connect with interviewers on LinkedIn with a thank you message`,
+      `Send a handwritten note if you have their mailing address (extra points for thoughtfulness)`,
+      `Include a relevant article or resource: "I came across this article about [topic we discussed] and thought you might find it interesting."`,
+      `Reiterate a key point from the interview: "After our conversation about [challenge], I'm even more confident I can help [Company] achieve [specific goal]."`
+    ],
+    status_check: [
+      `Email: "I hope this email finds you well. I wanted to check in regarding the [Position] role. Could you provide an update on the timeline for next steps?"`,
+      `Call directly: "Hi, this is [Name]. I interviewed for [Position] on [Date] and wanted to check on the status of my application."`,
+      `Ask about their decision timeline: "When should I expect to hear about next steps in the process?"`,
+      `Request feedback if it's been over 2 weeks: "If possible, I'd appreciate any feedback on my interview performance."`,
+      `Show continued enthusiasm: "I wanted to reiterate my strong interest in the [Position] role and see if there's any additional information I can provide."`,
+      `Reference something specific: "I've been thinking more about our conversation regarding [specific topic] and have some additional ideas I'd love to share."`
+    ],
+    decision_check: [
+      `Ask directly: "Could you share the expected timeline for making a final decision on this role?"`,
+      `Inquire about next steps: "What are the remaining steps in your hiring process?"`,
+      `Show continued interest: "I remain very interested in this position. Is there any additional information I can provide to help with your decision?"`,
+      `Set a follow-up date: "Should I plan to follow up again in a week if I haven't heard back?"`,
+      `Offer to provide references: "I'd be happy to provide additional references or work samples if that would be helpful for your decision."`,
+      `Express flexibility: "I'm flexible with start dates and would be happy to discuss any concerns or questions about my candidacy."`
+    ]
+  };
+
+  return suggestions[actionType];
 };
 
 /**
@@ -214,6 +262,8 @@ export const generateActionItems = (
           actionType: 'followup',
           urgency: daysSinceLastFollowup > 14 ? 'high' : daysSinceLastFollowup > 7 ? 'medium' : 'low',
           message: generateSnarkMessage('followup', job.company, daysSinceLastFollowup, settings.snarkLevel, job.applicationStatus),
+          suggestions: generateActionSuggestions('followup', job.company, job.applicationStatus),
+          currentSuggestionIndex: 0,
           daysSince: daysSinceLastFollowup,
           canSnooze: true
         });
@@ -234,6 +284,8 @@ export const generateActionItems = (
           actionType: 'thankyou',
           urgency: daysSinceLastActivity > 5 ? 'high' : 'medium',
           message: generateSnarkMessage('thankyou', job.company, daysSinceLastActivity, settings.snarkLevel, job.applicationStatus),
+          suggestions: generateActionSuggestions('thankyou', job.company, job.applicationStatus),
+          currentSuggestionIndex: 0,
           daysSince: daysSinceLastActivity,
           canSnooze: true
         });
@@ -254,6 +306,8 @@ export const generateActionItems = (
           actionType: 'decision_check',
           urgency: daysSinceLastDecisionCheck > 14 ? 'high' : 'medium',
           message: generateSnarkMessage('decision_check', job.company, daysSinceLastDecisionCheck, settings.snarkLevel, job.applicationStatus),
+          suggestions: generateActionSuggestions('decision_check', job.company, job.applicationStatus),
+          currentSuggestionIndex: 0,
           daysSince: daysSinceLastDecisionCheck,
           canSnooze: true
         });

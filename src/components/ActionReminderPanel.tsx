@@ -7,7 +7,8 @@ import {
   faCheck,
   faClock,
   faFire,
-  faExclamationTriangle
+  faExclamationTriangle,
+  faSync
 } from '@fortawesome/free-solid-svg-icons';
 import { JobDescription } from '../types';
 import {
@@ -34,6 +35,7 @@ const ActionReminderPanel: React.FC<ActionReminderPanelProps> = ({ jobs, onJobUp
   const [showSettings, setShowSettings] = useState(showSettingsOnly);
   const [showAllActions, setShowAllActions] = useState(false);
   const [settings, setSettings] = useState<ReminderSettings>(loadReminderSettings());
+  const [suggestionIndices, setSuggestionIndices] = useState<Record<string, number>>({});
 
   const agingStats = useMemo(() => calculateAgingStats(jobs), [jobs]);
   const actionItems = useMemo(() => generateActionItems(jobs, settings), [jobs, settings]);
@@ -58,6 +60,17 @@ const ActionReminderPanel: React.FC<ActionReminderPanelProps> = ({ jobs, onJobUp
       const updatedJob = snoozeAction(job, actionItem.actionType, days);
       onJobUpdate(updatedJob);
     }
+  };
+
+  const cycleSuggestion = (actionItem: ActionItem) => {
+    const currentIndex = suggestionIndices[actionItem.id] || 0;
+    const nextIndex = (currentIndex + 1) % actionItem.suggestions.length;
+    setSuggestionIndices(prev => ({ ...prev, [actionItem.id]: nextIndex }));
+  };
+
+  const getCurrentSuggestion = (actionItem: ActionItem): string => {
+    const index = suggestionIndices[actionItem.id] || 0;
+    return actionItem.suggestions[index] || actionItem.suggestions[0];
   };
 
   const getUrgencyIcon = (urgency: string) => {
@@ -222,6 +235,20 @@ const ActionReminderPanel: React.FC<ActionReminderPanelProps> = ({ jobs, onJobUp
                       <span className="action-type">{getActionLabel(item.actionType)}</span>
                     </div>
                     <div className="action-message">{item.message}</div>
+                    <div className="action-suggestion">
+                      <div className="suggestion-content">
+                        <strong>💡 Suggestion:</strong> {getCurrentSuggestion(item)}
+                      </div>
+                      {item.suggestions.length > 1 && (
+                        <button
+                          className="cycle-suggestion-btn"
+                          onClick={() => cycleSuggestion(item)}
+                          title={`Show next suggestion (${(suggestionIndices[item.id] || 0) + 1} of ${item.suggestions.length})`}
+                        >
+                          <FontAwesomeIcon icon={faSync} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="action-buttons">
                     <button
