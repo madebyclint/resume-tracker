@@ -257,6 +257,7 @@ const JobDescriptionsPage: React.FC = () => {
   // Filter state
   const [showArchivedJobs, setShowArchivedJobs] = useState(false);
   const [hideRejectedJobs, setHideRejectedJobs] = useState(true);
+  const [showOnlyWaitingJobs, setShowOnlyWaitingJobs] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicateSearchQuery, setDuplicateSearchQuery] = useState('');
 
@@ -1095,6 +1096,39 @@ const JobDescriptionsPage: React.FC = () => {
     } catch (error) {
       console.error('Error unarchiving job:', error);
       showToast('Failed to unarchive job. Please try again.', 'error');
+    }
+  };
+
+  const handleToggleWaitingForResponse = async (id: string) => {
+    try {
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: prev.jobDescriptions.map(job => {
+          if (job.id === id) {
+            const newWaitingStatus = !job.waitingForResponse;
+            return {
+              ...logActivity(job, 'field_updated', {
+                field: 'waitingForResponse',
+                fromValue: job.waitingForResponse || false,
+                toValue: newWaitingStatus,
+                details: `Waiting for response ${newWaitingStatus ? 'enabled' : 'disabled'}`
+              }),
+              waitingForResponse: newWaitingStatus
+            };
+          }
+          return job;
+        })
+      }));
+
+      const job = state.jobDescriptions.find(j => j.id === id);
+      const newStatus = !job?.waitingForResponse;
+      showToast(
+        `Job marked as ${newStatus ? 'waiting for response' : 'not waiting for response'}`,
+        'success'
+      );
+    } catch (error) {
+      console.error('Error toggling waiting status:', error);
+      showToast('Failed to update waiting status. Please try again.', 'error');
     }
   };
 
@@ -2781,6 +2815,14 @@ AI will automatically fill in the job title and company name fields above!"
                     />
                     Hide rejected applications
                   </label>
+                  <label className="filter-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={showOnlyWaitingJobs}
+                      onChange={(e) => setShowOnlyWaitingJobs(e.target.checked)}
+                    />
+                    Show only waiting for response
+                  </label>
                 </div>
                 <div className={`jobs-layout ${selectedJob ? 'split-view' : 'full-width'}`}>
                   <JobManagementTable
@@ -2800,6 +2842,13 @@ AI will automatically fill in the job title and company name fields above!"
                       if (hideRejectedJobs) {
                         filteredJobs = filteredJobs.filter(job =>
                           job.applicationStatus !== 'rejected'
+                        );
+                      }
+
+                      // Show only waiting jobs if filter is enabled
+                      if (showOnlyWaitingJobs) {
+                        filteredJobs = filteredJobs.filter(job =>
+                          job.waitingForResponse === true
                         );
                       }
 
@@ -2825,6 +2874,7 @@ AI will automatically fill in the job title and company name fields above!"
                     onUnarchive={handleUnarchiveJob}
                     onMarkDuplicate={handleMarkDuplicate}
                     onStatusChange={handleStatusChange}
+                    onToggleWaitingForResponse={handleToggleWaitingForResponse}
                     onSelect={setSelectedJobId}
                     selectedJobId={selectedJobId}
                   />

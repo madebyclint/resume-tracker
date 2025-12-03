@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle, faClock, faFlag } from '@fortawesome/free-solid-svg-icons';
 import StatusDropdown from './StatusDropdown';
 import { getCleanedStatusJourney, getStatusChangesSummary } from '../utils/activityLogger';
 
@@ -14,6 +14,7 @@ interface JobManagementTableProps {
   onUnarchive: (jobId: string) => void;
   onMarkDuplicate: (jobId: string) => void;
   onStatusChange: (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage']) => void;
+  onToggleWaitingForResponse: (jobId: string) => void;
   onSelect: (jobId: string) => void;
   selectedJobId: string | null;
 }
@@ -55,6 +56,7 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
   onUnarchive,
   onMarkDuplicate,
   onStatusChange,
+  onToggleWaitingForResponse,
   onSelect,
   selectedJobId
 }) => {
@@ -670,10 +672,15 @@ Clint`;
               sortedJobs.map(job => (
                 <tr
                   key={job.id}
-                  className={selectedJobId === job.id ? 'selected' : ''}
+                  className={`${selectedJobId === job.id ? 'selected' : ''} ${job.waitingForResponse ? 'waiting-for-response' : ''}`}
                   onClick={() => onSelect(job.id)}
                 >
-                  <td className="id-cell" style={{ textAlign: 'center', fontWeight: 'bold' }}>
+                  <td className="id-cell" style={{ textAlign: 'center', fontWeight: 'bold', position: 'relative' }}>
+                    {job.waitingForResponse && (
+                      <div className="waiting-flag">
+                        <FontAwesomeIcon icon={faFlag} />
+                      </div>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                       <span className="job-id" title={`UUID: ${job.id}`}>
                         {job.sequentialId || 'N/A'}
@@ -721,6 +728,16 @@ Clint`;
                           title="Edit job"
                         >
                           <FontAwesomeIcon icon={faEdit} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleWaitingForResponse(job.id);
+                          }}
+                          className={`action-btn waiting-btn ${job.waitingForResponse ? 'active' : ''}`}
+                          title={job.waitingForResponse ? "Mark as not waiting for response" : "Mark as waiting for response"}
+                        >
+                          <FontAwesomeIcon icon={faClock} />
                         </button>
                         <button
                           onClick={(e) => {

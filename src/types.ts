@@ -94,6 +94,7 @@ export interface JobDescription {
   secondaryContact?: string; // additional contact
   priority?: 'low' | 'medium' | 'high'; // how interested you are
   impact?: 'low' | 'medium' | 'high'; // potential career impact level
+  waitingForResponse?: boolean; // flag to indicate waiting for company response
   followUpDate?: string; // when to follow up next
   interviewDates?: string[]; // array of interview dates
   salaryDiscussed?: string; // salary range discussed
