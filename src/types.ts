@@ -112,11 +112,13 @@ export interface JobDescription {
   activityLog?: Array<{
     id: string;
     timestamp: string;
-    type: 'status_change' | 'interview_stage_change' | 'note_added' | 'document_linked' | 'field_updated';
+    type: 'status_change' | 'interview_stage_change' | 'note_added' | 'document_linked' | 'field_updated' | 'action_completed';
     fromValue?: any;
     toValue?: any;
     field?: string; // for field_updated type
     details?: string;
+    actionType?: string; // for action_completed type
+    actionDetails?: string; // what the user actually did
   }>;
   
   // Quick stats
@@ -152,6 +154,16 @@ export function isCoverLetter(doc: Document): doc is CoverLetter {
 }
 
 
+
+// Action completion types
+export type ActionCompletionType = 'email' | 'phone' | 'linkedin' | 'text' | 'in_person' | 'other';
+
+export interface ActionCompletion {
+  actionType: string; // 'followup', 'thankyou', 'status_check', etc.
+  completionType: ActionCompletionType;
+  notes?: string;
+  date: string;
+}
 
 export interface AppState {
   resumes: Resume[];

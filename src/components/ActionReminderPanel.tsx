@@ -10,7 +10,7 @@ import {
   faExclamationTriangle,
   faSync
 } from '@fortawesome/free-solid-svg-icons';
-import { JobDescription } from '../types';
+import { JobDescription, ActionCompletion } from '../types';
 import {
   calculateAgingStats,
   generateActionItems,
@@ -22,6 +22,8 @@ import {
   ReminderSettings,
   SnarkLevel
 } from '../utils/actionReminder';
+import { logActionCompletion } from '../utils/activityLogger';
+import ActionCompletionModal from './ActionCompletionModal';
 import './ActionReminderPanel.css';
 
 interface ActionReminderPanelProps {
@@ -36,6 +38,8 @@ const ActionReminderPanel: React.FC<ActionReminderPanelProps> = ({ jobs, onJobUp
   const [showAllActions, setShowAllActions] = useState(false);
   const [settings, setSettings] = useState<ReminderSettings>(loadReminderSettings());
   const [suggestionIndices, setSuggestionIndices] = useState<Record<string, number>>({});
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [selectedActionItem, setSelectedActionItem] = useState<ActionItem | null>(null);
 
   const agingStats = useMemo(() => calculateAgingStats(jobs), [jobs]);
   const actionItems = useMemo(() => generateActionItems(jobs, settings), [jobs, settings]);
@@ -46,12 +50,22 @@ const ActionReminderPanel: React.FC<ActionReminderPanelProps> = ({ jobs, onJobUp
     saveReminderSettings(newSettings);
   };
 
-  const handleActionComplete = (actionItem: ActionItem, actionType: string) => {
-    const job = jobs.find(j => j.id === actionItem.jobId);
-    if (job) {
-      const updatedJob = markActionCompleted(job, actionType as any);
-      onJobUpdate(updatedJob);
+  const handleActionComplete = (actionItem: ActionItem) => {
+    setSelectedActionItem(actionItem);
+    setShowCompletionModal(true);
+  };
+
+  const handleCompletionSubmit = (completion: ActionCompletion) => {
+    if (selectedActionItem) {
+      const job = jobs.find(j => j.id === selectedActionItem.jobId);
+      if (job) {
+        // Log the action completion and update the job
+        const updatedJob = logActionCompletion(job, completion);
+        onJobUpdate(updatedJob);
+      }
     }
+    setShowCompletionModal(false);
+    setSelectedActionItem(null);
   };
 
   const handleSnoozeAction = (actionItem: ActionItem, days: number) => {
@@ -253,7 +267,7 @@ const ActionReminderPanel: React.FC<ActionReminderPanelProps> = ({ jobs, onJobUp
                   <div className="action-buttons">
                     <button
                       className="action-btn complete-btn"
-                      onClick={() => handleActionComplete(item, item.actionType)}
+                      onClick={() => handleActionComplete(item)}
                       title={`Mark ${getActionLabel(item.actionType)} as completed`}
                     >
                       <FontAwesomeIcon icon={faCheck} /> Done
@@ -383,6 +397,17 @@ const ActionReminderPanel: React.FC<ActionReminderPanelProps> = ({ jobs, onJobUp
           </div>
         </div>
       )}
+
+      {/* Action Completion Modal */}
+      <ActionCompletionModal
+        isOpen={showCompletionModal}
+        onClose={() => {
+          setShowCompletionModal(false);
+          setSelectedActionItem(null);
+        }}
+        onComplete={handleCompletionSubmit}
+        actionItem={selectedActionItem}
+      />
     </div>
   );
 };

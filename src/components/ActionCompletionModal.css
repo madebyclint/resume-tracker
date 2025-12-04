@@ -1,0 +1,140 @@
+/* Action Completion Modal Styles */
+.action-completion-modal {
+  max-width: 500px;
+  width: 90%;
+}
+
+.action-context {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+  margin-bottom: 24px;
+}
+
+.action-context p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.action-context p:last-child {
+  margin-bottom: 0;
+}
+
+.completion-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.completion-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  border: 2px solid #e2e8f0;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.completion-type-btn:hover {
+  border-color: #cbd5e1;
+  color: #374151;
+  transform: translateY(-1px);
+}
+
+.completion-type-btn.active {
+  border-color: #3b82f6;
+  background: #3b82f6;
+  color: white;
+}
+
+.completion-type-btn svg {
+  font-size: 18px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.form-group input[type="date"] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.cancel-button,
+.complete-button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.cancel-button {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.cancel-button:hover {
+  background: #e5e7eb;
+}
+
+.complete-button {
+  background: #10b981;
+  color: white;
+}
+
+.complete-button:hover {
+  background: #059669;
+}
+
+.complete-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}

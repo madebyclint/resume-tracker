@@ -1,13 +1,15 @@
-import { JobDescription } from '../types';
+import { JobDescription, ActionCompletion } from '../types';
 
 export interface ActivityLogEntry {
   id: string;
   timestamp: string;
-  type: 'status_change' | 'interview_stage_change' | 'note_added' | 'document_linked' | 'field_updated';
+  type: 'status_change' | 'interview_stage_change' | 'note_added' | 'document_linked' | 'field_updated' | 'action_completed';
   fromValue?: any;
   toValue?: any;
   field?: string;
   details?: string;
+  actionType?: string; // for action_completed type
+  actionDetails?: string; // what the user actually did
 }
 
 /**
@@ -492,4 +494,112 @@ export const cleanAllJobsStatusHistory = (jobs: JobDescription[]): JobDescriptio
     const journey = getCleanedStatusJourney(job);
     return journey.rapidChanges > 0 ? cleanStatusHistory(job) : job;
   });
+};
+
+/**
+ * Log an action completion to a job's activity log
+ */
+export const logActionCompletion = (
+  job: JobDescription,
+  completion: ActionCompletion
+): JobDescription => {
+  const activityEntry: ActivityLogEntry = {
+    id: generateActivityId(),
+    timestamp: new Date().toISOString(),
+    type: 'action_completed',
+    actionType: completion.actionType,
+    actionDetails: `${getCompletionTypeLabel(completion.completionType)}${completion.notes ? `: ${completion.notes}` : ''}`,
+    details: `Completed ${getActionTypeLabel(completion.actionType)} via ${getCompletionTypeLabel(completion.completionType)}`
+  };
+
+  const updatedJob = {
+    ...job,
+    activityLog: [...(job.activityLog || []), activityEntry],
+    lastActivityDate: completion.date,
+    completedActions: {
+      ...job.completedActions,
+      [completion.actionType]: completion.date
+    }
+  };
+
+  return updatedJob;
+};
+
+/**
+ * Get human-readable label for action types
+ */
+export const getActionTypeLabel = (actionType: string): string => {
+  switch (actionType) {
+    case 'followup': return 'follow-up';
+    case 'thankyou': return 'thank you note';
+    case 'status_check': return 'status check';
+    case 'decision_check': return 'decision timeline check';
+    default: return actionType;
+  }
+};
+
+/**
+ * Get human-readable label for completion types
+ */
+export const getCompletionTypeLabel = (completionType: string): string => {
+  switch (completionType) {
+    case 'email': return 'email';
+    case 'phone': return 'phone call';
+    case 'linkedin': return 'LinkedIn message';
+    case 'text': return 'text message';
+    case 'in_person': return 'in-person conversation';
+    case 'other': return 'other method';
+    default: return completionType;
+  }
+};
+
+/**
+ * Calculate delay for next reminder based on action type and completion
+ */
+export const calculateReminderDelay = (actionType: string, completionType: string): number => {
+  // Return delay in days
+  const baseDelays = {
+    followup: 14,     // 2 weeks before next follow-up reminder
+    thankyou: 999,    // Don't remind about thank you notes again (one-time action)
+    status_check: 10, // 10 days before next status check
+    decision_check: 7 // 1 week before next decision timeline request
+  };
+
+  const completionMultipliers = {
+    email: 1.0,       // Standard delay
+    phone: 1.2,       // Slightly longer (more personal)
+    linkedin: 0.9,    // Slightly shorter (less formal)
+    text: 0.8,        // Shorter (casual)
+    in_person: 1.5,   // Longer (most personal)
+    other: 1.0        // Standard
+  };
+
+  const baseDelay = baseDelays[actionType as keyof typeof baseDelays] || 7;
+  const multiplier = completionMultipliers[completionType as keyof typeof completionMultipliers] || 1.0;
+
+  return Math.round(baseDelay * multiplier);
+};
+
+/**
+ * Check if enough time has passed since last action for new reminders
+ */
+export const shouldShowReminder = (
+  actionType: string,
+  lastCompletedDate: string | undefined,
+  currentDate: Date = new Date()
+): boolean => {
+  if (!lastCompletedDate) return true;
+
+  const lastDate = new Date(lastCompletedDate);
+  const daysSince = Math.ceil((currentDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  const minDelays = {
+    followup: 7,      // At least 1 week between follow-ups
+    thankyou: 999,    // Never remind again
+    status_check: 5,  // At least 5 days between status checks
+    decision_check: 7 // At least 1 week between decision requests
+  };
+
+  const minDelay = minDelays[actionType as keyof typeof minDelays] || 7;
+  return daysSince >= minDelay;
 };
