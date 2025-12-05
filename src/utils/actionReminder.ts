@@ -1,4 +1,5 @@
 import { JobDescription } from '../types';
+import { shouldShowReminder } from './activityLogger';
 
 export type SnarkLevel = 'gentle' | 'medium' | 'savage';
 export type ActionType = 'followup' | 'thankyou' | 'status_check' | 'decision_check';
@@ -248,13 +249,14 @@ export const generateActionItems = (
 
     // Check for follow-up needed (applied status)
     if (job.applicationStatus === 'applied') {
-      const lastFollowup = completedActions.followup;
-      const daysSinceLastFollowup = lastFollowup ? 
-        Math.ceil((now.getTime() - new Date(lastFollowup).getTime()) / (1000 * 60 * 60 * 24)) : daysSinceApplication;
+      const shouldShow = shouldShowReminder('followup', job);
+      const isNotSnoozed = !isActionSnoozed('followup', job.id, snoozedUntil);
+      const daysSinceLastFollowup = Math.ceil((now.getTime() - (lastActivityDate || applicationDate || now).getTime()) / (1000 * 60 * 60 * 24));
       
-      const followupInterval = lastFollowup ? settings.followupReminderDays * 2 : settings.followupReminderDays; // Slower re-reminding
+      // Ensure we show reminders for jobs in the follow-up category (4-14 days)
+      const shouldShowBasedOnAge = daysSinceLastFollowup >= 4;
       
-      if (daysSinceLastFollowup >= followupInterval && !isActionSnoozed('followup', job.id, snoozedUntil)) {
+      if ((shouldShow || shouldShowBasedOnAge) && isNotSnoozed && daysSinceLastFollowup >= 1) {
         actions.push({
           id: `${job.id}_followup`,
           jobId: job.id,
@@ -272,11 +274,8 @@ export const generateActionItems = (
 
     // Check for thank you note needed (interviewing status)
     if (job.applicationStatus === 'interviewing') {
-      const lastThankYou = completedActions.thankyou;
-      const daysSinceLastActivity = Math.ceil((now.getTime() - (lastActivityDate || applicationDate || now).getTime()) / (1000 * 60 * 60 * 24));
-      
-      if (!lastThankYou && daysSinceLastActivity >= settings.thankYouReminderDays && 
-          !isActionSnoozed('thankyou', job.id, snoozedUntil)) {
+      if (shouldShowReminder('thankyou', job) && !isActionSnoozed('thankyou', job.id, snoozedUntil)) {
+        const daysSinceLastActivity = Math.ceil((now.getTime() - (lastActivityDate || applicationDate || now).getTime()) / (1000 * 60 * 60 * 24));
         actions.push({
           id: `${job.id}_thankyou`,
           jobId: job.id,
@@ -292,23 +291,18 @@ export const generateActionItems = (
       }
 
       // Check for decision timeline request
-      const lastDecisionCheck = completedActions.decision_check;
-      const daysSinceLastDecisionCheck = lastDecisionCheck ? 
-        Math.ceil((now.getTime() - new Date(lastDecisionCheck).getTime()) / (1000 * 60 * 60 * 24)) : daysSinceLastActivity;
-      
-      const decisionInterval = lastDecisionCheck ? settings.decisionCheckDays * 1.5 : settings.decisionCheckDays; // Slower re-reminding
-      
-      if (daysSinceLastDecisionCheck >= decisionInterval && !isActionSnoozed('decision_check', job.id, snoozedUntil)) {
+      if (shouldShowReminder('decision_check', job) && !isActionSnoozed('decision_check', job.id, snoozedUntil)) {
+        const daysSinceLastActivity = Math.ceil((now.getTime() - (lastActivityDate || applicationDate || now).getTime()) / (1000 * 60 * 60 * 24));
         actions.push({
           id: `${job.id}_decision`,
           jobId: job.id,
           company: job.company,
           actionType: 'decision_check',
-          urgency: daysSinceLastDecisionCheck > 14 ? 'high' : 'medium',
-          message: generateSnarkMessage('decision_check', job.company, daysSinceLastDecisionCheck, settings.snarkLevel, job.applicationStatus),
+          urgency: daysSinceLastActivity > 14 ? 'high' : 'medium',
+          message: generateSnarkMessage('decision_check', job.company, daysSinceLastActivity, settings.snarkLevel, job.applicationStatus),
           suggestions: generateActionSuggestions('decision_check', job.company, job.applicationStatus),
           currentSuggestionIndex: 0,
-          daysSince: daysSinceLastDecisionCheck,
+          daysSince: daysSinceLastActivity,
           canSnooze: true
         });
       }

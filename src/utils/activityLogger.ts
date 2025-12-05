@@ -585,9 +585,12 @@ export const calculateReminderDelay = (actionType: string, completionType: strin
  */
 export const shouldShowReminder = (
   actionType: string,
-  lastCompletedDate: string | undefined,
+  job: JobDescription,
   currentDate: Date = new Date()
 ): boolean => {
+  const completedActions = job.completedActions || {};
+  const lastCompletedDate = completedActions[actionType as keyof typeof completedActions];
+  
   if (!lastCompletedDate) return true;
 
   const lastDate = new Date(lastCompletedDate);
@@ -595,7 +598,7 @@ export const shouldShowReminder = (
   
   const minDelays = {
     followup: 7,      // At least 1 week between follow-ups
-    thankyou: 999,    // Never remind again
+    thankyou: 999,    // Never remind again (one-time action)
     status_check: 5,  // At least 5 days between status checks
     decision_check: 7 // At least 1 week between decision requests
   };
