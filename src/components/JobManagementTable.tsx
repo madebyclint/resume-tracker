@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle, faClock, faFlag } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle, faClock, faFlag, faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons';
 import StatusDropdown from './StatusDropdown';
 import { getCleanedStatusJourney, getStatusChangesSummary } from '../utils/activityLogger';
 
@@ -751,6 +751,18 @@ Clint`;
                         />
                       )}
                       {job.company}
+                      {job.url && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(job.url, '_blank', 'noopener,noreferrer');
+                          }}
+                          className="external-link-btn"
+                          title="Open job listing in new tab"
+                        >
+                          <FontAwesomeIcon icon={faExternalLinkAlt} />
+                        </button>
+                      )}
                     </div>
                     <div className="position-row">
                       <span className="position-title">

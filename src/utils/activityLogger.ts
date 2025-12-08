@@ -158,7 +158,7 @@ export const getCleanedStatusJourney = (job: JobDescription) => {
   // Determine if this represents a legitimate application attempt
   const legitimateStatuses = ['applied', 'interviewing', 'rejected', 'offered', 'withdrawn'];
   const hasLegitimateProgression = legitimateStatuses.includes(currentStatus) || 
-    [...uniqueStatuses].some(status => legitimateStatuses.includes(status));
+    [...uniqueStatuses].filter(status => status !== undefined).some(status => legitimateStatuses.includes(status));
 
   return {
     hasProgressed: hasLegitimateProgression,
