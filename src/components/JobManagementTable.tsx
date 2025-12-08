@@ -13,7 +13,7 @@ interface JobManagementTableProps {
   onArchive: (jobId: string) => void;
   onUnarchive: (jobId: string) => void;
   onMarkDuplicate: (jobId: string) => void;
-  onStatusChange: (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage']) => void;
+  onStatusChange: (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage'], offerStage?: JobDescription['offerStage']) => void;
   onToggleWaitingForResponse: (jobId: string) => void;
   onSelect: (jobId: string) => void;
   selectedJobId: string | null;
@@ -881,8 +881,8 @@ Clint`;
                   <td className="status-cell">
                     <StatusDropdown
                       job={job as JobDescription}
-                      onStatusChange={(jobId, status, interviewStage) => {
-                        onStatusChange(jobId, status, interviewStage);
+                      onStatusChange={(jobId, status, interviewStage, offerStage) => {
+                        onStatusChange(jobId, status, interviewStage, offerStage);
                       }}
                       onClick={(e) => e.stopPropagation()}
                     />

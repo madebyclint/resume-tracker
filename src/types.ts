@@ -81,6 +81,7 @@ export interface JobDescription {
   // CRM-like tracking fields
   applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived';
   interviewStage?: 'screening' | 'first_interview' | 'followup_interview' | 'final_round' | 'assessment'; // sub-status for interviewing
+  offerStage?: 'received' | 'considering' | 'negotiating' | 'accepted' | 'rejected' | 'expired'; // sub-status for offered
   
   // Archive and duplicate handling
   isArchived?: boolean; // Explicitly archived by user (different from status)
@@ -104,6 +105,7 @@ export interface JobDescription {
   statusHistory?: Array<{
     status: JobDescription['applicationStatus'];
     interviewStage?: JobDescription['interviewStage'];
+    offerStage?: JobDescription['offerStage'];
     date: string;
     notes?: string;
   }>;

@@ -3,7 +3,7 @@ import { JobDescription } from '../types';
 
 interface StatusDropdownProps {
   job: JobDescription;
-  onStatusChange: (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage']) => void;
+  onStatusChange: (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage'], offerStage?: JobDescription['offerStage']) => void;
   onClick?: (e: React.MouseEvent) => void;
   className?: string;
 }
@@ -14,7 +14,7 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
   onClick,
   className = ''
 }) => {
-  const getDisplayText = (status: string, interviewStage?: string) => {
+  const getDisplayText = (status: string, interviewStage?: string, offerStage?: string) => {
     if (status === 'interviewing' && interviewStage) {
       switch (interviewStage) {
         case 'screening': return 'Screening';
@@ -23,6 +23,18 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
         case 'final_round': return 'Final Round';
         case 'assessment': return 'Assessment';
         default: return 'Interviewing';
+      }
+    }
+
+    if (status === 'offered' && offerStage) {
+      switch (offerStage) {
+        case 'received': return 'Offer Received';
+        case 'considering': return 'Considering';
+        case 'negotiating': return 'Negotiating';
+        case 'accepted': return 'Accepted';
+        case 'rejected': return 'Offer Rejected';
+        case 'expired': return 'Offer Expired';
+        default: return 'Offered';
       }
     }
 
@@ -45,6 +57,9 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
     if (value.startsWith('interviewing_')) {
       const interviewStage = value.replace('interviewing_', '') as JobDescription['interviewStage'];
       onStatusChange(job.id, 'interviewing', interviewStage);
+    } else if (value.startsWith('offered_')) {
+      const offerStage = value.replace('offered_', '') as JobDescription['offerStage'];
+      onStatusChange(job.id, 'offered', undefined, offerStage);
     } else {
       onStatusChange(job.id, value as JobDescription['applicationStatus']);
     }
@@ -53,6 +68,9 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
   const getCurrentValue = () => {
     if (job.applicationStatus === 'interviewing' && job.interviewStage) {
       return `interviewing_${job.interviewStage}`;
+    }
+    if (job.applicationStatus === 'offered' && job.offerStage) {
+      return `offered_${job.offerStage}`;
     }
     return job.applicationStatus || 'not_applied';
   };
@@ -76,7 +94,16 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
       </optgroup>
 
       <option value="rejected">Rejected</option>
-      <option value="offered">Offered</option>
+
+      <optgroup label="Offer Stages">
+        <option value="offered_received">🎉 Offer Received</option>
+        <option value="offered_considering">🤔 Considering</option>
+        <option value="offered_negotiating">💬 Negotiating</option>
+        <option value="offered_accepted">✅ Accepted</option>
+        <option value="offered_rejected">❌ Offer Rejected</option>
+        <option value="offered_expired">⏰ Offer Expired</option>
+      </optgroup>
+
       <option value="withdrawn">Withdrawn</option>
 
       <optgroup label="Special States">

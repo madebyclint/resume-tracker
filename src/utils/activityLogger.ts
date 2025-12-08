@@ -52,7 +52,8 @@ export const logActivity = (
 export const logStatusChange = (
   job: JobDescription,
   newStatus: JobDescription['applicationStatus'],
-  newInterviewStage?: JobDescription['interviewStage']
+  newInterviewStage?: JobDescription['interviewStage'],
+  newOfferStage?: JobDescription['offerStage']
 ): JobDescription => {
   const activities: ActivityLogEntry[] = [];
   const timestamp = new Date().toISOString();
@@ -81,10 +82,24 @@ export const logStatusChange = (
     });
   }
 
+  // Log offer stage change if offer stage changed
+  if (newStatus === 'offered' && job.offerStage !== newOfferStage) {
+    activities.push({
+      id: generateActivityId(),
+      timestamp,
+      type: 'field_updated',
+      field: 'offerStage',
+      fromValue: job.offerStage,
+      toValue: newOfferStage,
+      details: `Offer stage changed from ${job.offerStage || 'none'} to ${newOfferStage || 'none'}`
+    });
+  }
+
   // Update status history
   const statusHistoryEntry = {
     status: newStatus,
     interviewStage: newInterviewStage,
+    offerStage: newOfferStage,
     date: timestamp,
     notes: activities.map(a => a.details).join('; ')
   };
@@ -93,6 +108,7 @@ export const logStatusChange = (
     ...job,
     applicationStatus: newStatus,
     interviewStage: newInterviewStage,
+    offerStage: newOfferStage,
     applicationDate: newStatus === 'applied' && !job.applicationDate ? timestamp : job.applicationDate,
     lastActivityDate: timestamp,
     activityLog: [...(job.activityLog || []), ...activities],
@@ -597,10 +613,11 @@ export const shouldShowReminder = (
   const daysSince = Math.ceil((currentDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
   
   const minDelays = {
-    followup: 7,      // At least 1 week between follow-ups
-    thankyou: 999,    // Never remind again (one-time action)
-    status_check: 5,  // At least 5 days between status checks
-    decision_check: 7 // At least 1 week between decision requests
+    followup: 7,        // At least 1 week between follow-ups
+    thankyou: 999,      // Never remind again (one-time action)
+    status_check: 5,    // At least 5 days between status checks
+    decision_check: 7,  // At least 1 week between decision requests
+    offer_response: 1   // Daily reminders for offer responses (urgent!)
   };
 
   const minDelay = minDelays[actionType as keyof typeof minDelays] || 7;

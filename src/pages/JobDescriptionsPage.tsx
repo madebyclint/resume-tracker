@@ -1224,13 +1224,14 @@ const JobDescriptionsPage: React.FC = () => {
   const handleStatusChange = async (
     jobId: string,
     status: JobDescription['applicationStatus'],
-    interviewStage?: JobDescription['interviewStage']
+    interviewStage?: JobDescription['interviewStage'],
+    offerStage?: JobDescription['offerStage']
   ) => {
     const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
     if (!jobDescription) return;
 
     // Use the activity logger to create an updated job with proper logging
-    const updatedJobDescription = logStatusChange(jobDescription, status, interviewStage);
+    const updatedJobDescription = logStatusChange(jobDescription, status, interviewStage, offerStage);
 
     try {
       await saveJobDescription(updatedJobDescription);

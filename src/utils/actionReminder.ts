@@ -2,7 +2,7 @@ import { JobDescription } from '../types';
 import { shouldShowReminder } from './activityLogger';
 
 export type SnarkLevel = 'gentle' | 'medium' | 'savage';
-export type ActionType = 'followup' | 'thankyou' | 'status_check' | 'decision_check';
+export type ActionType = 'followup' | 'thankyou' | 'status_check' | 'decision_check' | 'offer_response';
 export type AgingCategory = 'fresh' | 'followup' | 'stale' | 'cold';
 
 export interface ActionItem {
@@ -125,6 +125,14 @@ export const generateActionSuggestions = (
       `Set a follow-up date: "Should I plan to follow up again in a week if I haven't heard back?"`,
       `Offer to provide references: "I'd be happy to provide additional references or work samples if that would be helpful for your decision."`,
       `Express flexibility: "I'm flexible with start dates and would be happy to discuss any concerns or questions about my candidacy."`
+    ],
+    offer_response: [
+      `Express gratitude: "Thank you for the offer! I'm excited about the opportunity to join [Company]."`,
+      `Ask for details: "Could you provide more details about the compensation package, benefits, and start date?"`,
+      `Request time to decide: "I'd appreciate [X days/week] to consider the offer and discuss with my family."`,
+      `Negotiate respectfully: "Based on my research and experience, I was hoping for a salary closer to [amount]. Is there flexibility?"`,
+      `Clarify terms: "Could we review the job responsibilities, reporting structure, and growth opportunities?"`,
+      `Express concerns diplomatically: "I'm very interested, but have some questions about [specific aspect]. Could we discuss?"`
     ]
   };
 
@@ -208,6 +216,23 @@ export const generateSnarkMessage = (
         `${company} has strung you along for ${daysSince} days. Demand a timeline.`,
         `${daysSince} days without a decision from ${company}? They're being unprofessional.`,
         `Either ${company} wants you or they don't. Make them pick after ${daysSince} days.`
+      ]
+    },
+    offer_response: {
+      gentle: [
+        `You have an offer from ${company} - time to respond thoughtfully`,
+        `Consider your response to ${company}'s offer`,
+        `${company} is waiting for your decision on their offer`
+      ],
+      medium: [
+        `${company} made you an offer ${daysSince} days ago. Don't leave them hanging!`,
+        `Time to respond to ${company}'s offer - they need an answer`,
+        `${daysSince} days to think about ${company}'s offer. Decision time!`
+      ],
+      savage: [
+        `${company} offered you a job ${daysSince} days ago. Stop overthinking and respond!`,
+        `${daysSince} days of radio silence on ${company}'s offer? They think you're not interested.`,
+        `${company} is probably rescinding their offer after ${daysSince} days of no response. ACT NOW.`
       ]
     }
   };
@@ -305,6 +330,30 @@ export const generateActionItems = (
           daysSince: daysSinceLastActivity,
           canSnooze: true
         });
+      }
+    }
+
+    // Check for offer response needed (offered status)
+    if (job.applicationStatus === 'offered') {
+      // For offers, check if they need to respond based on offer stage
+      if (job.offerStage === 'received' || job.offerStage === 'considering') {
+        if (shouldShowReminder('offer_response', job) && !isActionSnoozed('offer_response', job.id, snoozedUntil)) {
+          const daysSinceLastActivity = Math.ceil((now.getTime() - (lastActivityDate || applicationDate || now).getTime()) / (1000 * 60 * 60 * 24));
+          const urgency = daysSinceLastActivity > 7 ? 'high' : daysSinceLastActivity > 3 ? 'medium' : 'low';
+          
+          actions.push({
+            id: `${job.id}_offer_response`,
+            jobId: job.id,
+            company: job.company,
+            actionType: 'offer_response',
+            urgency: urgency,
+            message: generateSnarkMessage('offer_response', job.company, daysSinceLastActivity, settings.snarkLevel, job.applicationStatus),
+            suggestions: generateActionSuggestions('offer_response', job.company, job.applicationStatus),
+            currentSuggestionIndex: 0,
+            daysSince: daysSinceLastActivity,
+            canSnooze: true
+          });
+        }
       }
     }
   });
