@@ -197,21 +197,40 @@ const ActionReminderPanel: React.FC<ActionReminderPanelProps> = ({ jobs, onJobUp
   // In floating mode, when collapsed, show a FAB
   if (floating && !isExpanded && actionItems.length > 0) {
     const hasUrgentActions = actionItems.some(item => item.urgency === 'high');
+    const hasMediumActions = actionItems.some(item => item.urgency === 'medium');
+    const hasHighPriorityActions = actionItems.some(item => item.urgency === 'high');
+
+    // Determine color class based on count and urgency
+    let colorClass = '';
+    let icon = faExclamationTriangle;
+
+    if (actionItems.length >= 10) {
+      colorClass = 'many-actions';
+      icon = faFire;
+    } else if (hasHighPriorityActions) {
+      colorClass = 'high-priority';
+      icon = faFire;
+    } else if (hasMediumActions) {
+      colorClass = 'medium-priority';
+      icon = faExclamationTriangle;
+    } else {
+      colorClass = 'low-priority';
+      icon = faClock;
+    }
+
     return (
       <button
-        className={`floating-fab ${hasUrgentActions ? 'urgent' : ''}`}
+        className={`floating-fab ${colorClass} ${hasUrgentActions ? 'urgent' : ''}`}
         onClick={() => setIsExpanded(true)}
         title={`${actionItems.length} action${actionItems.length !== 1 ? 's' : ''} needed`}
       >
         <div className="fab-content">
-          <FontAwesomeIcon icon={hasUrgentActions ? faFire : faExclamationTriangle} className="fab-icon" />
+          <FontAwesomeIcon icon={icon} className="fab-icon" />
           <span className="fab-count">{actionItems.length}</span>
         </div>
       </button>
     );
-  }
-
-  // Don't show anything in floating mode when collapsed and no actions
+  }  // Don't show anything in floating mode when collapsed and no actions
   if (floating && !isExpanded && actionItems.length === 0) {
     return null;
   }
