@@ -2416,35 +2416,7 @@ AI will automatically fill in the job title and company name fields above!"
                   </label>
                 </div>
 
-                {/* Action Reminder Panel */}
-                <ActionReminderPanel
-                  jobs={(() => {
-                    let filteredJobs = state.jobDescriptions;
 
-                    // Filter out archived/duplicates for reminders
-                    filteredJobs = filteredJobs.filter(job =>
-                      !job.isArchived &&
-                      job.applicationStatus !== 'archived' &&
-                      job.applicationStatus !== 'duplicate'
-                    );
-
-                    return filteredJobs;
-                  })()}
-                  onJobUpdate={(updatedJob) => {
-                    setState(prev => ({
-                      ...prev,
-                      jobDescriptions: prev.jobDescriptions.map(jd =>
-                        jd.id === updatedJob.id ? updatedJob : jd
-                      )
-                    }));
-
-                    // Save to storage
-                    saveJobDescription(updatedJob).catch(error => {
-                      console.error('Error saving job description:', error);
-                      showToast('Failed to save job description. Please try again.', 'error');
-                    });
-                  }}
-                />
 
                 <div className={`jobs-layout ${selectedJob ? 'split-view' : 'full-width'}`}>
                   <JobManagementTable
@@ -3478,7 +3450,7 @@ AI will automatically fill in the job title and company name fields above!"
                   job.applicationStatus !== 'archived' &&
                   job.applicationStatus !== 'duplicate'
                 )}
-                onJobUpdate={(updatedJob) => {
+                onJobUpdate={(updatedJob: JobDescription) => {
                   setState(prev => ({
                     ...prev,
                     jobDescriptions: prev.jobDescriptions.map(jd =>
@@ -3522,6 +3494,37 @@ AI will automatically fill in the job title and company name fields above!"
           </div>
         ))}
       </div>
+
+      {/* Floating Action Reminder Panel */}
+      <ActionReminderPanel
+        floating={true}
+        jobs={(() => {
+          let filteredJobs = state.jobDescriptions;
+
+          // Filter out archived/duplicates for reminders
+          filteredJobs = filteredJobs.filter(job =>
+            !job.isArchived &&
+            job.applicationStatus !== 'archived' &&
+            job.applicationStatus !== 'duplicate'
+          );
+
+          return filteredJobs;
+        })()}
+        onJobUpdate={(updatedJob: JobDescription) => {
+          setState(prev => ({
+            ...prev,
+            jobDescriptions: prev.jobDescriptions.map(jd =>
+              jd.id === updatedJob.id ? updatedJob : jd
+            )
+          }));
+
+          // Save to storage
+          saveJobDescription(updatedJob).catch(error => {
+            console.error('Error saving job description:', error);
+            showToast('Failed to save job description. Please try again.', 'error');
+          });
+        }}
+      />
     </div>
   );
 };

@@ -8,6 +8,168 @@
   overflow: hidden;
 }
 
+/* Floating mode styles */
+.action-reminder-panel.floating {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  margin-bottom: 0;
+  max-width: 400px;
+  width: 380px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(0);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+}
+
+.action-reminder-panel.floating.collapsed {
+  width: auto;
+  min-width: 60px;
+  border-radius: 30px;
+  overflow: visible;
+  transform: scale(0.9);
+}
+
+.action-reminder-panel.floating:not(.collapsed) {
+  animation: expandPanel 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes expandPanel {
+  from {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.action-reminder-panel.floating .panel-header {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.action-reminder-panel.floating.collapsed .panel-header {
+  padding: 12px 16px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+}
+
+.action-reminder-panel.floating.collapsed .panel-title h3 {
+  display: none;
+}
+
+.action-reminder-panel.floating.collapsed .toggle-btn {
+  display: none;
+}
+
+.action-reminder-panel.floating.collapsed .settings-btn {
+  display: none;
+}
+
+.action-reminder-panel.floating.collapsed .action-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 12px;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Floating fab button style when collapsed */
+.floating-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  width: 60px;
+  height: 60px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.floating-fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(59, 130, 246, 0.4);
+}
+
+.floating-fab.urgent {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.5);
+  }
+}
+
+.floating-fab .fab-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.floating-fab .fab-icon {
+  font-size: 16px;
+}
+
+.floating-fab .fab-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* Floating backdrop */
+.floating-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(2px);
+  z-index: 999;
+  opacity: 0;
+  animation: fadeInBackdrop 0.3s ease forwards;
+}
+
+@keyframes fadeInBackdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -141,6 +303,8 @@
 
 .action-item {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
@@ -506,5 +670,26 @@
   
   .action-buttons {
     justify-content: flex-end;
+  }
+
+  /* Floating mode responsive */
+  .action-reminder-panel.floating {
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+    width: calc(100% - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .action-reminder-panel.floating.collapsed {
+    left: auto;
+    width: 60px;
+    right: 10px;
+  }
+
+  .floating-fab {
+    bottom: 10px;
+    right: 10px;
   }
 }
