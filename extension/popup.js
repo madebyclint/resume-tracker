@@ -12,7 +12,6 @@ class PopupController {
   
   initializeElements() {
     this.statusEl = document.getElementById('status');
-    this.extractBtn = document.getElementById('extractBtn');
     this.jobPreview = document.getElementById('jobPreview');
     this.actionsEl = document.getElementById('actions');
     this.sendBtn = document.getElementById('sendBtn');
@@ -27,7 +26,6 @@ class PopupController {
   }
   
   bindEvents() {
-    this.extractBtn.addEventListener('click', () => this.extractJobData());
     this.sendBtn.addEventListener('click', () => this.sendToApp());
     this.openAppBtn.addEventListener('click', () => this.openResumeTracker());
     // Keep test connection but hidden
@@ -63,15 +61,18 @@ class PopupController {
         
         if (response && response.isJobPage) {
           this.showStatus('success', `Job detected: ${response.data?.title || 'Untitled Job'}`);
-          this.updateButton('Extract Job Description', false);
           
           // Show preview if we have data
           if (response.data) {
             this.showJobPreview(response.data);
+          } else {
+            // Auto-extract if no data yet
+            this.extractJobData();
           }
         } else {
           this.showStatus('info', 'No job posting detected on this page');
-          this.updateButton('Try Extract Anyway', false);
+          // Try to extract anyway
+          this.extractJobData();
         }
       });
     } catch (error) {
@@ -84,12 +85,7 @@ class PopupController {
     this.statusEl.textContent = message;
   }
   
-  updateButton(text, disabled) {
-    this.extractBtn.innerHTML = disabled ? 
-      `<span class="spinner"></span>${text}` : 
-      text;
-    this.extractBtn.disabled = disabled;
-  }
+
   
   showJobPreview(data) {
     this.extractedData = data;
@@ -115,7 +111,6 @@ class PopupController {
     if (this.isLoading) return;
     
     this.isLoading = true;
-    this.updateButton('Extracting...', true);
     this.hideJobPreview();
     this.showStatus('loading', 'Extracting job description...');
     
@@ -125,22 +120,14 @@ class PopupController {
         
         if (chrome.runtime.lastError) {
           this.showStatus('error', 'Failed to extract data. Try refreshing the page.');
-          this.updateButton('Retry', false);
           return;
         }
         
         if (response && response.success) {
           this.showStatus('success', response.message || 'Job extracted successfully!');
-          this.updateButton('Extract Complete ✓', false);
           this.showJobPreview(response.data);
-          
-          // Auto-send to app if extraction was successful
-          setTimeout(() => {
-            this.sendToApp();
-          }, 1000);
         } else {
           this.showStatus('error', response?.error || 'Failed to extract job data');
-          this.updateButton('Try Again', false);
           
           // Still show preview if we got some data
           if (response?.data) {
@@ -151,7 +138,6 @@ class PopupController {
     } catch (error) {
       this.isLoading = false;
       this.showStatus('error', `Error: ${error.message}`);
-      this.updateButton('Try Again', false);
     }
   }
   
