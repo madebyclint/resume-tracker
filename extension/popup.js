@@ -16,7 +16,6 @@ class PopupController {
     this.jobPreview = document.getElementById('jobPreview');
     this.actionsEl = document.getElementById('actions');
     this.sendBtn = document.getElementById('sendBtn');
-    this.copyBtn = document.getElementById('copyBtn');
     this.openAppBtn = document.getElementById('openApp');
     this.testBtn = document.getElementById('testBtn');
     
@@ -30,9 +29,11 @@ class PopupController {
   bindEvents() {
     this.extractBtn.addEventListener('click', () => this.extractJobData());
     this.sendBtn.addEventListener('click', () => this.sendToApp());
-    this.copyBtn.addEventListener('click', () => this.copyToClipboard());
     this.openAppBtn.addEventListener('click', () => this.openResumeTracker());
-    this.testBtn.addEventListener('click', () => this.testConnection());
+    // Keep test connection but hidden
+    if (this.testBtn) {
+      this.testBtn.addEventListener('click', () => this.testConnection());
+    }
   }
   
   async getCurrentTab() {
@@ -205,45 +206,7 @@ class PopupController {
     }
   }
   
-  async copyToClipboard() {
-    if (!this.extractedData) {
-      this.showStatus('error', 'No job data to copy');
-      return;
-    }
-    
-    const textData = `Job Title: ${this.extractedData.title}
-Company: ${this.extractedData.company}
-Location: ${this.extractedData.location}
-URL: ${this.extractedData.url}
-
-Description:
-${this.extractedData.description}
-
----
-Extracted on: ${new Date(this.extractedData.extractedAt).toLocaleString()}
-Source: ${this.extractedData.source}`;
-    
-    try {
-      await navigator.clipboard.writeText(textData);
-      this.copyBtn.textContent = 'Copied ✓';
-      setTimeout(() => {
-        this.copyBtn.textContent = 'Copy Data';
-      }, 2000);
-    } catch (error) {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = textData;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      
-      this.copyBtn.textContent = 'Copied ✓';
-      setTimeout(() => {
-        this.copyBtn.textContent = 'Copy Data';
-      }, 2000);
-    }
-  }
+  // Removed copyToClipboard method - functionality simplified
   
   openResumeTracker() {
     chrome.tabs.create({ url: 'http://localhost:5173' });

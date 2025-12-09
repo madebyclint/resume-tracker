@@ -117,17 +117,19 @@
       .actions {
         display: flex;
         gap: 8px;
+        justify-content: center;
       }
 
       .actions button {
-        flex: 1;
-        padding: 8px 12px;
+        padding: 12px 24px;
         border: 1px solid #ddd;
         background: white;
-        border-radius: 4px;
-        font-size: 12px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
         cursor: pointer;
         transition: all 0.2s;
+        min-width: 120px;
       }
 
       .actions button:hover {
@@ -208,10 +210,9 @@
 
     <div class="actions" id="actions" style="display: none">
       <button id="sendBtn" class="primary">Send to App</button>
-      <button id="copyBtn">Copy Data</button>
     </div>
 
-    <div class="actions" style="display: flex">
+    <div class="actions" id="testConnectionSection" style="display: none">
       <button id="testBtn">Test Connection</button>
     </div>
 
