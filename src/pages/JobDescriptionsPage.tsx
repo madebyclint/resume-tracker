@@ -62,6 +62,18 @@ const createTextHash = (text: string): string => {
   return hash.toString();
 };
 
+// Helper function to determine if a job needs AI processing (is "unparsed")
+const isJobUnparsed = (job: JobDescription): boolean => {
+  // A job is considered unparsed primarily if it lacks AI processing
+  const lacksAIUsage = !job.aiUsage || job.aiUsage.parseCount === 0;
+
+  // Secondary check: missing sequential ID (usually assigned during AI parsing)
+  const lacksSequentialId = !job.sequentialId;
+
+  // Only consider jobs with substantial raw text content that haven't been AI processed
+  return !!(job.rawText && job.rawText.trim().length > 100 && lacksAIUsage && lacksSequentialId);
+};
+
 // Helper function to calculate AI costs (OpenAI GPT-3.5/4 pricing)
 const calculateAICost = (usage: { promptTokens: number; completionTokens: number; totalTokens: number }): number => {
   // OpenAI GPT-3.5-turbo pricing (as of Dec 2025): $0.001 per 1K input tokens, $0.002 per 1K output tokens
@@ -260,6 +272,7 @@ const JobDescriptionsPage: React.FC = () => {
   const [showArchivedJobs, setShowArchivedJobs] = useState(false);
   const [hideRejectedJobs, setHideRejectedJobs] = useState(true);
   const [showOnlyWaitingJobs, setShowOnlyWaitingJobs] = useState(false);
+  const [showUnparsedFirst, setShowUnparsedFirst] = useState(true); // Show unparsed jobs at the top by default
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicateSearchQuery, setDuplicateSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | ''>('');
@@ -738,6 +751,58 @@ const JobDescriptionsPage: React.FC = () => {
       showToast('Error parsing job description: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error');
     } finally {
       setIsReparsing(false);
+    }
+  };
+
+  // Handler for processing unparsed jobs with AI
+  const handleProcessJob = async (jobId: string) => {
+    const job = state.jobDescriptions.find(jd => jd.id === jobId);
+    if (!job) return;
+
+    setIsProcessing(true);
+    try {
+      const result = await smartParseJobDescription(
+        job.rawText,
+        job,
+        aiParseCache,
+        setAiParseCache,
+        job.additionalContext
+      );
+
+      if (result.success && result.extractedInfo && result.keywords) {
+        const updatedJob: JobDescription = {
+          ...job,
+          extractedInfo: result.extractedInfo,
+          keywords: result.keywords,
+          sequentialId: job.sequentialId || getNextSequentialId(),
+          aiUsage: {
+            totalTokens: result.usage?.total_tokens || 0,
+            promptTokens: result.usage?.prompt_tokens || 0,
+            completionTokens: result.usage?.completion_tokens || 0,
+            estimatedCost: result.usage ? calculateAICost(result.usage) : 0,
+            parseCount: (job.aiUsage?.parseCount || 0) + 1,
+            lastParseDate: new Date().toISOString(),
+            rawTextHash: createTextHash(job.rawText.trim())
+          }
+        };
+
+        setState(prev => ({
+          ...prev,
+          jobDescriptions: prev.jobDescriptions.map(jd =>
+            jd.id === jobId ? updatedJob : jd
+          )
+        }));
+
+        await saveJobDescription(updatedJob);
+
+        showToast(`Successfully processed job: ${job.title}`, 'success');
+      } else {
+        showToast(`Failed to process job: ${result.error || 'Unknown error'}`, 'error');
+      }
+    } catch (error) {
+      showToast(`Error processing job: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -2448,6 +2513,14 @@ AI will automatically fill in the job title and company name fields above!"
                     />
                     Show only waiting for response
                   </label>
+                  <label className="filter-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={showUnparsedFirst}
+                      onChange={(e) => setShowUnparsedFirst(e.target.checked)}
+                    />
+                    Show unparsed jobs first
+                  </label>
                 </div>
 
 
@@ -2502,6 +2575,23 @@ AI will automatically fill in the job title and company name fields above!"
                         );
                       }
 
+                      // Sort to prioritize unparsed jobs if enabled
+                      if (showUnparsedFirst) {
+                        filteredJobs = filteredJobs.sort((a, b) => {
+                          const aUnparsed = isJobUnparsed(a);
+                          const bUnparsed = isJobUnparsed(b);
+
+                          // Unparsed jobs first
+                          if (aUnparsed && !bUnparsed) return -1;
+                          if (!aUnparsed && bUnparsed) return 1;
+
+                          // Within same category (both parsed or both unparsed), sort by upload date (newest first)
+                          const aDate = new Date(a.uploadDate).getTime();
+                          const bDate = new Date(b.uploadDate).getTime();
+                          return bDate - aDate;
+                        });
+                      }
+
                       return filteredJobs;
                     })()}
                     onEdit={handleEditJobDescription}
@@ -2511,8 +2601,10 @@ AI will automatically fill in the job title and company name fields above!"
                     onMarkDuplicate={handleMarkDuplicate}
                     onStatusChange={handleStatusChange}
                     onToggleWaitingForResponse={handleToggleWaitingForResponse}
+                    onProcessJob={handleProcessJob}
                     onSelect={setSelectedJobId}
                     selectedJobId={selectedJobId}
+                    preserveOrder={showUnparsedFirst}
                   />
 
                   {selectedJob && (

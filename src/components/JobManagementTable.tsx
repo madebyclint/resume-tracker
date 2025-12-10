@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle, faClock, faFlag, faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle, faClock, faFlag, faExternalLinkAlt, faCog } from '@fortawesome/free-solid-svg-icons';
 import StatusDropdown from './StatusDropdown';
 import { getCleanedStatusJourney, getStatusChangesSummary } from '../utils/activityLogger';
 
@@ -15,8 +15,10 @@ interface JobManagementTableProps {
   onMarkDuplicate: (jobId: string) => void;
   onStatusChange: (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage'], offerStage?: JobDescription['offerStage']) => void;
   onToggleWaitingForResponse: (jobId: string) => void;
+  onProcessJob?: (jobId: string) => void; // New callback for processing unparsed jobs
   onSelect: (jobId: string) => void;
   selectedJobId: string | null;
+  preserveOrder?: boolean; // When true, don't apply internal sorting
 }
 
 type SortField = 'id' | 'sequentialId' | 'company' | 'title' | 'applicationDate' | 'lastActivityDate' | 'applicationStatus' | 'daysSinceApplication';
@@ -48,6 +50,18 @@ const getImpactColor = (impact: any) => {
   }
 };
 
+// Helper function to determine if a job needs AI processing (is "unparsed")
+const isJobUnparsed = (job: any): boolean => {
+  // A job is considered unparsed primarily if it lacks AI processing
+  const lacksAIUsage = !job.aiUsage || job.aiUsage.parseCount === 0;
+
+  // Secondary check: missing sequential ID (usually assigned during AI parsing)
+  const lacksSequentialId = !job.sequentialId;
+
+  // Only consider jobs with substantial raw text content that haven't been AI processed
+  return !!(job.rawText && job.rawText.trim().length > 100 && lacksAIUsage && lacksSequentialId);
+};
+
 const JobManagementTable: React.FC<JobManagementTableProps> = ({
   jobs,
   onEdit,
@@ -57,7 +71,9 @@ const JobManagementTable: React.FC<JobManagementTableProps> = ({
   onMarkDuplicate,
   onStatusChange,
   onToggleWaitingForResponse,
+  onProcessJob,
   onSelect,
+  preserveOrder = false,
   selectedJobId
 }) => {
   // Copy job description text to clipboard
@@ -450,8 +466,8 @@ Clint`;
     return matchesSearch && matchesStatus;
   });
 
-  // Sort jobs
-  const sortedJobs = [...filteredJobs].sort((a, b) => {
+  // Sort jobs (unless preserveOrder is true)
+  const sortedJobs = preserveOrder ? filteredJobs : [...filteredJobs].sort((a, b) => {
     let aValue: any;
     let bValue: any;
 
@@ -713,7 +729,7 @@ Clint`;
               sortedJobs.map(job => (
                 <tr
                   key={job.id}
-                  className={`${selectedJobId === job.id ? 'selected' : ''} ${job.waitingForResponse ? 'waiting-for-response' : ''}`}
+                  className={`${selectedJobId === job.id ? 'selected' : ''} ${job.waitingForResponse ? 'waiting-for-response' : ''} ${isJobUnparsed(job) ? 'unparsed-job' : ''}`}
                   onClick={() => onSelect(job.id)}
                 >
                   <td className="id-cell" style={{ textAlign: 'center', fontWeight: 'bold', position: 'relative' }}>
@@ -726,6 +742,13 @@ Clint`;
                       <span className="job-id" title={`UUID: ${job.id}`}>
                         {job.sequentialId || 'N/A'}
                       </span>
+                      {isJobUnparsed(job) && (
+                        <FontAwesomeIcon
+                          icon={faExclamationTriangle}
+                          style={{ color: '#ff6b35', fontSize: '10px' }}
+                          title="Needs AI parsing - missing job details"
+                        />
+                      )}
                       {(() => {
                         // Create a clean job object without the computed fields that cause type issues
                         const { daysSinceApplication, daysInCurrentStatus, ...cleanJob } = job;
@@ -772,6 +795,18 @@ Clint`;
                         )}
                       </span>
                       <span className="inline-actions">
+                        {isJobUnparsed(job) && onProcessJob && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onProcessJob(job.id);
+                            }}
+                            className="action-btn process-btn"
+                            title="Process job with AI"
+                          >
+                            <FontAwesomeIcon icon={faCog} />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
