@@ -2082,6 +2082,58 @@
   color: #6f42c1;
 }
 
+/* Clickable stats styles */
+.stat-item.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.stat-item.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  border-color: #007bff;
+}
+
+.stat-item.clickable:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Active filter state */
+.stat-item.active-filter {
+  background: #f8f9fa;
+  border: 2px solid #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.stat-item.active-filter .stat-label {
+  color: #007bff;
+  font-weight: 600;
+}
+
+.stat-item.active-filter .stat-value {
+  font-weight: 800;
+}
+
+/* Clear filter button */
+.clear-filter-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-left: 1rem;
+}
+
+.clear-filter-btn:hover {
+  background: #c82333;
+  transform: scale(1.05);
+}
+
 /* Enhanced Stats Header */
 .stats-container .stats-header {
   display: flex;

@@ -262,6 +262,7 @@ const JobDescriptionsPage: React.FC = () => {
   const [showOnlyWaitingJobs, setShowOnlyWaitingJobs] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicateSearchQuery, setDuplicateSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | ''>('');
 
   // Document matching toggle state
   const [showDocumentMatching, setShowDocumentMatching] = useState<Record<string, boolean>>({});
@@ -2077,6 +2078,15 @@ AI will automatically fill in the job title and company name fields above!"
                     <div className="stats-header-controls">
                       <span className="total-count">Total Jobs: {total}</span>
                       <span className="total-count" style={{ marginLeft: "1rem", color: "#007bff", fontWeight: "600" }}>Applied: {totalApplications}</span>
+                      {statusFilter && (
+                        <button
+                          className="clear-filter-btn"
+                          onClick={() => setStatusFilter('')}
+                          title={`Clear ${statusFilter} status filter`}
+                        >
+                          ✕ Clear Filter ({statusFilter.replace('_', ' ')})
+                        </button>
+                      )}
                       <button
                         className="expand-stats-btn"
                         onClick={() => setShowExpandedStats(!showExpandedStats)}
@@ -2087,27 +2097,51 @@ AI will automatically fill in the job title and company name fields above!"
                     </div>
                   </div>
                   <div className="stats-grid">
-                    <div className="stat-item not-applied">
+                    <div
+                      className={`stat-item not-applied clickable ${statusFilter === 'not_applied' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'not_applied' ? '' : 'not_applied')}
+                      title="Click to filter by Not Applied status"
+                    >
                       <span className="stat-label">Not Applied</span>
                       <span className="stat-value">{stats.not_applied}</span>
                     </div>
-                    <div className="stat-item applied">
+                    <div
+                      className={`stat-item applied clickable ${statusFilter === 'applied' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'applied' ? '' : 'applied')}
+                      title="Click to filter by Applied status"
+                    >
                       <span className="stat-label">Applied</span>
                       <span className="stat-value">{stats.applied}</span>
                     </div>
-                    <div className="stat-item interviewing">
+                    <div
+                      className={`stat-item interviewing clickable ${statusFilter === 'interviewing' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'interviewing' ? '' : 'interviewing')}
+                      title="Click to filter by Interviewing status"
+                    >
                       <span className="stat-label">Interviewing</span>
                       <span className="stat-value">{stats.interviewing}</span>
                     </div>
-                    <div className="stat-item offered">
+                    <div
+                      className={`stat-item offered clickable ${statusFilter === 'offered' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'offered' ? '' : 'offered')}
+                      title="Click to filter by Offered status"
+                    >
                       <span className="stat-label">Offered</span>
                       <span className="stat-value">{stats.offered}</span>
                     </div>
-                    <div className="stat-item rejected">
+                    <div
+                      className={`stat-item rejected clickable ${statusFilter === 'rejected' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'rejected' ? '' : 'rejected')}
+                      title="Click to filter by Rejected status"
+                    >
                       <span className="stat-label">Rejected</span>
                       <span className="stat-value">{stats.rejected}</span>
                     </div>
-                    <div className="stat-item withdrawn">
+                    <div
+                      className={`stat-item withdrawn clickable ${statusFilter === 'withdrawn' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'withdrawn' ? '' : 'withdrawn')}
+                      title="Click to filter by Withdrawn status"
+                    >
                       <span className="stat-label">Withdrawn</span>
                       <span className="stat-value">{stats.withdrawn}</span>
                     </div>
@@ -2444,6 +2478,14 @@ AI will automatically fill in the job title and company name fields above!"
                         filteredJobs = filteredJobs.filter(job =>
                           job.waitingForResponse === true
                         );
+                      }
+
+                      // Apply status filter
+                      if (statusFilter) {
+                        filteredJobs = filteredJobs.filter(job => {
+                          const jobStatus = job.applicationStatus || 'not_applied';
+                          return jobStatus === statusFilter;
+                        });
                       }
 
                       // Apply search filter
