@@ -9,6 +9,56 @@
   height: calc(100vh - 200px);
 }
 
+/* Custom tooltip styles */
+.ai-warning-tooltip {
+  position: relative;
+  cursor: help;
+  display: inline-block;
+}
+
+.ai-warning-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: normal;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s, visibility 0.3s;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  max-width: 300px;
+  white-space: normal;
+  text-align: center;
+}
+
+.ai-warning-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 115%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #333;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s, visibility 0.3s;
+  z-index: 1000;
+}
+
+.ai-warning-tooltip:hover::after,
+.ai-warning-tooltip:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
 .job-management-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;

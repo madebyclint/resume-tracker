@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { JobDescription } from '../types';
 import './JobManagementTable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle, faClock, faFlag, faExternalLinkAlt, faCog } from '@fortawesome/free-solid-svg-icons';
+import { faThumbsUp, faMinus, faFire, faEdit, faCopy, faTable, faFileAlt, faComment, faTrash, faChartPie, faUserTie, faArchive, faBoxOpen, faLink, faExclamationTriangle, faClock, faFlag, faExternalLinkAlt, faCog, faRobot } from '@fortawesome/free-solid-svg-icons';
 import StatusDropdown from './StatusDropdown';
 import { getCleanedStatusJourney, getStatusChangesSummary } from '../utils/activityLogger';
 
@@ -60,6 +60,46 @@ const isJobUnparsed = (job: any): boolean => {
 
   // Only consider jobs with substantial raw text content that haven't been AI processed
   return !!(job.rawText && job.rawText.trim().length > 100 && lacksAIUsage && lacksSequentialId);
+};
+
+// Helper function to generate detailed tooltip text for missing AI data
+const getAIMissingDataTooltip = (job: any): string => {
+  const missingData: string[] = [];
+
+  // Check if AI parsing hasn't been done
+  if (!job.aiUsage || job.aiUsage.parseCount === 0) {
+    missingData.push("AI parsing not performed");
+  }
+
+  // Check missing extracted info fields
+  const extractedInfo = job.extractedInfo || {};
+  const criticalFields = [
+    { key: 'role', label: 'Job role' },
+    { key: 'company', label: 'Company info' },
+    { key: 'location', label: 'Location' },
+    { key: 'salaryRange', label: 'Salary range' },
+    { key: 'requiredSkills', label: 'Required skills' },
+    { key: 'responsibilities', label: 'Responsibilities' },
+    { key: 'requirements', label: 'Requirements' }
+  ];
+
+  criticalFields.forEach(field => {
+    const value = extractedInfo[field.key];
+    if (!value || (Array.isArray(value) && value.length === 0)) {
+      missingData.push(field.label);
+    }
+  });
+
+  // Check if sequential ID is missing
+  if (!job.sequentialId) {
+    missingData.push("Sequential ID");
+  }
+
+  if (missingData.length === 0) {
+    return "AI parsing complete";
+  }
+
+  return `Missing AI data: ${missingData.join(', ')}`;
 };
 
 const JobManagementTable: React.FC<JobManagementTableProps> = ({
@@ -743,11 +783,16 @@ Clint`;
                         {job.sequentialId || 'N/A'}
                       </span>
                       {isJobUnparsed(job) && (
-                        <FontAwesomeIcon
-                          icon={faExclamationTriangle}
-                          style={{ color: '#ff6b35', fontSize: '10px' }}
-                          title="Needs AI parsing - missing job details"
-                        />
+                        <span
+                          className="ai-warning-tooltip"
+                          data-tooltip={getAIMissingDataTooltip(job)}
+                          title={getAIMissingDataTooltip(job)}
+                        >
+                          <FontAwesomeIcon
+                            icon={faRobot}
+                            style={{ color: '#ff6b35', fontSize: '10px' }}
+                          />
+                        </span>
                       )}
                       {(() => {
                         // Create a clean job object without the computed fields that cause type issues
@@ -755,11 +800,16 @@ Clint`;
                         const journey = getCleanedStatusJourney(cleanJob as JobDescription);
                         const summary = getStatusChangesSummary(cleanJob as JobDescription);
                         return journey.rapidChanges > 0 ? (
-                          <FontAwesomeIcon
-                            icon={faExclamationTriangle}
-                            style={{ color: '#ffc107', fontSize: '10px' }}
+                          <span
+                            className="ai-warning-tooltip"
+                            data-tooltip={summary || `Status corrections detected: ${journey.rapidChanges} rapid changes. This may affect analytics accuracy.`}
                             title={summary || `Status corrections detected: ${journey.rapidChanges} rapid changes. This may affect analytics accuracy.`}
-                          />
+                          >
+                            <FontAwesomeIcon
+                              icon={faExclamationTriangle}
+                              style={{ color: '#ffc107', fontSize: '10px' }}
+                            />
+                          </span>
                         ) : null;
                       })()}
                     </div>
