@@ -14,7 +14,7 @@ class JobDescriptionExtractor {
         title: '.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1',
         company: '.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, .job-details-jobs-unified-top-card__primary-description-container a',
         description: '.jobs-description-content__text, .jobs-box__html-content, .description__text',
-        location: '.job-details-jobs-unified-top-card__bullet, .jobs-unified-top-card__bullet'
+        location: '.job-details-jobs-unified-top-card__bullet, .jobs-unified-top-card__bullet, .job-details-jobs-unified-top-card__primary-description, .jobs-unified-top-card__primary-description, .job-details-jobs-unified-top-card__primary-description-container, .jobs-unified-top-card__primary-description-container, [class*="bullet"], [class*="location"], [class*="workplace"]'
       },
       'www.indeed.com': {
         title: '[data-testid="jobsearch-JobInfoHeader-title"], .jobsearch-JobInfoHeader-title, h1',
@@ -68,10 +68,15 @@ class JobDescriptionExtractor {
   }
 
   // Extract text content from elements matching selectors
-  extractText(selector) {
+  extractText(selector, isLocation = false) {
     try {
       const elements = document.querySelectorAll(selector);
       if (elements.length === 0) return '';
+      
+      // Special handling for location on LinkedIn
+      if (isLocation && window.location.hostname === 'www.linkedin.com') {
+        return this.extractLinkedInLocation(elements);
+      }
       
       // Try to get the most relevant element (usually the first or largest)
       let bestElement = elements[0];
@@ -92,6 +97,58 @@ class JobDescriptionExtractor {
     }
   }
 
+  // Smart LinkedIn location extraction
+  extractLinkedInLocation(elements) {
+    console.log('🔍 LinkedIn location extraction - found', elements.length, 'elements');
+    
+    // Common location patterns - ordered by specificity
+    const locationPatterns = [
+      /([A-Za-z\s]+),\s*([A-Z]{2})(?=\s|\u2022|\u00b7|$)/,  // "New York, NY" (City, State)
+      /(Remote|Hybrid|On-site)(?=\s|\u2022|\u00b7|$)/i,  // Work types
+      /([A-Za-z\s]+),\s*([A-Za-z\s]+)(?=\s|\u2022|\u00b7|$)/,  // "San Francisco, California"
+      /([A-Za-z\s]+)\s+(?:Area|Region|Metropolitan)(?=\s|\u2022|\u00b7|$)/i  // "Bay Area"
+    ];
+    
+    // Search through all elements for location patterns FIRST
+    for (const element of elements) {
+      const text = element.textContent?.trim() || '';
+      console.log('  Testing element:', text.substring(0, 100));
+      
+      // Try to extract location patterns from the text, regardless of other content
+      for (const pattern of locationPatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          const result = match[0].trim();
+          console.log('    ✅ Found location pattern:', result);
+          return result;
+        }
+      }
+    }
+    
+    // Fallback: look for comma-separated text that looks like location
+    console.log('  Trying fallback location detection...');
+    for (const element of elements) {
+      const text = element.textContent?.trim() || '';
+      
+      // Look for patterns like "City, ST" in bullet-separated text
+      const bulletParts = text.split(/\s*[\u2022\u00b7·]\s*/);
+      for (const part of bulletParts) {
+        const cleanPart = part.trim();
+        // Check if this part looks like a location (has comma, reasonable length, not time-related)
+        if (cleanPart.length > 3 && cleanPart.length < 30 && 
+            cleanPart.includes(',') && 
+            !cleanPart.includes('ago') && 
+            !cleanPart.includes('people')) {
+          console.log('    ✅ Fallback found:', cleanPart);
+          return cleanPart;
+        }
+      }
+    }
+    
+    console.log('  ❌ No location found');
+    return '';
+  }
+
   // Clean and format extracted text
   cleanText(text) {
     return text
@@ -109,7 +166,7 @@ class JobDescriptionExtractor {
       title: this.extractText(selectors.title),
       company: this.extractText(selectors.company),
       description: this.extractText(selectors.description),
-      location: this.extractText(selectors.location),
+      location: this.extractText(selectors.location, true),
       url: url,
       extractedAt: new Date().toISOString(),
       source: window.location.hostname

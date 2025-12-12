@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Resume Tracker Job Scraper",
-  "version": "1.0.0",
-  "description": "Extract job descriptions from job sites and send to Resume Tracker app",
+  "version": "2.2.0",
+  "description": "Advanced job description extraction with improved location parsing",
   "permissions": [
     "activeTab",
     "storage",
