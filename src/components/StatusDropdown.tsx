@@ -45,6 +45,7 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
       case 'rejected': return 'Rejected';
       case 'offered': return 'Offered';
       case 'withdrawn': return 'Withdrawn';
+      case 'wont_apply': return "Won't Apply";
       case 'duplicate': return 'Duplicate';
       case 'archived': return 'Archived';
       default: return 'Not Applied';
@@ -105,6 +106,7 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
       </optgroup>
 
       <option value="withdrawn">Withdrawn</option>
+      <option value="wont_apply">🚫 Won't Apply</option>
 
       <optgroup label="Special States">
         <option value="duplicate">📋 Duplicate</option>

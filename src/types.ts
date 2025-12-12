@@ -79,7 +79,7 @@ export interface JobDescription {
   linkedCoverLetterIds: string[]; // manually connected cover letters
   
   // CRM-like tracking fields
-  applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived';
+  applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'wont_apply' | 'duplicate' | 'archived';
   interviewStage?: 'screening' | 'first_interview' | 'followup_interview' | 'final_round' | 'assessment'; // sub-status for interviewing
   offerStage?: 'received' | 'considering' | 'negotiating' | 'accepted' | 'rejected' | 'expired'; // sub-status for offered
   

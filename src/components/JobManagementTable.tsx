@@ -467,9 +467,8 @@ Clint`;
 
   const [sortField, setSortField] = useState<SortField>('sequentialId');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   // Calculate computed fields for each job
   const jobsWithComputedFields = jobs.map(job => {
@@ -501,9 +500,16 @@ Clint`;
       (job.sequentialId && job.sequentialId.toString().includes(searchTerm)) ||
       (job.id && job.id.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus = filterStatus === 'all' || job.applicationStatus === filterStatus;
+    // Hide inactive statuses unless 'Show All' is enabled
+    const hiddenStatuses = ['wont_apply', 'archived', 'duplicate', 'rejected', 'withdrawn'];
+    const hiddenOfferStages = ['rejected', 'expired'];
 
-    return matchesSearch && matchesStatus;
+    const isStatusHidden = hiddenStatuses.includes(job.applicationStatus || 'not_applied');
+    const isOfferHidden = job.applicationStatus === 'offered' && hiddenOfferStages.includes(job.offerStage || '');
+
+    const isVisible = showAll || (!isStatusHidden && !isOfferHidden);
+
+    return matchesSearch && isVisible;
   });
 
   // Sort jobs (unless preserveOrder is true)
@@ -646,18 +652,8 @@ Clint`;
           <span className="job-count-badge">{filteredJobs.length} of {jobs.length}</span>
         </h2>
 
-        <button
-          className="filters-toggle"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          🎛️ {showFilters ? 'Hide' : 'Show'} Filters
-        </button>
-      </div>
-
-      {showFilters && (
-        <div className="filters-section">
-          <div className="filter-group">
-            <label className="filter-label">Search</label>
+        <div className="header-controls">
+          <div className="search-container">
             <input
               type="text"
               placeholder="Search companies or positions..."
@@ -667,35 +663,28 @@ Clint`;
             />
           </div>
 
-          <div className="filter-group">
-            <label className="filter-label">Status</label>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="filter-select"
+          <label className="show-all-toggle">
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+            />
+            Show All
+          </label>
+
+          {(searchTerm || showAll) && (
+            <button
+              className="clear-filters-btn"
+              onClick={() => {
+                setSearchTerm('');
+                setShowAll(false);
+              }}
             >
-              <option value="all">All Statuses</option>
-              <option value="not_applied">Not Applied</option>
-              <option value="applied">Applied</option>
-              <option value="interviewing">Interviewing</option>
-              <option value="rejected">Rejected</option>
-              <option value="offered">Offered</option>
-            </select>
-          </div>
-
-
-
-          <button
-            className="clear-filters-btn"
-            onClick={() => {
-              setFilterStatus('all');
-              setSearchTerm('');
-            }}
-          >
-            Clear All
-          </button>
+              Clear
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       <div className="job-table-container">
         <table className="job-table">
