@@ -247,7 +247,7 @@ const JobDescriptionsPage: React.FC = () => {
     contactPhone: '',
     impact: '' as 'low' | 'medium' | 'high' | '',
     applicationDate: '',
-    applicationStatus: '' as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived' | ''
+    applicationStatus: '' as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived' | 'wont_apply' | ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
@@ -1160,29 +1160,34 @@ const JobDescriptionsPage: React.FC = () => {
 
   const handleToggleWaitingForResponse = async (id: string) => {
     try {
+      const job = state.jobDescriptions.find(j => j.id === id);
+      if (!job) return;
+
+      const newWaitingStatus = !job.waitingForResponse;
+
+      const updatedJob = {
+        ...logActivity(job, 'field_updated', {
+          field: 'waitingForResponse',
+          fromValue: job.waitingForResponse || false,
+          toValue: newWaitingStatus,
+          details: `Waiting for response ${newWaitingStatus ? 'enabled' : 'disabled'}`
+        }),
+        waitingForResponse: newWaitingStatus
+      };
+
+      // Save to IndexedDB first
+      await saveJobDescription(updatedJob);
+
+      // Then update state
       setState(prev => ({
         ...prev,
-        jobDescriptions: prev.jobDescriptions.map(job => {
-          if (job.id === id) {
-            const newWaitingStatus = !job.waitingForResponse;
-            return {
-              ...logActivity(job, 'field_updated', {
-                field: 'waitingForResponse',
-                fromValue: job.waitingForResponse || false,
-                toValue: newWaitingStatus,
-                details: `Waiting for response ${newWaitingStatus ? 'enabled' : 'disabled'}`
-              }),
-              waitingForResponse: newWaitingStatus
-            };
-          }
-          return job;
-        })
+        jobDescriptions: prev.jobDescriptions.map(j =>
+          j.id === id ? updatedJob : j
+        )
       }));
 
-      const job = state.jobDescriptions.find(j => j.id === id);
-      const newStatus = !job?.waitingForResponse;
       showToast(
-        `Job marked as ${newStatus ? 'waiting for response' : 'not waiting for response'}`,
+        `Job marked as ${newWaitingStatus ? 'waiting for response' : 'not waiting for response'}`,
         'success'
       );
     } catch (error) {
