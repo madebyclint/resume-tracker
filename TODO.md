@@ -12,3 +12,11 @@
 - Add JD page scraping from url
 - Build a workflow for applying from lookup to submission
 - JD list line numbers need to scroll with content - otherwise useless
+
+
+Possible cleanup before prod:
+- Remove dashboard
+- Remove or fix analytics by using workflow or just log status changes
+- Add icons for all statuses
+- Add code quality like [codacity](https://www.codacy.com/pricing)
+- Add offer received action - if offer is received high priority action is created to reply to offer
