@@ -680,7 +680,7 @@
 }
 
 .info-item {
-  padding: 8px 0;
+  padding: 8px;
   font-size: 14px;
 }
 
@@ -3442,10 +3442,9 @@
 .modal-content {
   background: white;
   border-radius: 8px;
-  max-width: 600px;
-  width: 90%;
   max-height: 80vh;
   overflow-y: auto;
+  margin: 20px;
 }
 
 .modal-header {

@@ -602,7 +602,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 export class PDFExtractor {
   constructor() {
     // Set up PDF.js worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
   }
 
   async extractText(base64Data: string): Promise<string> {

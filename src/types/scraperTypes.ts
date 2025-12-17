@@ -172,3 +172,6 @@ export class AIParsingError extends ScraperError {
     super(message, 'AI_PARSING_ERROR', details);
   }
 }
+
+// Additional type definitions for UI components
+export type ScraperStep = 'input' | 'extraction' | 'ai-processing' | 'preview';

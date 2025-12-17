@@ -39,33 +39,65 @@ export class ImageExtractor {
   }
 
   private async performOCR(base64Data: string): Promise<string> {
-    // Placeholder implementation - would be replaced with actual OCR service
-    // Options include:
-    // - Tesseract.js (client-side OCR)
-    // - Google Cloud Vision API
-    // - AWS Textract
-    // - Azure Computer Vision
-    
-    // For now, return an error indicating OCR needs to be implemented
-    throw new ExtractionError(
-      'OCR service not yet implemented. Please integrate with Tesseract.js, Google Vision, or similar service.',
-      { 
-        suggestion: 'Consider implementing Tesseract.js for client-side OCR or integrate with cloud OCR services'
-      }
-    );
-    
-    // Example implementation with Tesseract.js would be:
-    /*
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker();
-    
     try {
-      const { data: { text } } = await worker.recognize(base64Data);
-      return text;
-    } finally {
-      await worker.terminate();
+      console.log('Starting Tesseract.js OCR processing...');
+      
+      // Dynamic import to reduce bundle size - only load when needed
+      const { createWorker } = await import('tesseract.js');
+      
+      // Create Tesseract worker
+      const worker = createWorker({
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+          }
+        }
+      });
+      
+      try {
+        console.log('Loading English language data...');
+        await (await worker).load();
+        await (await worker).loadLanguage('eng');
+        await (await worker).initialize('eng');
+        
+        console.log('Processing image with OCR...');
+        
+        // Perform OCR on the base64 image
+        const result = await (await worker).recognize(base64Data);
+        const extractedText = result.data.text?.trim();
+        
+        if (!extractedText || extractedText.length < 10) {
+          throw new ExtractionError(
+            'No readable text found in image. Please ensure the image contains clear, readable text.',
+            { confidence: result.data.confidence }
+          );
+        }
+        
+        console.log(`OCR completed successfully. Extracted ${extractedText.length} characters with ${result.data.confidence}% confidence.`);
+        
+        return extractedText;
+        
+      } finally {
+        // Always terminate the worker to free memory
+        await (await worker).terminate();
+      }
+      
+    } catch (error) {
+      console.error('Tesseract.js OCR failed:', error);
+      
+      if (error instanceof ExtractionError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new ExtractionError(
+        `OCR processing failed: ${errorMessage}`,
+        { 
+          originalError: error,
+          suggestion: 'Try using a higher quality image with clear, readable text'
+        }
+      );
     }
-    */
   }
 
   validateImage(base64Data: string): InputValidation {

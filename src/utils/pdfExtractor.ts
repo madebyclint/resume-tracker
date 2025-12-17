@@ -10,8 +10,8 @@ export class PDFExtractor {
 
   private initializePDFJS() {
     if (!this.isInitialized) {
-      // Set up PDF.js worker - using latest stable version
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      // Set up PDF.js worker - use jsdelivr CDN which is more reliable
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
       this.isInitialized = true;
     }
   }
