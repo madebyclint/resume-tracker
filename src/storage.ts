@@ -1,4 +1,5 @@
 import { AppState, Resume, CoverLetter, JobDescription } from "./types";
+import { ScraperCache, ScraperResult } from "./types/scraperTypes";
 
 const DB_NAME = "ResumeTrackerDB";
 const DB_VERSION = 4;
@@ -6,6 +7,7 @@ const RESUME_STORE = "resumes";
 const COVER_LETTER_STORE = "coverLetters";
 const JOB_DESCRIPTION_STORE = "jobDescriptions";
 const PDF_STORE = "pdfs";
+const SCRAPER_CACHE_STORE = "scraperCache";
 
 interface ResumeMetadata {
   id: string;
@@ -153,6 +155,13 @@ class IndexedDBStorage {
         // Create PDF data store
         if (!db.objectStoreNames.contains(PDF_STORE)) {
           db.createObjectStore(PDF_STORE, { keyPath: "id" });
+        }
+
+        // Create scraper cache store
+        if (!db.objectStoreNames.contains(SCRAPER_CACHE_STORE)) {
+          const scraperCacheStore = db.createObjectStore(SCRAPER_CACHE_STORE, { keyPath: "id" });
+          scraperCacheStore.createIndex("inputHash", "inputHash", { unique: true });
+          scraperCacheStore.createIndex("expiresAt", "expiresAt", { unique: false });
         }
       };
     });
@@ -441,18 +450,75 @@ class IndexedDBStorage {
     await this.init();
     if (!this.db) return;
 
-    const transaction = this.db.transaction([RESUME_STORE, COVER_LETTER_STORE, JOB_DESCRIPTION_STORE, PDF_STORE], "readwrite");
+    const transaction = this.db.transaction([RESUME_STORE, COVER_LETTER_STORE, JOB_DESCRIPTION_STORE, PDF_STORE, SCRAPER_CACHE_STORE], "readwrite");
     const resumeStore = transaction.objectStore(RESUME_STORE);
     const coverLetterStore = transaction.objectStore(COVER_LETTER_STORE);
     const jobDescStore = transaction.objectStore(JOB_DESCRIPTION_STORE);
     const pdfStore = transaction.objectStore(PDF_STORE);
+    const scraperCacheStore = transaction.objectStore(SCRAPER_CACHE_STORE);
 
     await Promise.all([
       this.promisifyRequest(resumeStore.clear()),
       this.promisifyRequest(coverLetterStore.clear()),
       this.promisifyRequest(jobDescStore.clear()),
-      this.promisifyRequest(pdfStore.clear())
+      this.promisifyRequest(pdfStore.clear()),
+      this.promisifyRequest(scraperCacheStore.clear())
     ]);
+  }
+
+  // Scraper cache methods
+  async saveScraperCache(cache: ScraperCache): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([SCRAPER_CACHE_STORE], "readwrite");
+    const scraperCacheStore = transaction.objectStore(SCRAPER_CACHE_STORE);
+
+    await this.promisifyRequest(scraperCacheStore.put(cache));
+  }
+
+  async getScraperCacheByHash(inputHash: string): Promise<ScraperCache | null> {
+    await this.init();
+    if (!this.db) return null;
+
+    const transaction = this.db.transaction([SCRAPER_CACHE_STORE], "readonly");
+    const scraperCacheStore = transaction.objectStore(SCRAPER_CACHE_STORE);
+    const index = scraperCacheStore.index("inputHash");
+
+    try {
+      const request = index.get(inputHash);
+      const result = await this.promisifyRequest<ScraperCache>(request);
+      return result || null;
+    } catch (error) {
+      console.warn('Error retrieving scraper cache:', error);
+      return null;
+    }
+  }
+
+  async getAllScraperCache(): Promise<ScraperCache[]> {
+    await this.init();
+    if (!this.db) return [];
+
+    const transaction = this.db.transaction([SCRAPER_CACHE_STORE], "readonly");
+    const scraperCacheStore = transaction.objectStore(SCRAPER_CACHE_STORE);
+
+    try {
+      const request = scraperCacheStore.getAll();
+      return await this.promisifyRequest<ScraperCache[]>(request);
+    } catch (error) {
+      console.warn('Error retrieving all scraper cache:', error);
+      return [];
+    }
+  }
+
+  async deleteScraperCache(id: string): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    const transaction = this.db.transaction([SCRAPER_CACHE_STORE], "readwrite");
+    const scraperCacheStore = transaction.objectStore(SCRAPER_CACHE_STORE);
+
+    await this.promisifyRequest(scraperCacheStore.delete(id));
   }
 
   private promisifyRequest<T = any>(request: IDBRequest): Promise<T> {
@@ -1116,4 +1182,107 @@ export async function saveGeneratedCoverLetter(
   await saveJobDescription(updatedJobDescription);
   
   return newCoverLetter;
+}
+
+// Job Description Scraper - Cache Functions
+export async function cacheScraperResult(inputHash: string, result: ScraperResult): Promise<void> {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const cache: ScraperCache = {
+      id: crypto.randomUUID(),
+      inputHash,
+      result,
+      timestamp: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+    };
+
+    await storage.saveScraperCache(cache);
+    console.log('Scraper result cached successfully');
+  } catch (error) {
+    console.warn('Failed to cache scraper result:', error);
+  }
+}
+
+export async function getCachedScraperResult(inputHash: string): Promise<ScraperResult | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const cache = await storage.getScraperCacheByHash(inputHash);
+    
+    if (!cache) {
+      return null;
+    }
+    
+    // Check if cache has expired
+    if (new Date(cache.expiresAt) <= new Date()) {
+      // Clean up expired cache entry
+      await storage.deleteScraperCache(cache.id);
+      return null;
+    }
+    
+    console.log('Using cached scraper result');
+    return cache.result;
+  } catch (error) {
+    console.warn('Failed to retrieve cached scraper result:', error);
+    return null;
+  }
+}
+
+// Clean up expired cache entries
+export async function cleanupScraperCache(): Promise<void> {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const caches = await storage.getAllScraperCache();
+    const now = new Date();
+    
+    let cleanedCount = 0;
+    for (const cache of caches) {
+      if (new Date(cache.expiresAt) <= now) {
+        await storage.deleteScraperCache(cache.id);
+        cleanedCount++;
+      }
+    }
+    
+    if (cleanedCount > 0) {
+      console.log(`Cleaned up ${cleanedCount} expired scraper cache entries`);
+    }
+  } catch (error) {
+    console.warn('Failed to cleanup scraper cache:', error);
+  }
+}
+
+// Get scraper cache statistics
+export async function getScraperCacheStats(): Promise<{
+  totalEntries: number;
+  expiredEntries: number;
+  validEntries: number;
+}> {
+  if (typeof window === "undefined") {
+    return { totalEntries: 0, expiredEntries: 0, validEntries: 0 };
+  }
+
+  try {
+    const caches = await storage.getAllScraperCache();
+    const now = new Date();
+    
+    const expiredEntries = caches.filter(cache => new Date(cache.expiresAt) <= now).length;
+    const validEntries = caches.length - expiredEntries;
+    
+    return {
+      totalEntries: caches.length,
+      expiredEntries,
+      validEntries
+    };
+  } catch (error) {
+    console.warn('Failed to get scraper cache stats:', error);
+    return { totalEntries: 0, expiredEntries: 0, validEntries: 0 };
+  }
 }
