@@ -1,32 +1,15 @@
 import { useState } from "react";
 import { useAppState } from "../state/AppStateContext";
-import FileUploadSection from "../components/FileUploadSection";
-import StatsSection from "../components/StatsSection";
-import ResumeTable from "../components/ResumeTable";
-import CoverLetterTable from "../components/CoverLetterTable";
-import TextPreviewModal from "../components/TextPreviewModal";
+import AnalyticsDashboard from "../components/AnalyticsDashboard";
 import { exportAllDataAsJSON, importAllDataFromJSON } from "../storage";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faDownload, faUpload } from '@fortawesome/free-solid-svg-icons';
+import { faDownload, faUpload, faChartLine } from '@fortawesome/free-solid-svg-icons';
+import './DashboardPage.css';
 
 export default function DashboardPage() {
-  const { state, setState, isLoading, syncWithStorage } = useAppState();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [coverLetterSearchTerm, setCoverLetterSearchTerm] = useState('');
-  const [previewText, setPreviewText] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
+  const { state, isLoading } = useAppState();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-
-  const handleShowPreview = (text: string) => {
-    setPreviewText(text);
-    setShowPreview(true);
-  };
-
-  const handleClosePreview = () => {
-    setShowPreview(false);
-    setPreviewText(null);
-  };
 
   const handleExportData = async () => {
     setIsExporting(true);
@@ -36,7 +19,7 @@ export default function DashboardPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `resume-tracker-backup-${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `job-tracker-backup-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -79,14 +62,14 @@ export default function DashboardPage() {
           skipDuplicates: true
         });
 
-        if (result.success || result.importedCounts.resumes > 0 || result.importedCounts.coverLetters > 0 || result.importedCounts.jobDescriptions > 0) {
-          await syncWithStorage();
+        if (result.success || result.importedCounts.jobDescriptions > 0) {
           const imported = result.importedCounts;
-          let message = `Successfully imported: ${imported.resumes} resumes, ${imported.coverLetters} cover letters, ${imported.jobDescriptions} job descriptions.`;
+          let message = `Successfully imported: ${imported.jobDescriptions} job descriptions.`;
           if (result.warnings.length > 0) {
             message += `\n\nWarnings:\n${result.warnings.join('\n')}`;
           }
           alert(message);
+          window.location.reload(); // Refresh to load imported data
         } else {
           alert(`Import failed:\n${result.errors.join('\n')}`);
         }
@@ -103,48 +86,24 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div style={{ textAlign: 'center', padding: '2rem' }}>
-        <p>Loading documents...</p>
+        <p>Loading pipeline data...</p>
       </div>
     );
   }
 
   return (
-    <div className="page-grid">
-      <FileUploadSection
-        state={state}
-        setState={setState}
-        syncWithStorage={syncWithStorage}
-      />
-
-      <div style={{
-        marginBottom: '1rem',
-        padding: '1rem',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '8px',
-        border: '1px solid #dee2e6'
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          marginBottom: '1rem',
-          gap: '0.5rem'
-        }}>
+    <div className="pipeline-dashboard">
+      <div className="dashboard-header">
+        <h2>
+          <FontAwesomeIcon icon={faChartLine} style={{ marginRight: '0.5rem' }} />
+          Pipeline Dashboard
+        </h2>
+        <div className="dashboard-actions">
           <button
             onClick={handleExportData}
             disabled={isExporting}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-            title="Export all data as backup file"
+            className="dashboard-button export-button"
+            title="Export all job data as backup file"
           >
             <FontAwesomeIcon icon={faDownload} />
             {isExporting ? 'Exporting...' : 'Export Data'}
@@ -152,51 +111,16 @@ export default function DashboardPage() {
           <button
             onClick={handleImportData}
             disabled={isImporting}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-            title="Import data from backup file"
+            className="dashboard-button import-button"
+            title="Import job data from backup file"
           >
             <FontAwesomeIcon icon={faUpload} />
             {isImporting ? 'Importing...' : 'Import Data'}
           </button>
         </div>
-        <StatsSection
-          resumes={state.resumes}
-          coverLetters={state.coverLetters}
-        />
       </div>
 
-      <ResumeTable
-        resumes={state.resumes}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        setState={setState}
-        onShowPreview={handleShowPreview}
-      />
-
-      <CoverLetterTable
-        coverLetters={state.coverLetters}
-        searchTerm={coverLetterSearchTerm}
-        setSearchTerm={setCoverLetterSearchTerm}
-        setState={setState}
-        onShowPreview={handleShowPreview}
-      />
-
-      <TextPreviewModal
-        showPreview={showPreview}
-        previewText={previewText}
-        onClose={handleClosePreview}
-      />
+      <AnalyticsDashboard jobs={state.jobDescriptions} />
     </div>
   );
 }

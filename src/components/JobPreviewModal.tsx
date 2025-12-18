@@ -132,9 +132,7 @@ export function JobPreviewModal({
         applicationStatus: 'not_applied',
         interviewStage: undefined,
         offerStage: undefined,
-        linkedResumeIds: [],
         keywords: [...(editedData.skills.required || []), ...(editedData.skills.preferred || [])],
-        linkedCoverLetterIds: [],
 
         // Enhanced extracted info
         extractedInfo: {

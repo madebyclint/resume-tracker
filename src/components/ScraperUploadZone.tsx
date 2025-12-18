@@ -190,7 +190,7 @@ export function ScraperUploadZone({ onInputCreated, initialData }: ScraperUpload
       const isInputFocused = activeElement && (
         activeElement.tagName === 'INPUT' ||
         activeElement.tagName === 'TEXTAREA' ||
-        activeElement.contentEditable === 'true'
+        (activeElement as any).contentEditable === 'true'
       );
 
       if (!isInputFocused || activeElement === textAreaRef.current) {

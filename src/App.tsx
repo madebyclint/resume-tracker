@@ -34,7 +34,7 @@ function AppShell() {
             onClick={() => setCurrentPage('dashboard')}
             style={{ cursor: 'pointer' }}
           >
-            📊 Dashboard
+            📊 Pipeline
           </div>
           <div
             className={`nav-item ${currentPage === 'jobs' ? 'active' : ''}`}

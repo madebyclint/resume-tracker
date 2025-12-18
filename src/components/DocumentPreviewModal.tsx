@@ -1,5 +1,4 @@
 import React from 'react';
-import { Resume, CoverLetter } from '../types';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFileText, faTimes } from '@fortawesome/free-solid-svg-icons';
 import './GeneratedContentModal.css'; // Reuse existing modal styles
@@ -7,7 +6,7 @@ import './GeneratedContentModal.css'; // Reuse existing modal styles
 interface DocumentPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  document: Resume | CoverLetter | null;
+  document: any | null;
   onLink?: () => void;
   isLinked?: boolean;
 }
@@ -82,14 +81,14 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                 <strong>AI Detected Role:</strong> {document.detectedRole}
               </div>
             )}
-            {!isResume && (document as CoverLetter).targetCompany && (
+            {!isResume && (document as any).targetCompany && (
               <div>
-                <strong>Target Company:</strong> {(document as CoverLetter).targetCompany}
+                <strong>Target Company:</strong> {(document as any).targetCompany}
               </div>
             )}
-            {!isResume && (document as CoverLetter).targetPosition && (
+            {!isResume && (document as any).targetPosition && (
               <div>
-                <strong>Target Position:</strong> {(document as CoverLetter).targetPosition}
+                <strong>Target Position:</strong> {(document as any).targetPosition}
               </div>
             )}
           </div>

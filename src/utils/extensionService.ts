@@ -175,8 +175,6 @@ export class ExtensionService {
       },
       keywords: [],
       uploadDate: now,
-      linkedResumeIds: [],
-      linkedCoverLetterIds: [],
       applicationStatus: 'not_applied',
       priority: 'medium',
       impact: 'medium',

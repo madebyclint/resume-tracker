@@ -136,10 +136,8 @@ export class ScraperService {
     // Type-specific validation
     switch (input.type) {
       case 'pdf':
-        const pdfValidation = this.pdfExtractor.validatePDF(input.content);
-        if (!pdfValidation.isValid) {
-          errors.push(...pdfValidation.errors);
-        }
+        // PDF validation removed - not supported in production version
+        errors.push('PDF processing is not available in this version');
         break;
         
       case 'image':
@@ -174,12 +172,10 @@ export class ScraperService {
   private async extractText(input: ScraperInput): Promise<string> {
     switch (input.type) {
       case 'pdf':
-        const pdfResult = await this.pdfExtractor.extractText(input.content);
-        return pdfResult.text;
+        throw new ExtractionError('PDF processing is not supported in this version');
         
       case 'image':
-        const imageResult = await this.imageExtractor.extractText(input.content);
-        return imageResult.text;
+        throw new ExtractionError('Image processing is not supported in this version');
         
       case 'text':
         return input.content;

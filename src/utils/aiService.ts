@@ -411,7 +411,7 @@ ${text}`
       console.log('Extracted applicationId:', parsed.extractedInfo?.applicationId);
       
       // Supplement AI keywords with local extraction to catch missed terms
-      const localKeywords = extractKeywordsFromText(text, 10);
+      const localKeywords = extractKeywordsFromText(text);
       const allSkills = [
         ...(parsed.extractedInfo.requiredSkills || []),
         ...(parsed.extractedInfo.preferredSkills || [])
@@ -912,34 +912,8 @@ Generate a complete, personalized cover letter with actual content now:`;
 
 
 
-// Get combined text content from all resumes for full-text generation
-export async function getCombinedResumeText(): Promise<string> {
-  try {
-    const { loadResumes } = await import('../storage');
-    const resumes = await loadResumes();
-    
-    if (resumes.length === 0) {
-      throw new Error('No resumes found. Please upload some resumes first.');
-    }
-
-    // Combine text content from all resumes
-    const combinedText = resumes
-      .filter(resume => resume.textContent && resume.textContent.trim().length > 0)
-      .map(resume => {
-        return `=== RESUME: ${resume.name} ===\n\n${resume.textContent}\n\n`;
-      })
-      .join('\n');
-
-    if (combinedText.trim().length === 0) {
-      throw new Error('No text content found in resumes. Please process your resumes to extract text content.');
-    }
-
-    return combinedText;
-  } catch (error) {
-    console.error('Error getting combined resume text:', error);
-    throw error;
-  }
-}
+// Resume functionality removed - this was for combining resume text
+// This function has been removed since we no longer store resumes
 
 // Job Description Scraper - AI Parsing Functions
 

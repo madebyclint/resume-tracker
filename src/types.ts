@@ -1,33 +1,3 @@
-export interface Resume {
-  id: string;
-  name: string;
-  fileName: string;
-  fileSize: number;
-  uploadDate: string;
-  fileData: string; // base64 encoded Word document
-  fileType: 'docx'; // only Word documents supported
-  textContent?: string; // extracted text for search
-  markdownContent?: string; // extracted markdown for export/display
-  detectedCompany?: string; // AI-detected current company
-  detectedRole?: string; // AI-detected current role
-}
-
-export interface CoverLetter {
-  id: string;
-  name: string;
-  fileName: string;
-  fileSize: number;
-  uploadDate: string;
-  fileData: string; // base64 encoded Word document
-  fileType: 'docx'; // only Word documents supported
-  textContent?: string; // extracted text for search
-  markdownContent?: string; // extracted markdown for export/display
-  detectedCompany?: string; // AI-detected target company
-  detectedRole?: string; // AI-detected target role
-  targetCompany?: string; // company this cover letter was written for
-  targetPosition?: string; // position this cover letter was written for
-}
-
 export interface JobDescription {
   id: string;
   sequentialId?: number; // Sequential tracking number (e.g., Job #1, Job #2)
@@ -75,8 +45,10 @@ export interface JobDescription {
   };
   keywords: string[]; // for matching
   uploadDate: string;
-  linkedResumeIds: string[]; // manually connected resumes
-  linkedCoverLetterIds: string[]; // manually connected cover letters
+  
+  // Temporary - will be removed during cleanup
+  linkedResumeIds: string[];
+  linkedCoverLetterIds: string[];
   
   // CRM-like tracking fields
   applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'wont_apply' | 'duplicate' | 'archived';
@@ -159,20 +131,6 @@ export interface JobDescription {
   };
 }
 
-// Union type for documents
-export type Document = Resume | CoverLetter;
-
-// Type guard functions
-export function isResume(doc: Document): doc is Resume {
-  return !('targetCompany' in doc) && !('targetPosition' in doc);
-}
-
-export function isCoverLetter(doc: Document): doc is CoverLetter {
-  return 'targetCompany' in doc || 'targetPosition' in doc;
-}
-
-
-
 // Action completion types
 export type ActionCompletionType = 'email' | 'phone' | 'linkedin' | 'text' | 'in_person' | 'other';
 
@@ -184,7 +142,29 @@ export interface ActionCompletion {
 }
 
 export interface AppState {
+  jobDescriptions: JobDescription[];
+  // Temporary - will be removed during cleanup  
   resumes: Resume[];
   coverLetters: CoverLetter[];
-  jobDescriptions: JobDescription[];
+}
+
+// Temporary stub types - will be removed
+export interface Resume {
+  id: string;
+  title: string;
+  name?: string;
+  fileName?: string;
+  textContent?: string;
+  uploadDate?: string;
+}
+
+export interface CoverLetter {
+  id: string;
+  title: string;
+  targetCompany?: string;
+  targetPosition?: string;
+  name?: string;
+  fileName?: string;
+  textContent?: string;
+  uploadDate?: string;
 }

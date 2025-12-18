@@ -199,8 +199,6 @@ export function convertToJobDescriptions(csvData: CSVJobApplication[], existingJ
       },
       keywords: extractKeywords(job),
       uploadDate: new Date().toISOString(),
-      linkedResumeIds: [],
-      linkedCoverLetterIds: [],
       
       // CRM fields
       applicationStatus: status,

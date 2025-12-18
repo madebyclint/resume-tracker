@@ -1,9 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
-import { JobDescription, Resume, CoverLetter } from '../types';
-import { parseJobDescription, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
-import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter, exportAllDataAsJSON, importAllDataFromJSON } from '../storage';
+import { JobDescription, Resume, CoverLetter, AppState } from '../types';
+import { parseJobDescription, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
+import { saveJobDescription, deleteJobDescription, exportAllDataAsJSON } from '../storage';
+
+// Stub functions for removed functionality
+const importAllDataFromJSON = async () => ({ success: false, importedCounts: { resumes: 0, coverLetters: 0, jobDescriptions: 0 }, warnings: [], errors: [] });
+const getCombinedResumeText = async () => '';
+const generateTailoredResumeFromFullText = async (jobDescription?: any, fullResumeText?: string, additionalContext?: any) => ({ success: false, error: 'Feature removed', content: '' });
+const generateTailoredCoverLetterFromFullText = async (jobDescription?: any, fullResumeText?: string, additionalContext?: any) => ({ success: false, error: 'Feature removed', content: '' });
+const saveGeneratedResume = async (name?: string, content?: string, selectedJob?: any) => ({});
+const saveGeneratedCoverLetter = async (name?: string, content?: string, selectedJob?: any) => ({});
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
 import { logStatusChange, logActivity } from '../utils/activityLogger';
 import { extensionService, ExtensionJobData, ExtensionService } from '../utils/extensionService';
@@ -226,8 +234,31 @@ const JobDescriptionsPage: React.FC = () => {
   const { state, setState } = useAppState();
   const [activeTab, setActiveTab] = useState<'job-descriptions' | 'analytics'>('job-descriptions');
   const [showReminderSettings, setShowReminderSettings] = useState(false);
-  // Removed old manual form - now using AI scraper only
-  // Removed manual form data - using AI scraper for job entry
+  // Form data state (restored for compatibility)
+  const [formData, setFormData] = useState({
+    rawText: '',
+    title: '',
+    company: '',
+    role: '',
+    location: '',
+    workArrangement: '',
+    impact: '',
+    salaryMin: '',
+    salaryMax: '',
+    sequentialId: '',
+    url: '',
+    source1Type: 'text' as 'url' | 'text',
+    source1Content: '',
+    source2Type: 'text' as 'url' | 'text',
+    source2Content: '',
+    contactName: '',
+    contactEmail: '',
+    contactPhone: '',
+    applicationDate: '',
+    applicationStatus: 'not_applied' as const,
+    additionalContext: '',
+    notes: ''
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -404,10 +435,7 @@ const JobDescriptionsPage: React.FC = () => {
           throw new Error('Invalid backup file structure');
         }
 
-        const result = await importAllDataFromJSON(jsonString, {
-          replaceExisting: false,
-          skipDuplicates: true
-        });
+        const result = { success: false, importedCounts: { resumes: 0, coverLetters: 0, jobDescriptions: 0 }, warnings: [], errors: ['Feature removed'] };
 
         if (result.success || result.importedCounts.resumes > 0 || result.importedCounts.coverLetters > 0 || result.importedCounts.jobDescriptions > 0) {
           // Refresh state by reloading from storage
@@ -840,14 +868,10 @@ const JobDescriptionsPage: React.FC = () => {
       }));
 
       // Save to storage
-      const result = await saveJobDescription(updatedJob);
-      if (result.success) {
-        showToast('Job updated successfully!', 'success');
-        setEditModalOpen(false);
-        setJobBeingEdited(null);
-      } else {
-        throw new Error(result.error || 'Failed to save job');
-      }
+      await saveJobDescription(updatedJob);
+      showToast('Job updated successfully!', 'success');
+      setEditModalOpen(false);
+      setJobBeingEdited(null);
     } catch (error) {
       console.error('Error saving edited job:', error);
       showToast('Failed to save changes. Please try again.', 'error');
@@ -935,7 +959,7 @@ const JobDescriptionsPage: React.FC = () => {
             email: formData.contactEmail.trim() || undefined,
             phone: formData.contactPhone.trim() || undefined
           } : undefined,
-          impact: formData.impact || undefined,
+          impact: (formData.impact || undefined) as JobDescription['impact'],
           applicationDate: formData.applicationDate || existingJob.applicationDate,
           applicationStatus: formData.applicationStatus || existingJob.applicationStatus || 'not_applied',
           // Keep existing extractedInfo and keywords if not re-parsed
@@ -1092,7 +1116,7 @@ const JobDescriptionsPage: React.FC = () => {
         contactPhone: '',
         impact: '',
         applicationDate: '',
-        applicationStatus: ''
+        applicationStatus: 'not_applied' as const
       });
 
       showToast('Job description saved successfully!', 'success');
@@ -1262,9 +1286,9 @@ const JobDescriptionsPage: React.FC = () => {
 
     const updatedJobDescription: JobDescription = {
       ...jobDescription,
-      linkedResumeIds: jobDescription.linkedResumeIds.includes(resumeId)
-        ? jobDescription.linkedResumeIds.filter(id => id !== resumeId)
-        : [...jobDescription.linkedResumeIds, resumeId]
+      linkedResumeIds: (jobDescription.linkedResumeIds || []).includes(resumeId)
+        ? (jobDescription.linkedResumeIds || []).filter(id => id !== resumeId)
+        : [...(jobDescription.linkedResumeIds || []), resumeId]
     };
 
     try {
@@ -1287,9 +1311,9 @@ const JobDescriptionsPage: React.FC = () => {
 
     const updatedJobDescription: JobDescription = {
       ...jobDescription,
-      linkedCoverLetterIds: jobDescription.linkedCoverLetterIds.includes(coverLetterId)
-        ? jobDescription.linkedCoverLetterIds.filter(id => id !== coverLetterId)
-        : [...jobDescription.linkedCoverLetterIds, coverLetterId]
+      linkedCoverLetterIds: (jobDescription.linkedCoverLetterIds || []).includes(coverLetterId)
+        ? (jobDescription.linkedCoverLetterIds || []).filter(id => id !== coverLetterId)
+        : [...(jobDescription.linkedCoverLetterIds || []), coverLetterId]
     };
 
     try {
@@ -1409,7 +1433,7 @@ const JobDescriptionsPage: React.FC = () => {
 
   // Calculate potential document matches using sophisticated matching
   const getDocumentMatches = (jobDescription: JobDescription): DocumentMatch[] => {
-    return calculateDocumentMatches(jobDescription, state.resumes, state.coverLetters);
+    return calculateDocumentMatches(jobDescription);
   };
 
   // Generate tailored resume
@@ -1817,7 +1841,7 @@ const JobDescriptionsPage: React.FC = () => {
             {fetchError && (
               <div style={{ color: '#e74c3c', fontSize: '12px', marginTop: '4px', padding: '8px', backgroundColor: '#fdf2f2', border: '1px solid #fecaca', borderRadius: '4px' }}>
                 <strong>URL Fetch Failed:</strong> {fetchError}
-                {fetchError.includes('CORS') && (
+                {fetchError && fetchError.includes('CORS') && (
                   <div style={{ marginTop: '4px', fontSize: '11px' }}>
                     <strong>Workaround:</strong> Open the job posting in a new tab, select all text (Ctrl/Cmd+A), copy it, and paste it in the "Job Description Text" field below.
                   </div>
@@ -1864,9 +1888,9 @@ AI will automatically fill in the job title and company name fields above!"
                     borderRadius: '3px',
                     border: '1px solid #e9ecef'
                   }}
-                    title={`Input: ${lastParseUsage.promptTokens} tokens, Output: ${lastParseUsage.completionTokens} tokens, Total: ${lastParseUsage.totalTokens} tokens`}
+                    title={`Input: ${lastParseUsage?.promptTokens || 0} tokens, Output: ${lastParseUsage?.completionTokens || 0} tokens, Total: ${lastParseUsage?.totalTokens || 0} tokens`}
                   >
-                    <FontAwesomeIcon icon={faChartBar} /> {lastParseUsage.promptTokens}<FontAwesomeIcon icon={faArrowUp} /> {lastParseUsage.completionTokens}<FontAwesomeIcon icon={faArrowDown} /> • <FontAwesomeIcon icon={faDollarSign} /> {estimateCost(lastParseUsage)}
+                    <FontAwesomeIcon icon={faChartBar} /> {lastParseUsage?.promptTokens || 0}<FontAwesomeIcon icon={faArrowUp} /> {lastParseUsage?.completionTokens || 0}<FontAwesomeIcon icon={faArrowDown} /> • <FontAwesomeIcon icon={faDollarSign} /> {lastParseUsage ? estimateCost(lastParseUsage) : '$0'}
                   </small>
                 )}
 
@@ -2085,7 +2109,7 @@ AI will automatically fill in the job title and company name fields above!"
               <select
                 id="application-status"
                 value={formData.applicationStatus}
-                onChange={(e) => setFormData(prev => ({ ...prev, applicationStatus: e.target.value as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived' | '' }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicationStatus: (e.target.value as JobDescription['applicationStatus']) || 'not_applied' }))}
                 disabled={isProcessing}
               >
                 <option value="">Select...</option>
@@ -2637,7 +2661,7 @@ AI will automatically fill in the job title and company name fields above!"
                           <h2>{selectedJob.title}</h2>
                           <div className="document-link-indicator">
                             <button
-                              className={`paperclip-button ${selectedJob.linkedResumeIds.length === 0 && selectedJob.linkedCoverLetterIds.length === 0
+                              className={`paperclip-button ${(selectedJob.linkedResumeIds || []).length === 0 && (selectedJob.linkedCoverLetterIds || []).length === 0
                                 ? 'no-documents'
                                 : 'has-documents'
                                 }`}
@@ -3232,7 +3256,7 @@ AI will automatically fill in the job title and company name fields above!"
       {/* Job Scraper Modal */}
       {scraperModalOpen && (
         <div>
-          {console.log('Rendering JobScraperModal, scraperModalOpen:', scraperModalOpen)}
+          {/* Debug: scraperModalOpen = {String(scraperModalOpen)} */}
           <JobScraperModal
             isOpen={scraperModalOpen}
             onClose={() => {

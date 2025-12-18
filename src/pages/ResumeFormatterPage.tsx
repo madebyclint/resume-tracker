@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
-import { saveGeneratedResume } from '../storage';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -357,37 +356,21 @@ const ResumeFormatterPage: React.FC = () => {
     setIsSaving(true);
 
     try {
-      // Create a mock job description for the saveGeneratedResume function
-      const mockJobDescription = {
-        id: 'temp-job',
-        title: 'Resume Formatter Job',
-        company: 'Manual Entry',
-        rawText: '',
-        url: '',
-        uploadDate: new Date().toISOString(),
-        sequentialId: 0,
-        linkedResumeIds: [],
-        linkedCoverLetterIds: [],
-        extractedInfo: {
-          requiredSkills: [],
-          preferredSkills: [],
-          responsibilities: [],
-          requirements: []
-        },
-        keywords: []
-      };
-
-      const savedResume = await saveGeneratedResume(saveFileName.trim(), resumeInputText, mockJobDescription);
-
-      setState(prev => ({
-        ...prev,
-        resumes: [...prev.resumes, savedResume]
-      }));
+      // Create a downloadable file instead of saving to storage
+      const blob = new Blob([formattedHTML], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${saveFileName.trim()}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       // Reset form
       setShowSaveModal(false);
       setSaveFileName('');
-      alert('Resume saved successfully!');
+      alert('Resume downloaded successfully!');
     } catch (error) {
       console.error('Error saving resume:', error);
       alert('Error saving resume. Please try again.');
