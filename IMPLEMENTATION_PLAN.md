@@ -4,6 +4,17 @@
 
 Building a resume tracker that scales from personal use to premium features, leveraging AI-assisted development velocity with engineering depth for production stability.
 
+## Development Process: 5-Agent Workflow
+
+### 📋 **1. Product Manager** → **2. Architect** → **3. Implementor** → **4. Peer Reviewer** → **5. QA**
+
+**Enhanced Process Flow:**
+1. **Business Requirements** → **Product Manager** defines features and user value
+2. **Product Spec** → **Architect** creates technical design and implementation plan  
+3. **Technical Design** → **Implementor** builds features with quality standards
+4. **Implementation** → **Peer Reviewer** validates code quality and compliance
+5. **Reviewed Code** → **QA** ensures functionality and user experience excellence
+
 ## Architecture Overview
 
 ### Tier 1: Free/Private (No Login Required)
