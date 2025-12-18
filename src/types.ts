@@ -140,6 +140,22 @@ export interface JobDescription {
     parseCount: number; // number of times AI parsed this job
     lastParseDate?: string;
     rawTextHash?: string; // hash of the rawText when last parsed to detect changes
+    scraperParseCount?: number; // New: Track scraper-specific parsing
+    scraperCost?: number; // New: Track scraper-specific costs
+  };
+
+  // Job Description Scraper data
+  scraperData?: {
+    inputType: 'pdf' | 'image' | 'text' | 'url' | 'extension';
+    extractedText?: string;
+    confidence: number;
+    processingTime: number;
+    originalFileName?: string;
+    captureMetadata?: {
+      url?: string;
+      timestamp?: string;
+      dimensions?: { width: number; height: number };
+    };
   };
 }
 

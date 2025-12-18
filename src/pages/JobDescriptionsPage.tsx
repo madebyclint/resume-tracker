@@ -19,6 +19,8 @@ import JobManagementTable from '../components/JobManagementTable';
 import StatusDropdown from '../components/StatusDropdown';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import ActionReminderPanel from '../components/ActionReminderPanel';
+import { JobScraperModal } from '../components/JobScraperModal';
+import { JobEditModal } from '../components/JobEditModal';
 
 import './JobDescriptionsPage.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -224,31 +226,8 @@ const JobDescriptionsPage: React.FC = () => {
   const { state, setState } = useAppState();
   const [activeTab, setActiveTab] = useState<'job-descriptions' | 'analytics'>('job-descriptions');
   const [showReminderSettings, setShowReminderSettings] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    company: '',
-    url: '',
-    rawText: '',
-    additionalContext: '',
-    notes: '',
-    sequentialId: '',
-    role: '',
-    location: '',
-    workArrangement: '' as 'hybrid' | 'remote' | 'office' | '',
-    source1Type: 'url' as 'url' | 'text',
-    source1Content: '',
-    source2Type: 'url' as 'url' | 'text',
-    source2Content: '',
-    salaryMin: '',
-    salaryMax: '',
-    contactName: '',
-    contactEmail: '',
-    contactPhone: '',
-    impact: '' as 'low' | 'medium' | 'high' | '',
-    applicationDate: '',
-    applicationStatus: '' as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'duplicate' | 'archived' | ''
-  });
+  // Removed old manual form - now using AI scraper only
+  // Removed manual form data - using AI scraper for job entry
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -279,6 +258,13 @@ const JobDescriptionsPage: React.FC = () => {
 
   // Document matching toggle state
   const [showDocumentMatching, setShowDocumentMatching] = useState<Record<string, boolean>>({});
+
+  // Scraper modal state
+  const [scraperModalOpen, setScraperModalOpen] = useState(false);
+
+  // Job edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [jobBeingEdited, setJobBeingEdited] = useState<JobDescription | null>(null);
 
   // Extension listener for job data from browser extension
   useEffect(() => {
@@ -340,6 +326,35 @@ const JobDescriptionsPage: React.FC = () => {
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  // Handle scraped job creation
+  const handleScrapedJobCreated = async (scrapedJob: JobDescription) => {
+    try {
+      // Save the scraped job
+      await saveJobDescription(scrapedJob);
+
+      // Update state
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: [...prev.jobDescriptions, scrapedJob]
+      }));
+
+      // Log activity
+      logActivity(scrapedJob, 'field_updated', {
+        field: 'imported',
+        toValue: true,
+        details: 'Job scraped and imported successfully'
+      });
+
+      // Close modal and show success message
+      setScraperModalOpen(false);
+      showToast('Job description scraped and saved successfully!', 'success');
+
+    } catch (error) {
+      console.error('Error saving scraped job:', error);
+      showToast('Failed to save scraped job. Please try again.', 'error');
+    }
   };
 
   const handleExportData = async () => {
@@ -810,33 +825,34 @@ const JobDescriptionsPage: React.FC = () => {
     const job = state.jobDescriptions.find(jd => jd.id === jobId);
     if (!job) return;
 
-    setFormData({
-      title: job.title,
-      company: job.company,
-      url: job.url || '',
-      rawText: job.rawText,
-      additionalContext: job.additionalContext || '',
-      notes: job.notes || '',
-      sequentialId: job.sequentialId?.toString() || '',
-      role: job.role || '',
-      location: job.location || '',
-      workArrangement: job.workArrangement || '',
-      source1Type: 'url',
-      source1Content: job.url || job.source1?.content || '',
-      source2Type: job.source2?.type || 'url',
-      source2Content: job.source2?.content || '',
-      salaryMin: job.salaryMin?.toString() || '',
-      salaryMax: job.salaryMax?.toString() || '',
-      contactName: job.contact?.name || '',
-      contactEmail: job.contact?.email || '',
-      contactPhone: job.contact?.phone || '',
-      impact: job.impact || '',
-      applicationDate: job.applicationDate?.split('T')[0] || '',
-      applicationStatus: job.applicationStatus || ''
-    });
-    setEditingJobId(jobId);
-    setShowAddForm(true);
-    setLastParseUsage(null); // Clear usage when starting to edit
+    setJobBeingEdited(job);
+    setEditModalOpen(true);
+  };
+
+  const handleSaveEditedJob = async (updatedJob: JobDescription) => {
+    try {
+      // Update in state
+      setState(prev => ({
+        ...prev,
+        jobDescriptions: prev.jobDescriptions.map(jd =>
+          jd.id === updatedJob.id ? updatedJob : jd
+        )
+      }));
+
+      // Save to storage
+      const result = await saveJobDescription(updatedJob);
+      if (result.success) {
+        showToast('Job updated successfully!', 'success');
+        setEditModalOpen(false);
+        setJobBeingEdited(null);
+      } else {
+        throw new Error(result.error || 'Failed to save job');
+      }
+    } catch (error) {
+      console.error('Error saving edited job:', error);
+      showToast('Failed to save changes. Please try again.', 'error');
+      throw error;
+    }
   };
 
   const handleCancelEdit = () => {
@@ -865,7 +881,6 @@ const JobDescriptionsPage: React.FC = () => {
       applicationDate: '',
       applicationStatus: ''
     });
-    setShowAddForm(false);
     setFetchError(null);
     setIsFetchingURL(false);
     setLastParseUsage(null); // Clear usage when canceling
@@ -1079,7 +1094,6 @@ const JobDescriptionsPage: React.FC = () => {
         applicationDate: '',
         applicationStatus: ''
       });
-      setShowAddForm(false);
 
       showToast('Job description saved successfully!', 'success');
 
@@ -1160,29 +1174,34 @@ const JobDescriptionsPage: React.FC = () => {
 
   const handleToggleWaitingForResponse = async (id: string) => {
     try {
+      const job = state.jobDescriptions.find(j => j.id === id);
+      if (!job) return;
+
+      const newWaitingStatus = !job.waitingForResponse;
+
+      const updatedJob = {
+        ...logActivity(job, 'field_updated', {
+          field: 'waitingForResponse',
+          fromValue: job.waitingForResponse || false,
+          toValue: newWaitingStatus,
+          details: `Waiting for response ${newWaitingStatus ? 'enabled' : 'disabled'}`
+        }),
+        waitingForResponse: newWaitingStatus
+      };
+
+      // Save to IndexedDB first
+      await saveJobDescription(updatedJob);
+
+      // Then update state
       setState(prev => ({
         ...prev,
-        jobDescriptions: prev.jobDescriptions.map(job => {
-          if (job.id === id) {
-            const newWaitingStatus = !job.waitingForResponse;
-            return {
-              ...logActivity(job, 'field_updated', {
-                field: 'waitingForResponse',
-                fromValue: job.waitingForResponse || false,
-                toValue: newWaitingStatus,
-                details: `Waiting for response ${newWaitingStatus ? 'enabled' : 'disabled'}`
-              }),
-              waitingForResponse: newWaitingStatus
-            };
-          }
-          return job;
-        })
+        jobDescriptions: prev.jobDescriptions.map(j =>
+          j.id === id ? updatedJob : j
+        )
       }));
 
-      const job = state.jobDescriptions.find(j => j.id === id);
-      const newStatus = !job?.waitingForResponse;
       showToast(
-        `Job marked as ${newStatus ? 'waiting for response' : 'not waiting for response'}`,
+        `Job marked as ${newWaitingStatus ? 'waiting for response' : 'not waiting for response'}`,
         'success'
       );
     } catch (error) {
@@ -1612,16 +1631,20 @@ const JobDescriptionsPage: React.FC = () => {
         {activeTab === 'job-descriptions' && (
           <div className="job-actions">
             <button
-              className="add-job-button"
-              onClick={() => setShowAddForm(true)}
-              disabled={showAddForm}
+              className="add-job-button primary"
+              onClick={() => {
+                console.log('Scraper button clicked!');
+                console.log('Current scraperModalOpen:', scraperModalOpen);
+                setScraperModalOpen(true);
+                console.log('Setting scraperModalOpen to true');
+              }}
+              title="Add job from PDF, image, text, or URL using AI"
             >
-              + Add Job Description
+              <FontAwesomeIcon icon={faFileImport} /> + Add Job
             </button>
             <button
               className="import-csv-button"
               onClick={() => setShowCSVImportModal(true)}
-              disabled={showAddForm}
               title="Import job applications from CSV file"
             >
               <FontAwesomeIcon icon={faFileImport} /> Import CSV
@@ -1629,7 +1652,7 @@ const JobDescriptionsPage: React.FC = () => {
             <button
               className="export-button"
               onClick={handleExportData}
-              disabled={isExporting || showAddForm}
+              disabled={isExporting}
               title="Export all data as backup file"
               style={{
                 padding: '8px 12px',
@@ -1649,7 +1672,7 @@ const JobDescriptionsPage: React.FC = () => {
             <button
               className="import-button"
               onClick={handleImportData}
-              disabled={isImporting || showAddForm}
+              disabled={isImporting}
               title="Import data from backup file"
               style={{
                 padding: '8px 12px',
@@ -1689,7 +1712,7 @@ const JobDescriptionsPage: React.FC = () => {
         )}
       </div>
 
-      {showAddForm && (
+      {/* Old manual form removed - using AI scraper only */}\n      {false && (
         <div
           className="add-job-form"
           ref={(el) => el?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -2656,7 +2679,6 @@ AI will automatically fill in the job title and company name fields above!"
                           <button
                             className="edit-button"
                             onClick={() => handleEditJobDescription(selectedJob.id)}
-                            disabled={showAddForm}
                           >
                             Edit
                           </button>
@@ -3207,7 +3229,33 @@ AI will automatically fill in the job title and company name fields above!"
         existingJobs={state.jobDescriptions}
       />
 
+      {/* Job Scraper Modal */}
+      {scraperModalOpen && (
+        <div>
+          {console.log('Rendering JobScraperModal, scraperModalOpen:', scraperModalOpen)}
+          <JobScraperModal
+            isOpen={scraperModalOpen}
+            onClose={() => {
+              console.log('Closing scraper modal');
+              setScraperModalOpen(false);
+            }}
+            onJobCreated={handleScrapedJobCreated}
+          />
+        </div>
+      )}
 
+      {/* Job Edit Modal */}
+      {jobBeingEdited && (
+        <JobEditModal
+          job={jobBeingEdited}
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setJobBeingEdited(null);
+          }}
+          onSave={handleSaveEditedJob}
+        />
+      )}
 
       {/* Document Linking Modal */}
       {showDocumentLinkingModal && selectedJob && (

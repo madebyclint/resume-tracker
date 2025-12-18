@@ -1,0 +1,407 @@
+.scraper-status-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-icon {
+  font-size: 18px;
+  transition: color 0.3s ease;
+}
+
+.status-icon.processing {
+  color: #3b82f6;
+}
+
+.status-icon.success {
+  color: #22c55e;
+}
+
+.status-icon.error {
+  color: #ef4444;
+}
+
+.status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-label {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.status-message {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.progress-bar {
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  transition: width 0.3s ease;
+  border-radius: 2px;
+}
+
+/* Detailed Status Styles */
+.scraper-status-detailed {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.status-header h3 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.processing-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.processing-time svg {
+  font-size: 14px;
+}
+
+.steps-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.step-item {
+  display: flex;
+  gap: 16px;
+  position: relative;
+}
+
+.step-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  min-width: 40px;
+}
+
+.step-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+  border: 3px solid;
+  background: white;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.step-item.pending .step-circle {
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+}
+
+.step-item.active .step-circle {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.step-item.completed .step-circle {
+  background: #22c55e;
+  border-color: #22c55e;
+}
+
+.step-item.error .step-circle {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.step-connector {
+  width: 3px;
+  height: 24px;
+  background: #e2e8f0;
+  margin-top: 4px;
+  transition: background-color 0.3s ease;
+}
+
+.step-content {
+  flex: 1;
+  padding-bottom: 24px;
+}
+
+.step-label {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.step-description {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.step-item.active .step-label {
+  color: #3b82f6;
+}
+
+.step-item.error .step-label {
+  color: #ef4444;
+}
+
+.step-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.step-progress .progress-bar {
+  flex: 1;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+}
+
+.step-progress .progress-fill {
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+}
+
+.progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3b82f6;
+  min-width: 35px;
+}
+
+.confidence-indicator {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 20px;
+}
+
+.confidence-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.confidence-bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease, background-color 0.3s ease;
+}
+
+.confidence-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confidence-quality {
+  font-weight: normal;
+  color: #6b7280;
+}
+
+.error-details {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.error-details svg {
+  color: #ef4444;
+  font-size: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.error-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.error-message strong {
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.error-message span {
+  color: #7f1d1d;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Animations */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.step-item.active .step-circle {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .scraper-status-detailed {
+    padding: 20px;
+  }
+
+  .status-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .step-indicator {
+    min-width: 36px;
+  }
+
+  .step-circle {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .step-content {
+    padding-bottom: 20px;
+  }
+
+  .step-progress {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .progress-text {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .scraper-status-detailed {
+    padding: 16px;
+  }
+
+  .step-circle {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .step-label {
+    font-size: 14px;
+  }
+
+  .step-description {
+    font-size: 12px;
+  }
+
+  .confidence-indicator,
+  .error-details {
+    padding: 12px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .step-circle {
+    border-width: 2px;
+  }
+  
+  .progress-bar,
+  .confidence-bar {
+    border: 1px solid #000;
+  }
+  
+  .step-connector {
+    width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .step-circle,
+  .progress-fill,
+  .confidence-fill {
+    transition: none;
+  }
+  
+  .spin {
+    animation: none;
+  }
+  
+  .step-item.active .step-circle {
+    animation: none;
+  }
+}

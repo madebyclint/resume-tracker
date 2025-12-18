@@ -1,5 +1,6 @@
 import { JobDescription } from '../types';
 import { extractKeywordsFromText } from './documentMatcher';
+import { ParsedJobData, AIUsageMetrics } from '../types/scraperTypes';
 
 // AI Configuration
 interface AIConfig {
@@ -938,6 +939,279 @@ export async function getCombinedResumeText(): Promise<string> {
     console.error('Error getting combined resume text:', error);
     throw error;
   }
+}
+
+// Job Description Scraper - AI Parsing Functions
+
+// System prompt for job scraper parsing
+const JOB_SCRAPER_SYSTEM_PROMPT = `You are an expert job description parser. Extract structured data from job postings in any format (text, PDF content, or OCR'd images). Return valid JSON only.
+
+Required output format:
+{
+  "url": "string (if detectable)",
+  "role": "string",
+  "company": "string", 
+  "location": "string",
+  "workType": "remote|hybrid|office",
+  "summary": "string (2-3 sentences)",
+  "skills": {
+    "required": ["skill1", "skill2"],
+    "preferred": ["skill3", "skill4"]
+  },
+  "deadlines": {
+    "application": "YYYY-MM-DD or null",
+    "startDate": "YYYY-MM-DD or null"
+  },
+  "salary": {
+    "min": number or null,
+    "max": number or null,
+    "range": "string representation",
+    "currency": "USD|EUR|GBP etc."
+  },
+  "companyInfo": {
+    "description": "string",
+    "industry": "string",
+    "size": "startup|small|medium|large|enterprise"
+  },
+  "benefits": ["benefit1", "benefit2"],
+  "requirements": ["req1", "req2"],
+  "responsibilities": ["resp1", "resp2"]
+}
+
+Rules:
+- Extract all available information, use null for missing data
+- Normalize salary to annual figures when possible
+- Infer work type from job description context
+- Use consistent skill formatting (lowercase, standardized terms)
+- Return only the JSON object, no explanations`;
+
+// Parse scraped job description text with AI
+export async function parseScrapedJobDescription(
+  rawText: string,
+  inputType: 'pdf' | 'image' | 'text' | 'url'
+): Promise<{
+  success: boolean;
+  parsedData?: ParsedJobData;
+  confidence: number;
+  errors: string[];
+  aiUsage: AIUsageMetrics;
+}> {
+  const config = getAIConfig();
+  if (!config.apiKey) {
+    return {
+      success: false,
+      errors: ['AI service not configured. Please add your OpenAI API key in settings.'],
+      confidence: 0,
+      aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+    };
+  }
+
+  if (!config.apiUrl) {
+    return {
+      success: false,
+      errors: ['AI API URL not configured'],
+      confidence: 0,
+      aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+    };
+  }
+
+  const prompt = buildJobScrapingPrompt(rawText, inputType);
+  
+  try {
+    const response = await fetch(config.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: config.model || 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: JOB_SCRAPER_SYSTEM_PROMPT
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('AI API error response:', errorText);
+      
+      if (response.status === 401) {
+        return {
+          success: false,
+          errors: ['Invalid API key. Please check your OpenAI API key in settings.'],
+          confidence: 0,
+          aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+        };
+      }
+      
+      if (response.status === 429) {
+        return {
+          success: false,
+          errors: ['API rate limit exceeded. Please try again in a few minutes.'],
+          confidence: 0,
+          aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+        };
+      }
+
+      return {
+        success: false,
+        errors: [`AI API error: ${response.status} ${response.statusText}`],
+        confidence: 0,
+        aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+      };
+    }
+
+    const data = await response.json();
+    const aiUsage = calculateAIUsage(data.usage || {});
+    
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      return {
+        success: false,
+        errors: ['No response content from AI service'],
+        confidence: 0,
+        aiUsage
+      };
+    }
+
+    try {
+      // Parse JSON response
+      const parsedData = JSON.parse(content) as ParsedJobData;
+      const confidence = calculateParsingConfidence(parsedData, rawText);
+      
+      return {
+        success: true,
+        parsedData,
+        confidence,
+        errors: [],
+        aiUsage
+      };
+    } catch (parseError) {
+      console.error('Failed to parse AI JSON response:', parseError);
+      console.error('AI response content:', content);
+      
+      return {
+        success: false,
+        errors: ['Failed to parse AI response. The AI may have returned malformed JSON.'],
+        confidence: 0,
+        aiUsage
+      };
+    }
+  } catch (error) {
+    console.error('Error calling AI API for job scraping:', error);
+    
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return {
+        success: false,
+        errors: ['Network error: Unable to reach AI API. Check your internet connection.'],
+        confidence: 0,
+        aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+      };
+    }
+
+    return {
+      success: false,
+      errors: [`Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`],
+      confidence: 0,
+      aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+    };
+  }
+}
+
+// Build the user prompt for job scraping
+function buildJobScrapingPrompt(rawText: string, inputType: string): string {
+  let contextInfo = '';
+  
+  switch (inputType) {
+    case 'pdf':
+      contextInfo = 'This text was extracted from a PDF job posting.';
+      break;
+    case 'image':
+      contextInfo = 'This text was extracted from an image/screenshot using OCR, so there may be some formatting issues or errors.';
+      break;
+    case 'text':
+      contextInfo = 'This is raw text from a job posting that was copied and pasted.';
+      break;
+    case 'url':
+      contextInfo = 'This text was scraped from a web page job posting.';
+      break;
+  }
+
+  return `${contextInfo}
+
+Please extract structured job information from the following text:
+
+${rawText}
+
+Focus on accuracy and only extract information that is clearly present in the text. If information is ambiguous or missing, use null values.`;
+}
+
+// Calculate AI usage metrics and estimated cost
+function calculateAIUsage(usage: any): AIUsageMetrics {
+  const totalTokens = usage.total_tokens || 0;
+  const promptTokens = usage.prompt_tokens || 0;
+  const completionTokens = usage.completion_tokens || 0;
+  
+  // Rough cost estimation for GPT-3.5-turbo (adjust as needed)
+  // Input: $0.0015 per 1K tokens, Output: $0.002 per 1K tokens
+  const inputCost = (promptTokens / 1000) * 0.0015;
+  const outputCost = (completionTokens / 1000) * 0.002;
+  const estimatedCost = inputCost + outputCost;
+
+  return {
+    totalTokens,
+    promptTokens,
+    completionTokens,
+    estimatedCost: Math.round(estimatedCost * 10000) / 10000 // Round to 4 decimal places
+  };
+}
+
+// Calculate confidence score for parsed job data
+function calculateParsingConfidence(parsedData: ParsedJobData, originalText: string): number {
+  let confidence = 0.5; // Base confidence
+  
+  // Increase confidence based on populated fields
+  const coreFields = [
+    parsedData.role,
+    parsedData.company,
+    parsedData.location,
+    parsedData.summary
+  ];
+  
+  const populatedCoreFields = coreFields.filter(field => 
+    field && field.trim().length > 0
+  ).length;
+  
+  confidence += (populatedCoreFields / coreFields.length) * 0.3;
+  
+  // Increase confidence based on skills extraction
+  const totalSkills = (parsedData.skills?.required?.length || 0) + 
+                     (parsedData.skills?.preferred?.length || 0);
+  if (totalSkills > 0) {
+    confidence += Math.min(totalSkills / 10, 0.15); // Max 15% boost for skills
+  }
+  
+  // Increase confidence if job-related keywords are present in original text
+  const jobKeywords = [
+    'experience', 'requirements', 'responsibilities', 'qualifications',
+    'skills', 'salary', 'benefits', 'apply', 'position', 'role', 'job'
+  ];
+  
+  const textLower = originalText.toLowerCase();
+  const foundKeywords = jobKeywords.filter(keyword => textLower.includes(keyword)).length;
+  confidence += (foundKeywords / jobKeywords.length) * 0.15;
+  
+  return Math.max(0, Math.min(1, confidence));
 }
 
 // Show configuration instructions

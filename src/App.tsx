@@ -3,6 +3,7 @@ import { AppStateProvider, useAppState } from "./state/AppStateContext";
 import DashboardPage from "./pages/DashboardPage";
 import JobDescriptionsPage from "./pages/JobDescriptionsPage";
 import ResumeFormatterPage from "./pages/ResumeFormatterPage";
+import { ScraperTestButton } from "./components/ScraperTestButton";
 import "./App.css";
 
 type Page = 'dashboard' | 'jobs' | 'resume-formatter';
