@@ -1,0 +1,1724 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import ReactDOMServer from 'react-dom/server';
+import { useAppState } from '../state/AppStateContext';
+import { JobDescription, Resume, CoverLetter, AppState } from '../types';
+import { parseJobDescription, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
+import { saveJobDescription, deleteJobDescription, exportAllDataAsJSON } from '../storage';
+
+// Stub functions for removed functionality
+const importAllDataFromJSON = async () => ({ success: false, importedCounts: { resumes: 0, coverLetters: 0, jobDescriptions: 0 }, warnings: [], errors: [] });
+const getCombinedResumeText = async () => '';
+const generateTailoredResumeFromFullText = async (jobDescription?: any, fullResumeText?: string, additionalContext?: any) => ({ success: false, error: 'Feature removed', content: '' });
+const generateTailoredCoverLetterFromFullText = async (jobDescription?: any, fullResumeText?: string, additionalContext?: any) => ({ success: false, error: 'Feature removed', content: '' });
+const saveGeneratedResume = async (name?: string, content?: string, selectedJob?: any) => ({});
+const saveGeneratedCoverLetter = async (name?: string, content?: string, selectedJob?: any) => ({});
+
+import { logStatusChange, logActivity } from '../utils/activityLogger';
+import { extensionService, ExtensionJobData, ExtensionService } from '../utils/extensionService';
+
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import GeneratedContentModal from '../components/GeneratedContentModal';
+import ValidationMessage from '../components/ValidationMessage';
+import CSVImportModal from '../components/CSVImportModal';
+import StorageMonitor from '../components/StorageMonitor';
+import JobManagementTable from '../components/JobManagementTable';
+import StatusDropdown from '../components/StatusDropdown';
+import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import ActionReminderPanel from '../components/ActionReminderPanel';
+import MainTabContent from '../components/MainTabContent';
+import AddJobForm from '../components/AddJobForm';
+import JobStatsSection from '../components/JobStatsSection';
+import JobDescriptionsContent from '../components/JobDescriptionsContent';
+import ToastNotification, { Toast } from '../components/ToastNotification';
+import DuplicateJobModal from '../components/DuplicateJobModal';
+import ReminderSettingsModal from '../components/ReminderSettingsModal';
+import TabNavigation from '../components/TabNavigation';
+import ModalManager from '../components/ModalManager';
+import JobFilters from '../components/JobFilters';
+import JobListDisplay from '../components/JobListDisplay';
+import { JobScraperModal } from '../components/JobScraperModal';
+import { JobDetailsPanel } from '../components/JobDetailsPanel';
+import { JobEditModal } from '../components/JobEditModal';
+import { useJobFormData, JobDescriptionFormData } from '../hooks/useJobFormData';
+import { useToastManager } from '../hooks/useToastManager';
+import { useModalManager } from '../hooks/useModalManager';
+import { useUIState } from '../hooks/useUIState';
+import { useJobActions } from '../hooks/useJobActions';
+import { useJobAnalytics } from '../hooks/useJobAnalytics';
+import { useJobFormHandlers } from '../hooks/useJobFormHandlers';
+import { useJobManagementHandlers } from '../hooks/useJobManagementHandlers';
+import { useGenerationHandlers } from '../hooks/useGenerationHandlers';
+import { useJobPageState } from '../hooks/useJobPageState';
+import {
+  extractSalaryMin,
+  extractSalaryMax,
+  formatCurrency,
+  getImpactIcon,
+  getImpactColor,
+  createTextHash,
+  needsAIParsing,
+  calculateAICost,
+  estimateCost
+} from '../utils/jobDescriptionHelpers';
+import { smartParseJobDescription } from '../utils/aiParsingService';
+
+import './JobDescriptionsPage.css';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faThumbsUp, faMinus, faFire, faTimes, faEdit, faCopy, faTable, faFileAlt, faFileImport, faChartBar, faDollarSign, faSync, faArrowUp, faArrowDown, faCheck, faExclamationTriangle, faPaperclip, faPlus, faSearch, faEye, faDownload, faUpload, faCog } from '@fortawesome/free-solid-svg-icons';
+
+// All helper functions and form data types moved to separate utility files
+
+// Helper function to clean up LinkedIn URLs
+const cleanLinkedInUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname.includes('linkedin.com') && urlObj.pathname.startsWith('/jobs/view/')) {
+      // Extract just the job ID from the path
+      const jobId = urlObj.pathname.split('/')[3];
+      return `https://www.linkedin.com/jobs/view/${jobId}`;
+    }
+    return url; // Return original URL if not a LinkedIn job URL
+  } catch {
+    return url; // Return original if URL is invalid
+  }
+};
+
+// Helper function to determine if a job needs AI processing (is "unparsed")
+const isJobUnparsed = (job: JobDescription): boolean => {
+  return needsAIParsing(job);
+};
+
+// Convert JobDescription to form data for editing  
+const convertJobDescriptionToFormData = (job: JobDescription): JobDescriptionFormData => {
+  return {
+    title: job.title || '',
+    company: job.company || '',
+    sequentialId: job.sequentialId?.toString() || '',
+    url: job.url || '',
+    rawText: job.rawText || '',
+    role: job.role || '',
+    location: job.location || '',
+    workArrangement: job.workArrangement || '',
+    impact: typeof job.impact === 'string' ? job.impact : '',
+    salaryMin: job.salaryMin?.toString() || '',
+    salaryMax: job.salaryMax?.toString() || '',
+    source1Type: job.source1?.type || 'url',
+    source1Content: job.source1?.content || '',
+    source2Type: job.source2?.type || 'url',
+    source2Content: job.source2?.content || '',
+    contactName: job.contact?.name || '',
+    contactEmail: job.contact?.email || '',
+    contactPhone: job.contact?.phone || '',
+    applicationDate: job.applicationDate || '',
+    applicationStatus: job.applicationStatus || 'not_applied',
+    notes: job.notes || '',
+    additionalContext: job.additionalContext || '',
+    waitingForResponse: job.waitingForResponse || false,
+    isArchived: job.isArchived || false,
+    createdAt: job.createdAt,
+    priority: typeof job.priority === 'string' ? job.priority : '',
+    interviewStage: job.interviewStage || '',
+    offerStage: job.offerStage || '',
+    daysSinceApplication: job.daysSinceApplication || 0,
+    daysInCurrentStatus: job.daysInCurrentStatus || 0,
+  };
+};
+
+const JobDescriptionsPage: React.FC = () => {
+  const { state, setState } = useAppState();
+  const pageState = useJobPageState();
+  const {
+    activeTab, setActiveTab,
+    showReminderSettings, setShowReminderSettings,
+    selectedJobId, setSelectedJobId,
+    editingJobId, setEditingJobId,
+    editingNotesId, setEditingNotesId,
+    tempNotes, setTempNotes,
+    showArchivedJobs, setShowArchivedJobs,
+    hideRejectedJobs, setHideRejectedJobs,
+    showOnlyWaitingJobs, setShowOnlyWaitingJobs,
+    showUnparsedFirst, setShowUnparsedFirst,
+    searchQuery, setSearchQuery,
+    duplicateSearchQuery, setDuplicateSearchQuery,
+    statusFilter, setStatusFilter,
+    showExpandedStats, setShowExpandedStats,
+    chartType, setChartType,
+    aiParseCache, setAiParseCache,
+    linkedDocumentsSearch, setLinkedDocumentsSearch
+  } = pageState;
+
+  // Extracted custom hooks for better separation of concerns
+  const { toasts, showToast, removeToast } = useToastManager();
+  const modalManager = useModalManager();
+  const uiState = useUIState();
+  const jobActions = useJobActions(setState, showToast, modalManager.setScraperModalOpen);
+  const statsData = useJobAnalytics(state.jobDescriptions);
+  const {
+    formData,
+    setFormData,
+    createEmptyFormData,
+    updateFormData,
+    resetFormData,
+    convertToJobDescription
+  } = useJobFormData();
+  const formHandlers = useJobFormHandlers();
+  const managementHandlers = useJobManagementHandlers();
+  const generationHandlers = useGenerationHandlers();
+
+  // Most state now managed by useJobPageState hook
+
+  // Duplicate job handling now in modal manager
+
+  // Filter state now managed by useJobPageState hook
+
+  // Document matching toggle state
+
+
+  // Modal states now managed by extracted hooks
+
+  // Extension listener for job data from browser extension
+  useEffect(() => {
+    const handleExtensionJobData = (extensionData: ExtensionJobData) => {
+      try {
+        // Convert extension data to job description format
+        const jobDescription = ExtensionService.convertToJobDescription(extensionData);
+
+        // Add to state
+        setState(prevState => ({
+          ...prevState,
+          jobDescriptions: [...prevState.jobDescriptions, jobDescription]
+        }));
+
+        // Log activity and save to storage
+        const jobWithActivity = logActivity(jobDescription, 'field_updated', {
+          field: 'imported',
+          toValue: true,
+          details: `Imported from ${extensionData.source} via browser extension`
+        });
+
+        // Save to storage
+        saveJobDescription(jobWithActivity);
+
+        // Show success toast
+        showToast(
+          `Job "${jobDescription.title}" imported from browser extension!`,
+          'success',
+          5000
+        );
+
+        console.log('Successfully imported job from extension:', jobDescription);
+      } catch (error) {
+        console.error('Error importing job from extension:', error);
+        showToast('Failed to import job from browser extension', 'error');
+      }
+    };
+
+    // Add listener to extension service
+    extensionService.addJobDataListener(handleExtensionJobData);
+
+    // Cleanup listener on unmount
+    return () => {
+      extensionService.removeJobDataListener(handleExtensionJobData);
+    };
+  }, [setState]);
+
+  // Toast functions now provided by useToastManager hook
+
+  // Job creation handler now provided by useJobActions hook
+  const handleScrapedJobCreated = handleScrapedJob;
+
+  // Event handlers now provided by useJobActions hook
+  const {
+    handleExportData,
+    handleImportData,
+    handleScrapedJob,
+    handleDeleteJob,
+    handleToggleArchive,
+    handleDuplicateJob,
+    handleUpdateJob,
+    handleParseAllUnparsed,
+    isExporting,
+    isImporting
+  } = jobActions;
+
+  // Analytics and cache state now managed by useJobPageState hook
+
+  // Analytics data now provided by useJobAnalytics hook
+
+  // Generation and modal states now managed by extracted hooks
+
+  // Get next sequential job ID
+  const getNextSequentialId = (): number => {
+    if (state.jobDescriptions.length === 0) return 1;
+    const maxId = Math.max(...state.jobDescriptions.map(jd => jd.sequentialId || 0));
+    return maxId + 1;
+  };
+
+  // Form handlers now provided by useJobFormHandlers hook
+  const handleFetchURL = () => formHandlers.handleFetchURL(formData.url || '', formData, setFormData);
+
+  // Auto-parse job description text to extract title, company, etc.
+
+  // Reparse handler now provided by useJobFormHandlers hook
+  const handleReparse = () => {
+    const existingJob = editingJobId ? state.jobDescriptions.find(job => job.id === editingJobId) || null : null;
+    return formHandlers.handleReparse(
+      formData.rawText, formData, setFormData, aiParseCache, setAiParseCache,
+      editingJobId, existingJob, setState, showToast, getNextSequentialId
+    );
+  };
+
+  // Process job handler now provided by useJobManagementHandlers hook  
+  const handleProcessJob = (jobId: string) => {
+    return managementHandlers.handleProcessJob(
+      jobId, state, setState, showToast, getNextSequentialId,
+      aiParseCache, setAiParseCache, (processing: boolean) => { } // setIsProcessing stub
+    );
+  };
+
+  const handleEditJobDescription = (jobId: string) => {
+    const job = state.jobDescriptions.find(jd => jd.id === jobId);
+    if (job) {
+      setJobBeingEdited(job);
+      setEditModalOpen(true);
+    }
+  };
+
+  const handleSaveEditedJob = async (updatedJob: JobDescription) => {
+    try {
+      setState(prev => ({ ...prev, jobDescriptions: prev.jobDescriptions.map(jd => jd.id === updatedJob.id ? updatedJob : jd) }));
+      await saveJobDescription(updatedJob);
+      showToast('Job updated successfully!', 'success');
+      setEditModalOpen(false);
+      setJobBeingEdited(null);
+    } catch (error) {
+      console.error('Error saving edited job:', error);
+      showToast('Failed to save changes. Please try again.', 'error');
+      throw error;
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingJobId(null);
+    setFormData({
+      rawText: '',
+      title: '',
+      company: '',
+      role: '',
+      location: '',
+      workArrangement: '',
+      impact: 'low',
+      priority: '',
+      salaryMin: '',
+      salaryMax: '',
+      salaryRange: '',
+      sequentialId: '',
+      url: '',
+      source1Type: 'text',
+      source1Content: '',
+      source2Type: 'text',
+      source2Content: '',
+      contactName: '',
+      contactEmail: '',
+      contactPhone: '',
+      applicationDate: '',
+      applicationStatus: '',
+      interviewStage: '',
+      offerStage: '',
+      additionalContext: '',
+      notes: '',
+      isArchived: false,
+      duplicateOfId: '',
+      linkedDuplicateIds: [],
+      submissionDate: '',
+      lastActivityDate: '',
+      source: '',
+      contactPerson: '',
+      secondaryContact: '',
+      waitingForResponse: false,
+      followUpDate: '',
+      interviewDates: [],
+      salaryDiscussed: '',
+      statusHistory: [],
+      activityLog: [],
+      daysSinceApplication: 0,
+      daysInCurrentStatus: 0,
+      completedActions: {},
+      snoozedUntil: {}
+    });
+    setFetchError(null);
+    setIsFetchingURL(false);
+    setLastParseUsage(null); // Clear usage when canceling
+    // Save job handler provided by useJobFormHandlers hook  
+    const handleSaveJobDescription = () => {
+      return formHandlers.handleSaveJobDescription(
+        formData, editingJobId, state, setState, showToast, getNextSequentialId,
+        aiParseCache, setAiParseCache, resetFormData
+      );
+    };
+    setAiParseCache,
+    {
+      applicationDate: new Date().toISOString().split('T')[0],
+      applicationId: sequentialId,
+      impactFocus: 'New Job Description',
+      impactLevel: 'Standard'
+    }
+            );
+
+if (parseResult.success && parseResult.extractedInfo) {
+  // Update extracted info
+  newJobDescription.extractedInfo = parseResult.extractedInfo;
+  newJobDescription.keywords = parseResult.keywords || [];
+
+  // Track AI usage (only if not from cache)
+  if (parseResult.usage && !parseResult.fromCache) {
+    const textHash = createTextHash(formData.rawText.trim());
+    const estimatedCost = calculateAICost(parseResult.usage);
+    newJobDescription.aiUsage = {
+      totalTokens: parseResult.usage.totalTokens,
+      promptTokens: parseResult.usage.promptTokens,
+      completionTokens: parseResult.usage.completionTokens,
+      estimatedCost: estimatedCost,
+      parseCount: 1,
+      lastParseDate: new Date().toISOString(),
+      rawTextHash: textHash
+    };
+  } else if (parseResult.fromCache) {
+    // If from cache, set a minimal usage record to track that it was processed
+    const textHash = createTextHash(formData.rawText.trim());
+    newJobDescription.aiUsage = {
+      totalTokens: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      estimatedCost: 0,
+      parseCount: 0,
+      lastParseDate: new Date().toISOString(),
+      rawTextHash: textHash
+    };
+  }
+}
+          } catch (parseError) {
+  console.warn('Failed to parse job description with AI:', parseError);
+  // Continue with saving even if AI parsing fails
+}
+        }
+
+await saveJobDescription(newJobDescription);
+
+setState(prev => ({
+  ...prev,
+  jobDescriptions: [...prev.jobDescriptions, newJobDescription]
+}));
+      }
+
+// Reset form
+setFormData({
+  rawText: '',
+  title: '',
+  company: '',
+  role: '',
+  location: '',
+  workArrangement: '',
+  impact: 'low',
+  priority: '',
+  salaryMin: '',
+  salaryMax: '',
+  salaryRange: '',
+  sequentialId: '',
+  url: '',
+  source1Type: 'text',
+  source1Content: '',
+  source2Type: 'text',
+  source2Content: '',
+  contactName: '',
+  contactEmail: '',
+  contactPhone: '',
+  applicationDate: '',
+  applicationStatus: '',
+  interviewStage: '',
+  offerStage: '',
+  additionalContext: '',
+  notes: '',
+  isArchived: false,
+  duplicateOfId: '',
+  linkedDuplicateIds: [],
+  submissionDate: '',
+  lastActivityDate: '',
+  source: '',
+  contactPerson: '',
+  secondaryContact: '',
+  waitingForResponse: false,
+  followUpDate: '',
+  interviewDates: [],
+  salaryDiscussed: '',
+  statusHistory: [],
+  activityLog: [],
+  daysSinceApplication: 0,
+  daysInCurrentStatus: 0,
+  completedActions: {},
+  snoozedUntil: {}
+});
+
+showToast('Job description saved successfully!', 'success');
+
+    } catch (error) {
+  console.error('Error saving job description:', error);
+  showToast('Failed to save job description. Please try again.', 'error');
+} finally {
+  setIsProcessing(false);
+}
+  };
+
+const handleDeleteJobDescription = (id: string) => managementHandlers.handleDeleteJobDescription(id, setState, showToast);
+
+const handleArchiveJob = (id: string) => managementHandlers.handleArchiveJob(id, setState, showToast);
+
+const handleUnarchiveJob = (id: string) => managementHandlers.handleUnarchiveJob(id, setState, showToast);
+
+const handleToggleWaitingForResponse = (id: string) => managementHandlers.handleToggleWaitingForResponse(id, state, setState, showToast);
+  };
+
+const handleMarkDuplicate = async (jobId: string) => {
+  setDuplicateJobId(jobId);
+  setDuplicateSearchQuery('');
+  setShowDuplicateModal(true);
+};
+
+const handleConfirmDuplicate = async (originalJobId: string) => {
+  if (!duplicateJobId) return;
+
+  try {
+    setState(prev => ({
+      ...prev,
+      jobDescriptions: prev.jobDescriptions.map(job => {
+        if (job.id === duplicateJobId) {
+          // Mark as duplicate and archive
+          return {
+            ...logActivity(job, 'status_change', {
+              fromValue: job.applicationStatus || 'not_applied',
+              toValue: 'duplicate',
+              field: 'applicationStatus',
+              details: `Marked as duplicate of job ${originalJobId}`
+            }),
+            applicationStatus: 'duplicate' as JobDescription['applicationStatus'],
+            duplicateOfId: originalJobId,
+            isArchived: true
+          };
+        } else if (job.id === originalJobId) {
+          // Add to linked duplicates
+          return {
+            ...job,
+            linkedDuplicateIds: [...(job.linkedDuplicateIds || []), duplicateJobId]
+          };
+        }
+        return job;
+      })
+    }));
+
+    setShowDuplicateModal(false);
+    setDuplicateJobId(null);
+    showToast('Job marked as duplicate and archived', 'success');
+  } catch (error) {
+    console.error('Error marking job as duplicate:', error);
+    showToast('Failed to mark job as duplicate. Please try again.', 'error');
+  }
+};
+
+const handleLinkResume = async (jobId: string, resumeId: string) => {
+  const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
+  if (!jobDescription) return;
+
+  const updatedJobDescription: JobDescription = {
+    ...jobDescription,
+    // Document linking feature removed
+  };
+
+  try {
+    await saveJobDescription(updatedJobDescription);
+    setState(prev => ({
+      ...prev,
+      jobDescriptions: prev.jobDescriptions.map(jd =>
+        jd.id === jobId ? updatedJobDescription : jd
+      )
+    }));
+  } catch (error) {
+    console.error('Error linking resume:', error);
+    showToast('Failed to link resume. Please try again.', 'error');
+  }
+};
+
+const handleLinkCoverLetter = async (jobId: string, coverLetterId: string) => {
+  const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
+  if (!jobDescription) return;
+
+  const updatedJobDescription: JobDescription = {
+    ...jobDescription,
+    // Document linking feature removed
+  };
+
+  try {
+    await saveJobDescription(updatedJobDescription);
+    setState(prev => ({
+      ...prev,
+      jobDescriptions: prev.jobDescriptions.map(jd =>
+        jd.id === jobId ? updatedJobDescription : jd
+      )
+    }));
+  } catch (error) {
+    console.error('Error linking cover letter:', error);
+    showToast('Failed to link cover letter. Please try again.', 'error');
+  }
+};
+
+const handleStatusChange = (jobId: string, status: JobDescription['applicationStatus'], interviewStage?: JobDescription['interviewStage'], offerStage?: JobDescription['offerStage']) => managementHandlers.handleStatusChange(jobId, status, interviewStage, offerStage, state, setState, showToast);
+
+const handleQuickNote = (jobId: string, noteText: string) => managementHandlers.handleQuickNote(jobId, noteText, state, setState);
+
+const handleEditNotes = (jobId: string) => managementHandlers.handleEditNotes(jobId, setEditingNotesId, setTempNotes, state);
+
+const handleSaveNotes = (jobId: string) => managementHandlers.handleSaveNotes(jobId, tempNotes, state, setState, setEditingNotesId, setTempNotes);
+    } catch (error) {
+  console.error('Error saving notes:', error);
+  alert('Failed to save notes. Please try again.');
+}
+  };
+
+const handleCancelNotesEdit = () => managementHandlers.handleCancelNotesEdit(setEditingNotesId, setTempNotes);
+
+
+
+// Generation handlers now provided by useGenerationHandlers hook
+const handleGenerateResume = (jobDescription: JobDescription) => generationHandlers.handleGenerateResume(jobDescription, showToast);
+setIsGenerating(false);
+setIsGeneratingResume(false);
+    }
+  };
+
+// Generate tailored cover letter
+const handleGenerateCoverLetter = (jobDescription: JobDescription) => generationHandlers.handleGenerateCoverLetter(jobDescription, showToast);
+
+const handleSaveGenerated = (name: string, content: string) => generationHandlers.handleSaveGenerated(name, content, selectedJob, showToast, setState);
+
+const handleCSVImport = (jobDescriptions: JobDescription[]) => generationHandlers.handleCSVImport(jobDescriptions, setState, showToast);
+console.error('Error importing CSV:', error);
+showToast(`Failed to import job descriptions: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+    }
+  };
+
+// Simple preview function that opens content in new tab
+const handlePreviewDocument = (document: Resume | CoverLetter) => {
+  const content = document.textContent || 'No content available';
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  // Clean up the URL object after a short delay
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+};
+
+
+
+
+
+const selectedJob = selectedJobId ? state.jobDescriptions.find(jd => jd.id === selectedJobId) : null;
+
+// Calculate statistics for components
+const totalJobs = state.jobDescriptions.length;
+const activeJobs = state.jobDescriptions.filter(jd => !jd.isArchived && jd.applicationStatus !== 'rejected').length;
+const waitingJobs = state.jobDescriptions.filter(jd => jd.waitingForResponse).length;
+const unparsedJobsCount = state.jobDescriptions.filter(jd => !jd.extractedInfo || (!jd.extractedInfo.requiredSkills?.length && !jd.extractedInfo.preferredSkills?.length)).length;
+
+return (
+    <div className="job-descriptions-page">
+      <TabNavigation
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onAddJob={() => setScraperModalOpen(true)}
+        onImportCSV={() => setShowCSVImportModal(true)}
+        onExport={handleExportData}
+        onImport={() => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.json';
+          input.onchange = handleImportData;
+          input.click();
+        }}
+        onReminderSettings={() => setShowReminderSettings(true)}
+        isExporting={isExporting}
+        isImporting={isImporting}
+      />
+
+      <MainTabContent
+        activeTab={activeTab}
+        state={state}
+        showArchivedJobs={showArchivedJobs}
+        setShowArchivedJobs={setShowArchivedJobs}
+        hideRejectedJobs={hideRejectedJobs}
+        setHideRejectedJobs={setHideRejectedJobs}
+        showOnlyWaitingJobs={showOnlyWaitingJobs}
+        setShowOnlyWaitingJobs={setShowOnlyWaitingJobs}
+        showUnparsedFirst={showUnparsedFirst}
+        setShowUnparsedFirst={setShowUnparsedFirst}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        editingNotesId={editingNotesId}
+        tempNotes={tempNotes}
+        setTempNotes={setTempNotes}
+        selectedJob={selectedJob}
+        onJobSelect={setSelectedJobId}
+        onDeleteJob={handleDeleteJobDescription}
+        onArchiveJob={handleArchiveJob}
+        onUnarchiveJob={handleUnarchiveJob}
+        onToggleWaiting={handleToggleWaitingForResponse}
+        onStatusChange={handleStatusChange}
+        onQuickNote={handleQuickNote}
+        onEditNotes={handleEditNotes}
+        onSaveNotes={handleSaveNotes}
+        onCancelNotes={handleCancelNotesEdit}
+        onGenerateResume={handleGenerateResume}
+        onGenerateCoverLetter={handleGenerateCoverLetter}
+        onEditJob={handleEditJobDescription}
+        onPreviewJob={setJobBeingPreviewed}
+        onProcessJob={handleProcessJob}
+        totalJobs={totalJobs}
+        activeJobs={activeJobs}
+        waitingJobs={waitingJobs}
+        unparsedJobsCount={unparsedJobsCount}
+        statsData={statsData}
+        chartType={chartType}
+        setChartType={setChartType}
+        showExpandedStats={showExpandedStats}
+        setShowExpandedStats={setShowExpandedStats}
+      />
+
+      {/* Disabled legacy form and content */}
+      {false && (
+        <AddJobForm
+          editingJobId={editingJobId}
+          formData={formData}
+          setFormData={setFormData}
+          isProcessing={formHandlers.isProcessing}
+          onSave={handleSaveJobDescription}
+          onCancel={handleCancelEdit}
+          getNextSequentialId={getNextSequentialId}
+          onFetchURL={handleFetchURL}
+          isFetchingURL={formHandlers.isFetchingURL}
+          fetchError={formHandlers.fetchError}
+          onReparse={handleReparse}
+          isReparsing={formHandlers.isReparsing}
+          lastParseUsage={formHandlers.lastParseUsage}
+        />
+      )}
+
+      {/* Job Descriptions Content */
+                onChange={(e) => {
+                  const newUrl = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    url: newUrl,
+                    // Auto-populate Source 1 with the job listing URL
+                    source1Type: 'url',
+                    source1Content: newUrl
+                  }));
+                  setFetchError(null);
+                }}
+                placeholder="https://company.com/careers/job-id"
+                disabled={isProcessing || isFetchingURL}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={handleFetchURL}
+                disabled={isProcessing || isFetchingURL || !formData.url?.trim()}
+                className="fetch-url-button"
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#007acc',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {isFetchingURL ? 'Fetching...' : 'Fetch JD'}
+              </button>
+            </div>
+            {fetchError && (
+              <div style={{ color: '#e74c3c', fontSize: '12px', marginTop: '4px', padding: '8px', backgroundColor: '#fdf2f2', border: '1px solid #fecaca', borderRadius: '4px' }}>
+                <strong>URL Fetch Failed:</strong> {fetchError}
+                {fetchError?.includes('CORS') && (
+                  <div style={{ marginTop: '4px', fontSize: '11px' }}>
+                    <strong>Workaround:</strong> Open the job posting in a new tab, select all text (Ctrl/Cmd+A), copy it, and paste it in the "Job Description Text" field below.
+                  </div>
+                )}
+              </div>
+            )}
+            <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+              Click "Fetch JD" to automatically extract job details from the URL. Note: LinkedIn, Indeed, and similar sites block direct access - you'll need to copy/paste manually for those.
+            </small>
+          </div>
+          <div className="form-group">
+            <label htmlFor="job-description">
+              Job Description Text *
+            </label>
+            <textarea
+              id="job-description"
+              value={formData.rawText}
+              onChange={(e) => {
+                setFormData(prev => ({ ...prev, rawText: e.target.value }));
+              }}
+              placeholder="Paste the full job description here and AI will auto-extract company name, job title, and other details...
+
+For LinkedIn/Indeed jobs:
+1. Open the job posting in a new tab
+2. Select all text (Ctrl/Cmd + A) 
+3. Copy (Ctrl/Cmd + C)
+4. Paste here (Ctrl/Cmd + V)
+
+AI will automatically fill in the job title and company name fields above!"
+              rows={12}
+              disabled={isProcessing}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+              <small style={{ color: '#666', fontSize: '12px' }}>
+                Include the full job posting text for best AI extraction results.
+              </small>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {lastParseUsage && (
+                  <small style={{
+                    color: '#888',
+                    fontSize: '11px',
+                    background: '#f8f9fa',
+                    padding: '2px 6px',
+                    borderRadius: '3px',
+                    border: '1px solid #e9ecef'
+                  }}
+                    title={`Input: ${lastParseUsage?.promptTokens || 0} tokens, Output: ${lastParseUsage?.completionTokens || 0} tokens, Total: ${lastParseUsage?.totalTokens || 0} tokens`}
+                  >
+                    <FontAwesomeIcon icon={faChartBar} /> {lastParseUsage?.promptTokens || 0}<FontAwesomeIcon icon={faArrowUp} /> {lastParseUsage?.completionTokens || 0}<FontAwesomeIcon icon={faArrowDown} /> • <FontAwesomeIcon icon={faDollarSign} /> {lastParseUsage ? estimateCost({ promptTokens: lastParseUsage?.promptTokens || 0, completionTokens: lastParseUsage?.completionTokens || 0 }) : '$0'}
+                  </small>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleReparse}
+                  disabled={isProcessing || isReparsing || !formData.rawText.trim()}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="Re-analyze the job description text with AI to extract missing company/title info"
+                >
+                  {isReparsing ? 'Re-parsing...' : <><FontAwesomeIcon icon={faSync} /> Re-parse with AI</>}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* New edit fields */ }
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="job-role">Role/Position</label>
+              <input
+                id="job-role"
+                type="text"
+                value={formData.role}
+                onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+                placeholder="e.g., Senior Software Engineer, Product Manager"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="job-location">Location</label>
+              <input
+                id="job-location"
+                type="text"
+                value={formData.location}
+                onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                placeholder="e.g., San Francisco, CA"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group" style={{ width: '200px' }}>
+              <label htmlFor="work-arrangement">Work Arrangement</label>
+              <select
+                id="work-arrangement"
+                value={formData.workArrangement}
+                onChange={(e) => setFormData(prev => ({ ...prev, workArrangement: e.target.value as 'hybrid' | 'remote' | 'office' | '' }))}
+                disabled={isProcessing}
+              >
+                <option value="">Select...</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="remote">Remote</option>
+                <option value="office">Office</option>
+              </select>
+            </div>
+            <div className="form-group" style={{ width: '200px' }}>
+              <label htmlFor="impact-level">
+                <FontAwesomeIcon icon={getImpactIcon(formData.impact) || faMinus} style={{ color: getImpactColor(formData.impact), marginRight: '6px' }} />
+                Impact Level
+              </label>
+              <select
+                id="impact-level"
+                value={formData.impact}
+                onChange={(e) => setFormData(prev => ({ ...prev, impact: e.target.value as 'low' | 'medium' | 'high' | '' }))}
+                disabled={isProcessing}
+              >
+                <option value="">Select...</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="salary-min">Salary Min</label>
+              <input
+                id="salary-min"
+                type="number"
+                value={formData.salaryMin}
+                onChange={(e) => setFormData(prev => ({ ...prev, salaryMin: e.target.value }))}
+                placeholder="120000"
+                disabled={isProcessing}
+              />
+              {formData.salaryMin && (
+                <small style={{ color: '#666', fontSize: '11px' }}>
+                  {formatCurrency(formData.salaryMin)}
+                </small>
+              )}
+            </div>
+            <div className="form-group">
+              <label htmlFor="salary-max">Salary Max</label>
+              <input
+                id="salary-max"
+                type="number"
+                value={formData.salaryMax}
+                onChange={(e) => setFormData(prev => ({ ...prev, salaryMax: e.target.value }))}
+                placeholder="180000"
+                disabled={isProcessing}
+              />
+              {formData.salaryMax && (
+                <small style={{ color: '#666', fontSize: '11px' }}>
+                  {formatCurrency(formData.salaryMax)}
+                </small>
+              )}
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="source1-content">Source 1</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  value={formData.source1Type}
+                  onChange={(e) => setFormData(prev => ({ ...prev, source1Type: e.target.value as 'url' | 'text' }))}
+                  disabled={isProcessing}
+                  style={{ width: '80px' }}
+                >
+                  <option value="url">URL</option>
+                  <option value="text">Text</option>
+                </select>
+                <input
+                  id="source1-content"
+                  type={formData.source1Type === 'url' ? 'url' : 'text'}
+                  value={formData.source1Content}
+                  onChange={(e) => setFormData(prev => ({ ...prev, source1Content: e.target.value }))}
+                  placeholder={formData.source1Type === 'url' ? 'https://example.com' : 'Source description'}
+                  disabled={isProcessing}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="source2-content">Source 2</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  value={formData.source2Type}
+                  onChange={(e) => setFormData(prev => ({ ...prev, source2Type: e.target.value as 'url' | 'text' }))}
+                  disabled={isProcessing}
+                  style={{ width: '80px' }}
+                >
+                  <option value="url">URL</option>
+                  <option value="text">Text</option>
+                </select>
+                <input
+                  id="source2-content"
+                  type={formData.source2Type === 'url' ? 'url' : 'text'}
+                  value={formData.source2Content}
+                  onChange={(e) => setFormData(prev => ({ ...prev, source2Content: e.target.value }))}
+                  placeholder={formData.source2Type === 'url' ? 'https://example.com' : 'Source description'}
+                  disabled={isProcessing}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div className="form-group">
+              <label htmlFor="contact-name">Contact Name (Recruiter/Hiring Manager)</label>
+              <input
+                id="contact-name"
+                type="text"
+                value={formData.contactName}
+                onChange={(e) => setFormData(prev => ({ ...prev, contactName: e.target.value }))}
+                placeholder="e.g., Jane Smith (for LinkedIn messaging)"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="contact-email">Contact Email</label>
+              <input
+                id="contact-email"
+                type="email"
+                value={formData.contactEmail}
+                onChange={(e) => setFormData(prev => ({ ...prev, contactEmail: e.target.value }))}
+                placeholder="e.g., recruiter@company.com"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="contact-phone">Contact Phone</label>
+              <input
+                id="contact-phone"
+                type="tel"
+                value={formData.contactPhone}
+                onChange={(e) => setFormData(prev => ({ ...prev, contactPhone: e.target.value }))}
+                placeholder="e.g., (555) 123-4567"
+                disabled={isProcessing}
+              />
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="application-date">Application Date</label>
+              <input
+                id="application-date"
+                type="date"
+                value={formData.applicationDate}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicationDate: e.target.value }))}
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="application-status">Application Status</label>
+              <select
+                id="application-status"
+                value={formData.applicationStatus}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicationStatus: (e.target.value as JobDescription['applicationStatus']) || 'not_applied' }))}
+                disabled={isProcessing}
+              >
+                <option value="">Select...</option>
+                <option value="not_applied">Not Applied</option>
+                <option value="applied">Applied</option>
+                <option value="interviewing">Interviewing</option>
+                <option value="rejected">Rejected</option>
+                <option value="offered">Offered</option>
+                <option value="withdrawn">Withdrawn</option>
+                <option value="duplicate">Duplicate</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="additional-context">Additional Context (Optional)</label>
+            <textarea
+              id="additional-context"
+              value={formData.additionalContext}
+              onChange={(e) => setFormData(prev => ({ ...prev, additionalContext: e.target.value }))}
+              placeholder="Add any additional context that will help generate resumes and cover letters (e.g., bio info, recommendations, ChatGPT summaries, company insights, etc.)"
+              rows={6}
+              disabled={isProcessing}
+            />
+            <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+              This context will be used when generating tailored resumes and cover letters for this position. After parsing, extracted job details will also be stored here for easy access.
+            </small>
+          </div>
+
+{/* Notes field - only show when editing existing job */ }
+{
+  editingJobId && (
+    <div className="form-group">
+      <label htmlFor="notes">Notes (Optional)</label>
+      <textarea
+        id="notes"
+        value={formData.notes}
+        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+        placeholder="Add personal notes about this job (application status, interview notes, follow-ups, etc.)"
+        rows={4}
+        disabled={isProcessing}
+      />
+      <small style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
+        Use this space for personal tracking notes, interview feedback, follow-up reminders, and other observations.
+      </small>
+    </div>
+  )
+}
+
+<div className="form-actions">
+  <button
+    onClick={handleCancelEdit}
+    disabled={isProcessing}
+    className="cancel-button"
+  >
+    Cancel
+  </button>
+  <button
+    onClick={handleSaveJobDescription}
+    disabled={isProcessing}
+    className="save-button"
+  >
+    {isProcessing ? 'Saving...' : editingJobId ? 'Update Job Description' : 'Save Job Description'}
+  </button>
+</div>
+        </div >
+      )}
+
+{
+  activeTab === 'job-descriptions' && state.jobDescriptions.length > 0 && (
+        <JobStatsSection
+          statsData={statsData}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          showExpandedStats={showExpandedStats}
+          setShowExpandedStats={setShowExpandedStats}
+          chartType={chartType}
+          setChartType={setChartType}
+        />
+      )}
+
+              return (
+                <>
+                  <div className="stats-header">
+                    <h3>Application Status Overview</h3>
+                    <div className="stats-header-controls">
+                      <span className="total-count">Total Jobs: {total}</span>
+                      <span className="total-count" style={{ marginLeft: "1rem", color: "#007bff", fontWeight: "600" }}>Applied: {totalApplications}</span>
+                      {statusFilter && (
+                        <button
+                          className="clear-filter-btn"
+                          onClick={() => setStatusFilter('')}
+                          title={`Clear ${statusFilter} status filter`}
+                        >
+                          ✕ Clear Filter ({statusFilter.replace('_', ' ')})
+                        </button>
+                      )}
+                      <button
+                        className="expand-stats-btn"
+                        onClick={() => setShowExpandedStats(!showExpandedStats)}
+                        title={showExpandedStats ? "Hide detailed analytics" : "Show detailed analytics"}
+                      >
+                        {showExpandedStats ? '▼ Less Stats' : '▲ More Stats'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="stats-grid">
+                    <div
+                      className={`stat-item not-applied clickable ${statusFilter === 'not_applied' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'not_applied' ? '' : 'not_applied')}
+                      title="Click to filter by Not Applied status"
+                    >
+                      <span className="stat-label">Not Applied</span>
+                      <span className="stat-value">{stats.not_applied}</span>
+                    </div>
+                    <div
+                      className={`stat-item applied clickable ${statusFilter === 'applied' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'applied' ? '' : 'applied')}
+                      title="Click to filter by Applied status"
+                    >
+                      <span className="stat-label">Applied</span>
+                      <span className="stat-value">{stats.applied}</span>
+                    </div>
+                    <div
+                      className={`stat-item interviewing clickable ${statusFilter === 'interviewing' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'interviewing' ? '' : 'interviewing')}
+                      title="Click to filter by Interviewing status"
+                    >
+                      <span className="stat-label">Interviewing</span>
+                      <span className="stat-value">{stats.interviewing}</span>
+                    </div>
+                    <div
+                      className={`stat-item offered clickable ${statusFilter === 'offered' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'offered' ? '' : 'offered')}
+                      title="Click to filter by Offered status"
+                    >
+                      <span className="stat-label">Offered</span>
+                      <span className="stat-value">{stats.offered}</span>
+                    </div>
+                    <div
+                      className={`stat-item rejected clickable ${statusFilter === 'rejected' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'rejected' ? '' : 'rejected')}
+                      title="Click to filter by Rejected status"
+                    >
+                      <span className="stat-label">Rejected</span>
+                      <span className="stat-value">{stats.rejected}</span>
+                    </div>
+                    <div
+                      className={`stat-item withdrawn clickable ${statusFilter === 'withdrawn' ? 'active-filter' : ''}`}
+                      onClick={() => setStatusFilter(statusFilter === 'withdrawn' ? '' : 'withdrawn')}
+                      title="Click to filter by Withdrawn status"
+                    >
+                      <span className="stat-label">Withdrawn</span>
+                      <span className="stat-value">{stats.withdrawn}</span>
+                    </div>
+                  </div>
+
+                  {showExpandedStats && (
+                    <div className="expanded-stats">
+                      <div className="analytics-section">
+                        <h4><FontAwesomeIcon icon={faChartBar} /> Advanced Analytics</h4>
+                        <div className="analytics-grid">
+                          <div className="analytics-item">
+                            <span className="analytics-label">Days Since First</span>
+                            <span className="analytics-value">{daysSinceFirst}</span>
+                          </div>
+                          <div className="analytics-item">
+                            <span className="analytics-label">Total Applications</span>
+                            <span className="analytics-value">{totalApplications}</span>
+                          </div>
+                          <div className="analytics-item">
+                            <span className="analytics-label">Pending (Applied Status)</span>
+                            <span className="analytics-value">{stats.applied}</span>
+                          </div>
+                          <div className="analytics-item">
+                            <span className="analytics-label">High Impact Ratio</span>
+                            <span className="analytics-value">{impactRatio}%</span>
+                          </div>
+                          <div className="analytics-item">
+                            <span className="analytics-label">Success Rate</span>
+                            <span className="analytics-value">{totalApplications > 0 ? ((stats.offered / totalApplications) * 100).toFixed(0) : '0'}%</span>
+                          </div>
+                        </div>
+
+                        <div className="ai-cost-section">
+                          <h4>🤖 AI Usage & Costs</h4>
+                          <div className="analytics-grid">
+                            <div className="analytics-item ai-cost">
+                              <span className="analytics-label">Total Tokens</span>
+                              <span className="analytics-value">{aiStats.totalTokens.toLocaleString()}</span>
+                            </div>
+                            <div className="analytics-item ai-cost">
+                              <span className="analytics-label">Est. Cost</span>
+                              <span className="analytics-value">${aiStats.totalCost.toFixed(4)}</span>
+                            </div>
+                            <div className="analytics-item ai-cost">
+                              <span className="analytics-label">Parse Count</span>
+                              <span className="analytics-value">{aiStats.parseCount}</span>
+                            </div>
+                            <div className="analytics-item ai-cost">
+                              <span className="analytics-label">Avg Cost/Job</span>
+                              <span className="analytics-value">${aiStats.jobsWithAI > 0 ? (aiStats.totalCost / aiStats.jobsWithAI).toFixed(4) : '0.0000'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="storage-monitor-section" style={{ marginBottom: '1.5rem' }}>
+                        <StorageMonitor />
+                      </div>
+
+                      <div className="impact-section">
+                        <h4>🎯 Impact Levels</h4>
+                        <div className="impact-grid">
+                          <div className="impact-item low">
+                            <span className="impact-label">Low Impact</span>
+                            <span className="impact-value">{impactStats.low}</span>
+                          </div>
+                          <div className="impact-item medium">
+                            <span className="impact-label">Medium Impact</span>
+                            <span className="impact-value">{impactStats.medium}</span>
+                          </div>
+                          <div className="impact-item high">
+                            <span className="impact-label">High Impact</span>
+                            <span className="impact-value">{impactStats.high}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="charts-section">
+                        <div className="charts-header">
+                          <h4>📈 Resume Application Velocity</h4>
+                          <div className="chart-type-toggle">
+                            <button
+                              className={`chart-toggle-btn ${chartType === 'bar' ? 'active' : ''}`}
+                              onClick={() => setChartType('bar')}
+                            >
+                              <FontAwesomeIcon icon={faChartBar} /> Bars
+                            </button>
+                            <button
+                              className={`chart-toggle-btn ${chartType === 'line' ? 'active' : ''}`}
+                              onClick={() => setChartType('line')}
+                            >
+                              📈 Lines
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="chart-container">
+                          <h4>Daily Resume Applications (Last 14 Days)</h4>
+                          {chartType === 'bar' ? (
+                            <div className="mini-chart daily-chart bar-chart">
+                              {dailyData.map((day, idx) => (
+                                <div key={idx} className="chart-bar-container">
+                                  <div
+                                    className="chart-bar"
+                                    style={{
+                                      height: `${Math.max(day.count * 20, 4)}px`,
+                                      backgroundColor: day.count > 0 ? '#007bff' : '#e9ecef'
+                                    }}
+                                    title={`${day.displayDate}: ${day.count} resume applications`}
+                                  ></div>
+                                  <span className="chart-label">{day.displayDate}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="line-chart-container">
+                              <svg className="line-chart daily-line-chart" viewBox="0 0 400 80" preserveAspectRatio="none">
+                                <defs>
+                                  <linearGradient id="dailyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stopColor="#007bff" stopOpacity="0.3" />
+                                    <stop offset="100%" stopColor="#007bff" stopOpacity="0.1" />
+                                  </linearGradient>
+                                </defs>
+                                {/* Grid lines */}
+                                {[0, 1, 2, 3, 4].map(i => (
+                                  <line
+                                    key={i}
+                                    x1="0"
+                                    y1={i * 20}
+                                    x2="400"
+                                    y2={i * 20}
+                                    stroke="#e9ecef"
+                                    strokeWidth="0.5"
+                                  />
+                                ))}
+                                {/* Data line */}
+                                <polyline
+                                  fill="none"
+                                  stroke="#007bff"
+                                  strokeWidth="2"
+                                  points={dailyData.map((day, idx) =>
+                                    `${(idx / (dailyData.length - 1)) * 400},${80 - Math.min(day.count * 20, 76)}`
+                                  ).join(' ')}
+                                />
+                                {/* Area fill */}
+                                <polygon
+                                  fill="url(#dailyGradient)"
+                                  points={`0,80 ${dailyData.map((day, idx) =>
+                                    `${(idx / (dailyData.length - 1)) * 400},${80 - Math.min(day.count * 20, 76)}`
+                                  ).join(' ')} 400,80`}
+                                />
+                                {/* Data points */}
+                                {dailyData.map((day, idx) => (
+                                  <circle
+                                    key={idx}
+                                    cx={(idx / (dailyData.length - 1)) * 400}
+                                    cy={80 - Math.min(day.count * 20, 76)}
+                                    r="3"
+                                    fill="#007bff"
+                                    stroke="#ffffff"
+                                    strokeWidth="2"
+                                  >
+                                    <title>{`${day.displayDate}: ${day.count} resume applications`}</title>
+                                  </circle>
+                                ))}
+                              </svg>
+                              <div className="line-chart-labels">
+                                {dailyData.filter((_, idx) => idx % 2 === 0).map((day, idx) => (
+                                  <span key={idx} className="line-chart-label">{day.displayDate}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="chart-container">
+                          <h4>Weekly Resume Applications (Last 8 Weeks)</h4>
+                          {chartType === 'bar' ? (
+                            <div className="mini-chart weekly-chart bar-chart">
+                              {weeklyData.map((week, idx) => (
+                                <div key={idx} className="chart-bar-container">
+                                  <div
+                                    className="chart-bar"
+                                    style={{
+                                      height: `${Math.max(week.count * 8, 4)}px`,
+                                      backgroundColor: week.count > 0 ? '#28a745' : '#e9ecef'
+                                    }}
+                                    title={`Week ${week.week} (${week.startDate}-${week.endDate}): ${week.count} resume applications`}
+                                  ></div>
+                                  <span className="chart-label">{week.week}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="line-chart-container">
+                              <svg className="line-chart weekly-line-chart" viewBox="0 0 400 80" preserveAspectRatio="none">
+                                <defs>
+                                  <linearGradient id="weeklyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stopColor="#28a745" stopOpacity="0.3" />
+                                    <stop offset="100%" stopColor="#28a745" stopOpacity="0.1" />
+                                  </linearGradient>
+                                </defs>
+                                {/* Grid lines */}
+                                {[0, 1, 2, 3, 4].map(i => (
+                                  <line
+                                    key={i}
+                                    x1="0"
+                                    y1={i * 20}
+                                    x2="400"
+                                    y2={i * 20}
+                                    stroke="#e9ecef"
+                                    strokeWidth="0.5"
+                                  />
+                                ))}
+                                {/* Data line */}
+                                <polyline
+                                  fill="none"
+                                  stroke="#28a745"
+                                  strokeWidth="2"
+                                  points={weeklyData.map((week, idx) =>
+                                    `${(idx / (weeklyData.length - 1)) * 400},${80 - Math.min(week.count * 10, 76)}`
+                                  ).join(' ')}
+                                />
+                                {/* Area fill */}
+                                <polygon
+                                  fill="url(#weeklyGradient)"
+                                  points={`0,80 ${weeklyData.map((week, idx) =>
+                                    `${(idx / (weeklyData.length - 1)) * 400},${80 - Math.min(week.count * 10, 76)}`
+                                  ).join(' ')} 400,80`}
+                                />
+                                {/* Data points */}
+                                {weeklyData.map((week, idx) => (
+                                  <circle
+                                    key={idx}
+                                    cx={(idx / (weeklyData.length - 1)) * 400}
+                                    cy={80 - Math.min(week.count * 10, 76)}
+                                    r="3"
+                                    fill="#28a745"
+                                    stroke="#ffffff"
+                                    strokeWidth="2"
+                                  >
+                                    <title>{`Week ${week.week} (${week.startDate}-${week.endDate}): ${week.count} resume applications`}</title>
+                                  </circle>
+                                ))}
+                              </svg>
+                              <div className="line-chart-labels">
+                                {weeklyData.map((week, idx) => (
+                                  <span key={idx} className="line-chart-label">{week.week}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div >
+      )
+}
+
+{
+  activeTab === 'job-descriptions' && (
+    <JobDescriptionsContent
+      state={state}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      showArchivedJobs={showArchivedJobs}
+      setShowArchivedJobs={setShowArchivedJobs}
+      hideRejectedJobs={hideRejectedJobs}
+      setHideRejectedJobs={setHideRejectedJobs}
+      showOnlyWaitingJobs={showOnlyWaitingJobs}
+      setShowOnlyWaitingJobs={setShowOnlyWaitingJobs}
+      showUnparsedFirst={showUnparsedFirst}
+      setShowUnparsedFirst={setShowUnparsedFirst}
+      statusFilter={statusFilter}
+      selectedJobId={selectedJobId}
+      setSelectedJobId={setSelectedJobId}
+      onEditJob={handleEditJobDescription}
+      onDeleteJob={handleDeleteJobDescription}
+      onArchiveJob={handleArchiveJob}
+      onUnarchiveJob={handleUnarchiveJob}
+      onMarkDuplicate={handleMarkDuplicate}
+      onStatusChange={handleStatusChange}
+      onToggleWaitingForResponse={handleToggleWaitingForResponse}
+      onProcessJob={handleProcessJob}
+      onQuickNote={handleQuickNote}
+    />
+            {
+    state.jobDescriptions.length === 0 ? (
+      <div className="empty-state">
+        <p>No job descriptions yet. Add one to get started!</p>
+      </div>
+    ) : (
+    <>
+      <div className="job-filters">
+        <div className="search-container">
+          <input
+            type="text"
+            placeholder="Search jobs (company, title, role...)"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+          />
+        </div>
+        <label className="filter-checkbox">
+          <input
+            type="checkbox"
+            checked={showArchivedJobs}
+            onChange={(e) => setShowArchivedJobs(e.target.checked)}
+          />
+          Show archived jobs
+        </label>
+        <label className="filter-checkbox">
+          <input
+            type="checkbox"
+            checked={hideRejectedJobs}
+            onChange={(e) => setHideRejectedJobs(e.target.checked)}
+          />
+          Hide rejected applications
+        </label>
+        <label className="filter-checkbox">
+          <input
+            type="checkbox"
+            checked={showOnlyWaitingJobs}
+            onChange={(e) => setShowOnlyWaitingJobs(e.target.checked)}
+          />
+          Show only waiting for response
+        </label>
+        <label className="filter-checkbox">
+          <input
+            type="checkbox"
+            checked={showUnparsedFirst}
+            onChange={(e) => setShowUnparsedFirst(e.target.checked)}
+          />
+          Show unparsed jobs first
+        </label>
+      </div>
+
+
+
+      <div className={`jobs-layout ${selectedJob ? 'split-view' : 'full-width'}`}>
+        <JobManagementTable
+          jobs={(() => {
+            let filteredJobs = state.jobDescriptions;
+
+            // Filter out archived/duplicates if not showing archived
+            if (!showArchivedJobs) {
+              filteredJobs = filteredJobs.filter(job =>
+                !job.isArchived &&
+                job.applicationStatus !== 'archived' &&
+                job.applicationStatus !== 'duplicate'
+              );
+            }
+
+            // Filter out rejected if hiding rejected
+            if (hideRejectedJobs) {
+              filteredJobs = filteredJobs.filter(job =>
+                job.applicationStatus !== 'rejected'
+              );
+            }
+
+            // Show only waiting jobs if filter is enabled
+            if (showOnlyWaitingJobs) {
+              filteredJobs = filteredJobs.filter(job =>
+                job.waitingForResponse === true
+              );
+            }
+
+            // Apply status filter
+            if (statusFilter) {
+              filteredJobs = filteredJobs.filter(job => {
+                const jobStatus = job.applicationStatus || 'not_applied';
+                return jobStatus === statusFilter;
+              });
+            }
+
+            // Apply search filter
+            if (searchQuery.trim()) {
+              const query = searchQuery.toLowerCase().trim();
+              filteredJobs = filteredJobs.filter(job =>
+                job.company.toLowerCase().includes(query) ||
+                job.title.toLowerCase().includes(query) ||
+                (job.role && job.role.toLowerCase().includes(query)) ||
+                (job.extractedInfo.role && job.extractedInfo.role.toLowerCase().includes(query)) ||
+                (job.location && job.location.toLowerCase().includes(query)) ||
+                (job.extractedInfo.location && job.extractedInfo.location.toLowerCase().includes(query)) ||
+                (job.source && job.source.toLowerCase().includes(query))
+              );
+            }
+
+            // Sort to prioritize unparsed jobs if enabled
+            if (showUnparsedFirst) {
+              filteredJobs = filteredJobs.sort((a, b) => {
+                const aUnparsed = isJobUnparsed(a);
+                const bUnparsed = isJobUnparsed(b);
+
+                // Unparsed jobs first
+                if (aUnparsed && !bUnparsed) return -1;
+                if (!aUnparsed && bUnparsed) return 1;
+
+                // Within same category (both parsed or both unparsed), sort by upload date (newest first)
+                const aDate = new Date(a.uploadDate).getTime();
+                const bDate = new Date(b.uploadDate).getTime();
+                return bDate - aDate;
+              });
+            }
+
+            return filteredJobs;
+          })()}
+          onEdit={handleEditJobDescription}
+          onDelete={handleDeleteJobDescription}
+          onArchive={handleArchiveJob}
+          onUnarchive={handleUnarchiveJob}
+          onMarkDuplicate={handleMarkDuplicate}
+          onStatusChange={handleStatusChange}
+          onToggleWaitingForResponse={handleToggleWaitingForResponse}
+          onProcessJob={handleProcessJob}
+          onSelect={setSelectedJobId}
+          selectedJobId={selectedJobId}
+          preserveOrder={showUnparsedFirst}
+        />
+
+        {selectedJob && (
+          <JobDetailsPanel
+            selectedJob={selectedJob}
+            onClose={() => setSelectedJobId(null)}
+            onEdit={handleEditJobDescription}
+            onDelete={handleDeleteJobDescription}
+            onQuickNote={handleQuickNote}
+          />
+        )}
+      </div>
+    </>
+  )
+  }
+          </div >
+        )
+}
+      </div >
+
+      <GeneratedContentModal
+        isOpen={showGeneratedModal}
+        onClose={() => setShowGeneratedModal(false)}
+        onSave={handleSaveGenerated}
+        title={generatedTitle}
+        content={generatedContent}
+        isLoading={isGenerating}
+        error={generationError || undefined}
+        defaultName={generatedDefaultName}
+      />
+
+
+
+      <ModalManager
+        showGeneratedModal={showGeneratedModal}
+        generatedTitle={generatedTitle}
+        generatedContent={generatedContent}
+        isGenerating={isGenerating}
+        generationError={generationError}
+        generatedDefaultName={generatedDefaultName}
+        onCloseGeneratedModal={() => setShowGeneratedModal(false)}
+        onSaveGenerated={handleSaveGenerated}
+        
+        showCSVImportModal={showCSVImportModal}
+        onCloseCSVImportModal={() => setShowCSVImportModal(false)}
+        onCSVImport={handleCSVImport}
+        existingJobs={state.jobDescriptions}
+        
+        scraperModalOpen={scraperModalOpen}
+        onCloseScraperModal={() => setScraperModalOpen(false)}
+        onJobCreated={handleScrapedJobCreated}
+        
+        jobBeingEdited={jobBeingEdited}
+        editModalOpen={editModalOpen}
+        onCloseEditModal={() => {
+          setEditModalOpen(false);
+          setJobBeingEdited(null);
+        }}
+        onSaveEditedJob={handleSaveEditedJob}
+        
+        showDuplicateModal={showDuplicateModal}
+        duplicateJobId={duplicateJobId}
+        duplicateSearchQuery={duplicateSearchQuery}
+        onCloseDuplicateModal={() => setShowDuplicateModal(false)}
+        onDuplicateSearchChange={setDuplicateSearchQuery}
+        onConfirmDuplicate={handleConfirmDuplicate}
+        
+        showReminderSettings={showReminderSettings}
+        onCloseReminderSettings={() => setShowReminderSettings(false)}
+        onJobUpdate={(updatedJob: JobDescription) => {
+          setState(prev => ({
+            ...prev,
+            jobDescriptions: prev.jobDescriptions.map(jd =>
+              jd.id === updatedJob.id ? updatedJob : jd
+            )
+          }));
+          saveJobDescription(updatedJob).catch(error => {
+            console.error('Error saving job description:', error);
+            showToast('Failed to save job description. Please try again.', 'error');
+          });
+        }}
+        jobs={state.jobDescriptions.filter(job =>
+          !job.isArchived &&
+          job.applicationStatus !== 'archived' &&
+          job.applicationStatus !== 'duplicate'
+        )}
+      />
+
+      <ToastNotification toasts={toasts} onRemoveToast={removeToast} />
+
+{/* Floating Action Reminder Panel */ }
+<ActionReminderPanel
+  floating={true}
+  jobs={(() => {
+    let filteredJobs = state.jobDescriptions;
+
+    // Filter out archived/duplicates for reminders
+    filteredJobs = filteredJobs.filter(job =>
+      !job.isArchived &&
+      job.applicationStatus !== 'archived' &&
+      job.applicationStatus !== 'duplicate'
+    );
+
+    return filteredJobs;
+  })()}
+  onJobUpdate={(updatedJob: JobDescription) => {
+    setState(prev => ({
+      ...prev,
+      jobDescriptions: prev.jobDescriptions.map(jd =>
+        jd.id === updatedJob.id ? updatedJob : jd
+      )
+    }));
+
+    // Save to storage
+    saveJobDescription(updatedJob).catch(error => {
+      console.error('Error saving job description:', error);
+      showToast('Failed to save job description. Please try again.', 'error');
+    });
+  }}
+/>
+    </div >
+  );
+};
+
+export default JobDescriptionsPage;

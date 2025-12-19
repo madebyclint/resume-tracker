@@ -1,0 +1,117 @@
+/* Tab Navigation Styles */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 0 16px;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 16px;
+}
+
+.tab-navigation {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-button {
+  padding: 12px 20px;
+  border: 2px solid #dee2e6;
+  background: #f8f9fa;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-button:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.tab-button.active {
+  background: #007bff;
+  color: white;
+  border-color: #0056b3;
+}
+
+.tab-button.active:hover {
+  background: #0056b3;
+}
+
+.job-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.add-job-button,
+.import-csv-button,
+.export-button,
+.import-button,
+.reminder-settings-button {
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-job-button.primary {
+  background: #28a745;
+  color: white;
+  border-color: #1e7e34;
+}
+
+.add-job-button.primary:hover {
+  background: #218838;
+  border-color: #1e7e34;
+}
+
+.import-csv-button {
+  background: #17a2b8;
+  color: white;
+  border-color: #138496;
+}
+
+.import-csv-button:hover {
+  background: #138496;
+}
+
+.export-button,
+.import-button {
+  background: #6c757d;
+  color: white;
+  border-color: #545b62;
+}
+
+.export-button:hover,
+.import-button:hover {
+  background: #545b62;
+}
+
+.export-button:disabled,
+.import-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reminder-settings-button {
+  background: #fd7e14;
+  color: white;
+  border-color: #e55a00;
+}
+
+.reminder-settings-button:hover {
+  background: #e55a00;
+}

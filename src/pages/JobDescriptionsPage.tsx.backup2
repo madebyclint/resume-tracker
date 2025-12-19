@@ -287,49 +287,56 @@ const JobDescriptionsPage: React.FC = () => {
     });
     setFetchError(null);
     setIsFetchingURL(false);
-    setLastParseUsage(null);
-  };
-
-  const handleSaveJobDescription = () => {
-    return formHandlers.handleSaveJobDescription(
-      formData, editingJobId, state, setState, showToast, getNextSequentialId,
-      aiParseCache, setAiParseCache, resetFormData
-    );
-  };
-
-  if (parseResult.success && parseResult.extractedInfo) {
-    // Update extracted info
-    newJobDescription.extractedInfo = parseResult.extractedInfo;
-    newJobDescription.keywords = parseResult.keywords || [];
-
-    // Track AI usage (only if not from cache)
-    if (parseResult.usage && !parseResult.fromCache) {
-      const textHash = createTextHash(formData.rawText.trim());
-      const estimatedCost = calculateAICost(parseResult.usage);
-      newJobDescription.aiUsage = {
-        totalTokens: parseResult.usage.totalTokens,
-        promptTokens: parseResult.usage.promptTokens,
-        completionTokens: parseResult.usage.completionTokens,
-        estimatedCost: estimatedCost,
-        parseCount: 1,
-        lastParseDate: new Date().toISOString(),
-        rawTextHash: textHash
-      };
-    } else if (parseResult.fromCache) {
-      // If from cache, set a minimal usage record to track that it was processed
-      const textHash = createTextHash(formData.rawText.trim());
-      newJobDescription.aiUsage = {
-        totalTokens: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        estimatedCost: 0,
-        parseCount: 0,
-        lastParseDate: new Date().toISOString(),
-        rawTextHash: textHash
-      };
+    setLastParseUsage(null); // Clear usage when canceling
+    // Save job handler provided by useJobFormHandlers hook  
+    const handleSaveJobDescription = () => {
+      return formHandlers.handleSaveJobDescription(
+        formData, editingJobId, state, setState, showToast, getNextSequentialId,
+        aiParseCache, setAiParseCache, resetFormData
+      );
+    };
+    setAiParseCache,
+    {
+      applicationDate: new Date().toISOString().split('T')[0],
+      applicationId: sequentialId,
+      impactFocus: 'New Job Description',
+      impactLevel: 'Standard'
     }
+            );
+
+if (parseResult.success && parseResult.extractedInfo) {
+  // Update extracted info
+  newJobDescription.extractedInfo = parseResult.extractedInfo;
+  newJobDescription.keywords = parseResult.keywords || [];
+
+  // Track AI usage (only if not from cache)
+  if (parseResult.usage && !parseResult.fromCache) {
+    const textHash = createTextHash(formData.rawText.trim());
+    const estimatedCost = calculateAICost(parseResult.usage);
+    newJobDescription.aiUsage = {
+      totalTokens: parseResult.usage.totalTokens,
+      promptTokens: parseResult.usage.promptTokens,
+      completionTokens: parseResult.usage.completionTokens,
+      estimatedCost: estimatedCost,
+      parseCount: 1,
+      lastParseDate: new Date().toISOString(),
+      rawTextHash: textHash
+    };
+  } else if (parseResult.fromCache) {
+    // If from cache, set a minimal usage record to track that it was processed
+    const textHash = createTextHash(formData.rawText.trim());
+    newJobDescription.aiUsage = {
+      totalTokens: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      estimatedCost: 0,
+      parseCount: 0,
+      lastParseDate: new Date().toISOString(),
+      rawTextHash: textHash
+    };
   }
-} catch (parseError) {
+}
+          } catch (parseError) {
   console.warn('Failed to parse job description with AI:', parseError);
   // Continue with saving even if AI parsing fails
 }

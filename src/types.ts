@@ -46,10 +46,6 @@ export interface JobDescription {
   keywords: string[]; // for matching
   uploadDate: string;
   
-  // Temporary - will be removed during cleanup
-  linkedResumeIds: string[];
-  linkedCoverLetterIds: string[];
-  
   // CRM-like tracking fields
   applicationStatus?: 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'wont_apply' | 'duplicate' | 'archived';
   interviewStage?: 'screening' | 'first_interview' | 'followup_interview' | 'final_round' | 'assessment'; // sub-status for interviewing
@@ -102,6 +98,7 @@ export interface JobDescription {
   // Action reminders and tracking
   completedActions?: Record<string, string>; // actionType -> timestamp when completed
   snoozedUntil?: Record<string, string>; // actionId -> timestamp when snooze expires
+  
   
   // AI Usage tracking
   aiUsage?: {
