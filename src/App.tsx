@@ -4,6 +4,7 @@ import DashboardPage from "./pages/DashboardPage";
 import JobDescriptionsPage from "./pages/JobDescriptionsPage";
 import ResumeFormatterPage from "./pages/ResumeFormatterPage";
 import { ScraperTestButton } from "./components/ScraperTestButton";
+import { DataMigrationTool } from "./components/DataMigrationTool";
 import "./App.css";
 
 type Page = 'dashboard' | 'jobs' | 'resume-formatter';
@@ -63,6 +64,7 @@ export default function App() {
   return (
     <AppStateProvider>
       <AppShell />
+      <DataMigrationTool />
     </AppStateProvider>
   );
 }

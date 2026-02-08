@@ -2,7 +2,7 @@ import { AppState, Resume, CoverLetter, JobDescription } from "./types";
 import { ScraperCache, ScraperResult } from "./types/scraperTypes";
 
 const DB_NAME = "ResumeTrackerDB";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const RESUME_STORE = "resumes";
 const COVER_LETTER_STORE = "coverLetters";
 const JOB_DESCRIPTION_STORE = "jobDescriptions";
@@ -122,10 +122,20 @@ class IndexedDBStorage {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        console.error('IndexedDB open error:', request.error);
+        reject(request.error);
+      };
+      
       request.onsuccess = () => {
         this.db = request.result;
+        console.log(`Database opened successfully, version: ${this.db.version}`);
         resolve();
+      };
+
+      request.onblocked = () => {
+        console.warn('Database open blocked - please close other tabs');
+        reject(new Error('Database open blocked'));
       };
 
       request.onupgradeneeded = (event) => {
@@ -843,6 +853,44 @@ export async function clearAllData(): Promise<void> {
   }
 }
 
+// Fix for database version mismatch - clears and reinitializes the database
+export async function fixDatabaseVersionMismatch(): Promise<void> {
+  console.log("Fixing database version mismatch...");
+  
+  try {
+    // Close existing connection if any
+    if ((storage as any).db) {
+      (storage as any).db.close();
+      (storage as any).db = null;
+    }
+    
+    // Delete the existing database
+    await new Promise<void>((resolve, reject) => {
+      const deleteReq = indexedDB.deleteDatabase(DB_NAME);
+      deleteReq.onsuccess = () => {
+        console.log("Database deleted successfully");
+        resolve();
+      };
+      deleteReq.onerror = () => {
+        console.error("Failed to delete database:", deleteReq.error);
+        reject(deleteReq.error);
+      };
+      deleteReq.onblocked = () => {
+        console.warn("Database deletion blocked - please close all tabs with this app");
+        reject(new Error("Database deletion blocked"));
+      };
+    });
+    
+    // Reinitialize with current version
+    await storage.init();
+    console.log("Database reinitialized successfully at version", DB_VERSION);
+    
+  } catch (error) {
+    console.error("Failed to fix database version mismatch:", error);
+    throw error;
+  }
+}
+
 
 
 // Job Description exports
@@ -938,11 +986,28 @@ export async function importAllDataFromJSON(jsonString: string, options: {
   try {
     const importData = JSON.parse(jsonString);
     
-    // Validate import data structure
+    // Validate import data structure and handle version compatibility
     if (!importData.version) {
-      result.errors.push("Invalid backup file: missing version information");
+      // Check if this looks like old format data
+      if (importData.resumes || importData.coverLetters || importData.jobDescriptions) {
+        console.warn("Import data missing version, assuming legacy format v1.0");
+        importData.version = "1.0";
+      } else {
+        result.errors.push("Invalid backup file: missing version information and no recognizable data structure");
+        return result;
+      }
+    }
+
+    // Handle version compatibility
+    const importVersion = importData.version;
+    const supportedVersions = ['1.0', '1.1', '1.2'];
+    
+    if (!supportedVersions.includes(importVersion)) {
+      result.errors.push(`Unsupported backup version: ${importVersion}. Supported versions: ${supportedVersions.join(', ')}`);
       return result;
     }
+
+    console.log(`Importing data from backup version: ${importVersion}`);
 
     const { replaceExisting = false, skipDuplicates = true } = options;
 

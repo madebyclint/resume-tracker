@@ -4,4 +4,7 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
-dist
+dist.env
+api/.env
+.DS_Store
+api/dev.db

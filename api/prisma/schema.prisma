@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Resume {
+  id               String   @id @default(cuid())
+  name             String
+  fileName         String
+  fileSize         Int
+  uploadDate       DateTime @default(now())
+  fileData         String   // base64 encoded Word document
+  fileType         String   @default("docx")
+  textContent      String?  // extracted text for search
+  markdownContent  String?  // extracted markdown for export/display
+  detectedCompany  String?  // AI-detected current company
+  detectedRole     String?  // AI-detected current role
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // Relations
+  linkedJobDescriptions JobResumeLink[]
+  
+  @@map("resumes")
+}
+
+model CoverLetter {
+  id               String   @id @default(cuid())
+  name             String
+  fileName         String
+  fileSize         Int
+  uploadDate       DateTime @default(now())
+  fileData         String   // base64 encoded Word document
+  fileType         String   @default("docx")
+  textContent      String?  // extracted text for search
+  markdownContent  String?  // extracted markdown for export/display
+  detectedCompany  String?  // AI-detected target company
+  detectedRole     String?  // AI-detected target role
+  targetCompany    String?  // company this cover letter was written for
+  targetPosition   String?  // position this cover letter was written for
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // Relations
+  linkedJobDescriptions JobCoverLetterLink[]
+  
+  @@map("cover_letters")
+}
+
+model JobDescription {
+  id                String            @id @default(cuid())
+  sequentialId      Int?              // Sequential tracking number
+  title             String
+  company           String
+  role              String?           // Job role/title
+  location          String?           // Job location
+  workArrangement   String?           // Work arrangement (hybrid/remote/office)
+  source1Type       String?           // url or text
+  source1Content    String?
+  source2Type       String?           // url or text  
+  source2Content    String?
+  salaryMin         Int?              // Minimum salary
+  salaryMax         Int?              // Maximum salary
+  salaryRange       String?           // Combined salary range
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  url               String?           // URL of the original job listing
+  rawText           String            // original pasted job description
+  additionalContext String?           // optional additional context
+  keywords          String?           // comma-separated keywords for matching
+  uploadDate        DateTime          @default(now())
+  
+  // Extracted information (stored as JSON-like string)
+  extractedInfo     String?
+  
+  // CRM-like tracking fields
+  applicationStatus String?           @default("not_applied")
+  interviewStage    String?
+  offerStage        String?
+  
+  // Archive and duplicate handling
+  isArchived        Boolean           @default(false)
+  duplicateOfId     String?
+  duplicateOf       JobDescription?   @relation("JobDuplicates", fields: [duplicateOfId], references: [id])
+  duplicates        JobDescription[]  @relation("JobDuplicates")
+  
+  // Timeline and activity
+  applicationDate   DateTime?
+  submissionDate    DateTime?
+  lastActivityDate  DateTime?
+  source            String?           // where the job was found
+  contactPerson     String?           // recruiter or contact person
+  secondaryContact  String?           // additional contact
+  priority          String?           @default("medium")
+  impact            String?           @default("medium")
+  waitingForResponse Boolean          @default(false)
+  followUpDate      DateTime?
+  interviewDates    String?           // comma-separated date strings
+  salaryDiscussed   String?
+  notes             String?
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  // Relations
+  linkedResumes     JobResumeLink[]
+  linkedCoverLetters JobCoverLetterLink[]
+  statusHistory     StatusHistory[]
+  activityLog       ActivityLog[]
+  
+  @@map("job_descriptions")
+}
+
+// Junction table for many-to-many relationships
+model JobResumeLink {
+  id              String          @id @default(cuid())
+  jobDescriptionId String
+  resumeId        String
+  jobDescription  JobDescription  @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  resume          Resume          @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  
+  @@unique([jobDescriptionId, resumeId])
+  @@map("job_resume_links")
+}
+
+model JobCoverLetterLink {
+  id              String          @id @default(cuid())
+  jobDescriptionId String
+  coverLetterId   String
+  jobDescription  JobDescription  @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  coverLetter     CoverLetter     @relation(fields: [coverLetterId], references: [id], onDelete: Cascade)
+  
+  @@unique([jobDescriptionId, coverLetterId])
+  @@map("job_cover_letter_links")
+}
+
+model StatusHistory {
+  id                String               @id @default(cuid())
+  jobDescriptionId  String
+  status            String
+  interviewStage    String?
+  offerStage        String?
+  date              DateTime             @default(now())
+  notes             String?
+  
+  jobDescription    JobDescription       @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  
+  @@map("status_history")
+}
+
+model ActivityLog {
+  id                String               @id @default(cuid())
+  jobDescriptionId  String
+  timestamp         DateTime             @default(now())
+  type              String               // activity type as string
+  fromValue         String?              // JSON string
+  toValue           String?              // JSON string
+  field             String?              // for field_updated type
+  description       String?
+  
+  jobDescription    JobDescription       @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  
+  @@map("activity_log")
+}
+
+model ScraperCache {
+  id           String   @id @default(cuid())
+  inputHash    String   @unique
+  result       String   // JSON string of ScraperResult
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  
+  @@map("scraper_cache")
+}

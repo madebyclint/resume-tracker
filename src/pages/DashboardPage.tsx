@@ -5,9 +5,10 @@ import StatsSection from "../components/StatsSection";
 import ResumeTable from "../components/ResumeTable";
 import CoverLetterTable from "../components/CoverLetterTable";
 import TextPreviewModal from "../components/TextPreviewModal";
+import DatabaseDebugPanel from "../components/DatabaseDebugPanel";
 import { exportAllDataAsJSON, importAllDataFromJSON } from "../storage";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faDownload, faUpload } from '@fortawesome/free-solid-svg-icons';
+import { faDownload, faUpload, faCog } from '@fortawesome/free-solid-svg-icons';
 
 export default function DashboardPage() {
   const { state, setState, isLoading, syncWithStorage } = useAppState();
@@ -17,6 +18,7 @@ export default function DashboardPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
 
   const handleShowPreview = (text: string) => {
     setPreviewText(text);
@@ -169,6 +171,25 @@ export default function DashboardPage() {
             <FontAwesomeIcon icon={faUpload} />
             {isImporting ? 'Importing...' : 'Import Data'}
           </button>
+          <button
+            onClick={() => setShowDebugPanel(true)}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+            title="Database debug tools"
+          >
+            <FontAwesomeIcon icon={faCog} />
+            Debug DB
+          </button>
         </div>
         <StatsSection
           resumes={state.resumes}
@@ -197,6 +218,10 @@ export default function DashboardPage() {
         previewText={previewText}
         onClose={handleClosePreview}
       />
+
+      {showDebugPanel && (
+        <DatabaseDebugPanel onClose={() => setShowDebugPanel(false)} />
+      )}
     </div>
   );
 }
