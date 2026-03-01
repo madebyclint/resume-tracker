@@ -1,6 +1,26 @@
 import { AppState, Resume, CoverLetter, JobDescription } from "./types";
 import { ScraperCache, ScraperResult } from "./types/scraperTypes";
 
+/** Ensure all required array/object fields exist on a loaded job, guarding against older records */
+export function normalizeJobDescription(job: JobDescription): JobDescription {
+  return {
+    ...job,
+    linkedResumeIds: Array.isArray(job.linkedResumeIds) ? job.linkedResumeIds : [],
+    linkedCoverLetterIds: Array.isArray(job.linkedCoverLetterIds) ? job.linkedCoverLetterIds : [],
+    keywords: Array.isArray(job.keywords) ? job.keywords : [],
+    extractedInfo: {
+      ...(job.extractedInfo || {}),
+      requiredSkills: Array.isArray(job.extractedInfo?.requiredSkills) ? job.extractedInfo.requiredSkills : [],
+      preferredSkills: Array.isArray(job.extractedInfo?.preferredSkills) ? job.extractedInfo.preferredSkills : [],
+      responsibilities: Array.isArray(job.extractedInfo?.responsibilities) ? job.extractedInfo.responsibilities : [],
+      requirements: Array.isArray(job.extractedInfo?.requirements) ? job.extractedInfo.requirements : [],
+    },
+    linkedDuplicateIds: Array.isArray(job.linkedDuplicateIds) ? job.linkedDuplicateIds : [],
+    interviewDates: Array.isArray(job.interviewDates) ? job.interviewDates : [],
+    statusHistory: Array.isArray(job.statusHistory) ? job.statusHistory : [],
+  };
+}
+
 const DB_NAME = "ResumeTrackerDB";
 const DB_VERSION = 5;
 const RESUME_STORE = "resumes";
@@ -443,7 +463,9 @@ class IndexedDBStorage {
     const jobDescriptions = await this.promisifyRequest<JobDescription[]>(request);
 
     console.log('Loaded', jobDescriptions.length, 'job descriptions');
-    return jobDescriptions.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+    return jobDescriptions
+      .map(normalizeJobDescription)
+      .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
   }
 
   async deleteJobDescription(id: string): Promise<void> {

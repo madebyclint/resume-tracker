@@ -1,5 +1,6 @@
 import { AppState, Resume, CoverLetter, JobDescription } from "./types";
 import { ScraperCache, ScraperResult } from "./types/scraperTypes";
+import { normalizeJobDescription } from "./storage";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -177,7 +178,8 @@ class ApiStorage {
   }
 
   async loadJobDescriptions(): Promise<JobDescription[]> {
-    return await this.request<JobDescription[]>('/job-descriptions');
+    const jobs = await this.request<JobDescription[]>('/job-descriptions');
+    return jobs.map(normalizeJobDescription);
   }
 
   async deleteJobDescription(id: string): Promise<void> {
