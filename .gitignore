@@ -42,3 +42,7 @@ samples/
 api/src/seed-users.ts
 api/src/seed.ts
 api/src/assign-data-to-user.ts
+
+
+# MISC — personal notes/action files (__ prefix convention)
+__**
