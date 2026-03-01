@@ -83,8 +83,8 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
       onClick={onClick}
       className={`status-select status-${job.applicationStatus || 'not_applied'} ${className}`}
     >
-      <option value="not_applied">Not Applied</option>
-      <option value="applied">Applied</option>
+      <option value="not_applied">⭕ Not Applied</option>
+      <option value="applied">📨 Applied</option>
 
       <optgroup label="Interview Stages">
         <option value="interviewing_screening">📞 Screening</option>
@@ -94,18 +94,18 @@ const StatusDropdown: React.FC<StatusDropdownProps> = ({
         <option value="interviewing_assessment">📝 Assessment</option>
       </optgroup>
 
-      <option value="rejected">Rejected</option>
+      <option value="rejected">❌ Rejected</option>
 
       <optgroup label="Offer Stages">
         <option value="offered_received">🎉 Offer Received</option>
         <option value="offered_considering">🤔 Considering</option>
         <option value="offered_negotiating">💬 Negotiating</option>
         <option value="offered_accepted">✅ Accepted</option>
-        <option value="offered_rejected">❌ Offer Rejected</option>
+        <option value="offered_rejected">🚫 Offer Rejected</option>
         <option value="offered_expired">⏰ Offer Expired</option>
       </optgroup>
 
-      <option value="withdrawn">Withdrawn</option>
+      <option value="withdrawn">↩️ Withdrawn</option>
       <option value="wont_apply">🚫 Won't Apply</option>
 
       <optgroup label="Special States">

@@ -140,7 +140,7 @@ export const DataMigrationTool: React.FC = () => {
         }
         <button
           onClick={toggleCollapsed}
-          style={{ background: 'none', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', padding: '2px 8px', fontSize: '13px' }}
+          style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: '4px', cursor: 'pointer', padding: '2px 8px', fontSize: '13px', color: '#1565c0' }}
         >
           {collapsed ? 'Expand' : 'Minimize'}
         </button>

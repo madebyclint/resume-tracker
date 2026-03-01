@@ -42,7 +42,7 @@ function AppShell() {
             onClick={() => setCurrentPage('jobs')}
             style={{ cursor: 'pointer' }}
           >
-            📝 Job Descriptions
+            🗂️ Job Descriptions
           </div>
           <div
             className={`nav-item ${currentPage === 'resume-formatter' ? 'active' : ''}`}
