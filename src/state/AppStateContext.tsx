@@ -7,9 +7,9 @@ import {
   useState,
 } from "react";
 // Try API storage first, fallback to IndexedDB
-import { loadState as loadStateApi } from "../storageApi";
+import { loadState as loadStateApi, storage as apiStorage } from "../storageApi";
 import { loadState as loadStateIndexedDB, getEmptyState } from "../storage";
-import { AppState } from "../types";
+import { AppState, JobDescription } from "../types";
 
 interface AppStateContextValue {
   state: AppState;
@@ -17,6 +17,10 @@ interface AppStateContextValue {
   isLoading: boolean;
   syncWithStorage: () => Promise<void>;
   storageType: 'api' | 'indexeddb' | 'none';
+  devMode: boolean;
+  setDevMode: (v: boolean) => void;
+  persistJobDescription: (job: JobDescription) => Promise<void>;
+  deleteJobFromStorage: (id: string) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateContextValue | undefined>(undefined);
@@ -25,6 +29,34 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(getEmptyState());
   const [isLoading, setIsLoading] = useState(true);
   const [storageType, setStorageType] = useState<'api' | 'indexeddb' | 'none'>('none');
+  const [devMode, setDevModeState] = useState<boolean>(() => {
+    return localStorage.getItem('devMode') === 'true';
+  });
+
+  const setDevMode = (v: boolean) => {
+    setDevModeState(v);
+    localStorage.setItem('devMode', String(v));
+  };
+
+  /** Save a job to the DB — no-op in DEV mode, writes to API in PROD mode */
+  const persistJobDescription = useCallback(async (job: JobDescription): Promise<void> => {
+    if (devMode) return;
+    try {
+      await apiStorage.saveJobDescription(job);
+    } catch (error) {
+      console.error('Failed to persist job to API:', error);
+    }
+  }, [devMode]);
+
+  /** Delete a job from the DB — no-op in DEV mode, deletes from API in PROD mode */
+  const deleteJobFromStorage = useCallback(async (id: string): Promise<void> => {
+    if (devMode) return;
+    try {
+      await apiStorage.deleteJobDescription(id);
+    } catch (error) {
+      console.error('Failed to delete job from API:', error);
+    }
+  }, [devMode]);
 
   // Smart storage loading - try API first, fallback to IndexedDB
   const loadStateWithFallback = useCallback(async (): Promise<AppState> => {
@@ -85,7 +117,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [loadStateWithFallback]);
 
   return (
-    <AppStateContext.Provider value={{ state, setState, isLoading, syncWithStorage, storageType }}>
+    <AppStateContext.Provider value={{ state, setState, isLoading, syncWithStorage, storageType, devMode, setDevMode, persistJobDescription, deleteJobFromStorage }}>
       {children}
     </AppStateContext.Provider>
   );

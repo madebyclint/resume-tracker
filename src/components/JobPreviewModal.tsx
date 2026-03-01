@@ -15,7 +15,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { ParsedJobData, ScraperInput, AIUsageMetrics } from '../types/scraperTypes';
 import { JobDescription } from '../types';
-import { saveJobDescription } from '../storage';
+import { useAppState } from '../state/AppStateContext';
 import './JobPreviewModal.css';
 
 interface JobPreviewModalProps {
@@ -43,6 +43,7 @@ export function JobPreviewModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showRawText, setShowRawText] = useState(false);
+  const { persistJobDescription: saveJobDescription } = useAppState();
 
   const handleFieldUpdate = (path: string, value: any) => {
     setEditedData(prev => {

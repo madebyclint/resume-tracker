@@ -40,6 +40,66 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
+.sidebar-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.dev-mode-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background-color 0.2s, border-color 0.2s;
+  user-select: none;
+}
+
+.dev-mode-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dev-mode-toggle.dev-mode-on {
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.dev-mode-toggle input[type="checkbox"] {
+  accent-color: #fbbf24;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  min-height: unset;
+}
+
+.dev-mode-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.03em;
+}
+
+.dev-mode-toggle.dev-mode-on .dev-mode-label {
+  color: #fbbf24;
+}
+
+.dev-mode-badge {
+  font-size: 0.68rem;
+  color: #fbbf24;
+  text-align: center;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+
 .main {
   padding: 2rem;
   background: #f8fafc;

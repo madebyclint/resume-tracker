@@ -3,7 +3,7 @@ import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription, Resume, CoverLetter } from '../types';
 import { parseJobDescription, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
-import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter, exportAllDataAsJSON, importAllDataFromJSON } from '../storage';
+import { saveGeneratedResume, saveGeneratedCoverLetter, exportAllDataAsJSON, importAllDataFromJSON } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
 import { logStatusChange, logActivity, appendNoteItem } from '../utils/activityLogger';
 import { extensionService, ExtensionJobData, ExtensionService } from '../utils/extensionService';
@@ -223,7 +223,7 @@ const getImpactColor = (impact: any) => {
 };
 
 const JobDescriptionsPage: React.FC = () => {
-  const { state, setState } = useAppState();
+  const { state, setState, devMode, persistJobDescription: saveJobDescription, deleteJobFromStorage: deleteJobDescription } = useAppState();
   const [activeTab, setActiveTab] = useState<'job-descriptions' | 'analytics'>('job-descriptions');
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   // Removed old manual form - now using AI scraper only
@@ -1941,13 +1941,15 @@ Location: New York City (on-site)`,
             >
               <FontAwesomeIcon icon={faFileImport} /> + Add Job
             </button>
-            <button
-              className="test-job-button"
-              onClick={handleCreateTestJob}
-              title="Insert a pre-filled test job description to try features"
-            >
-              🧪 Test Job
-            </button>
+            {devMode && (
+              <button
+                className="test-job-button"
+                onClick={handleCreateTestJob}
+                title="Insert a pre-filled test job description to try features"
+              >
+                🧪 Test Job
+              </button>
+            )}
             <button
               className="import-csv-button"
               onClick={() => setShowCSVImportModal(true)}

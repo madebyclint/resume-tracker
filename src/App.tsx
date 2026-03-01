@@ -11,7 +11,7 @@ type Page = 'dashboard' | 'jobs' | 'resume-formatter';
 
 function AppShell() {
   const [currentPage, setCurrentPage] = useState<Page>('jobs');
-  const { state } = useAppState();
+  const { state, devMode, setDevMode } = useAppState();
 
   const renderCurrentPage = () => {
     switch (currentPage) {
@@ -52,10 +52,26 @@ function AppShell() {
             📄 Resume Formatter
           </div>
         </nav>
+        <div className="sidebar-bottom">
+          <label className={`dev-mode-toggle ${devMode ? 'dev-mode-on' : ''}`}>
+            <input
+              type="checkbox"
+              checked={devMode}
+              onChange={e => setDevMode(e.target.checked)}
+            />
+            <span className="dev-mode-label">
+              {devMode ? '🧪 DEV mode' : '🔒 PROD mode'}
+            </span>
+          </label>
+          {devMode && (
+            <div className="dev-mode-badge">DB writes disabled</div>
+          )}
+        </div>
       </aside>
       <main className="main">
         {renderCurrentPage()}
       </main>
+      {devMode && <DataMigrationTool />}
     </div>
   );
 }
@@ -64,7 +80,6 @@ export default function App() {
   return (
     <AppStateProvider>
       <AppShell />
-      <DataMigrationTool />
     </AppStateProvider>
   );
 }
