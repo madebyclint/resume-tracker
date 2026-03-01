@@ -41,3 +41,4 @@ samples/
 # Seed scripts with real user data / credentials
 api/src/seed-users.ts
 api/src/seed.ts
+api/src/assign-data-to-user.ts
