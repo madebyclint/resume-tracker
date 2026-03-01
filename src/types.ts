@@ -100,6 +100,17 @@ export interface JobDescription {
   interviewDates?: string[]; // array of interview dates
   salaryDiscussed?: string; // salary range discussed
   notes?: string;
+
+  // Structured note items — auto-generated from field/status changes and manual additions
+  noteItems?: Array<{
+    id: string;
+    timestamp: string;
+    text: string;
+    isAuto?: boolean; // true = auto-generated from a change; false/undefined = manually added
+  }>;
+
+  // Start date for accepted offers (when you actually start the job)
+  startDate?: string;
   
   // Timeline tracking
   statusHistory?: Array<{

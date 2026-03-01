@@ -5,7 +5,7 @@ import { JobDescription, Resume, CoverLetter } from '../types';
 import { parseJobDescription, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
 import { saveJobDescription, deleteJobDescription, saveGeneratedResume, saveGeneratedCoverLetter, exportAllDataAsJSON, importAllDataFromJSON } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
-import { logStatusChange, logActivity } from '../utils/activityLogger';
+import { logStatusChange, logActivity, appendNoteItem } from '../utils/activityLogger';
 import { extensionService, ExtensionJobData, ExtensionService } from '../utils/extensionService';
 
 import ReactMarkdown from 'react-markdown';
@@ -258,6 +258,235 @@ const JobDescriptionsPage: React.FC = () => {
 
   // Document matching toggle state
   const [showDocumentMatching, setShowDocumentMatching] = useState<Record<string, boolean>>({});
+
+  // Celebration modal for accepted offer
+  const [celebrationJob, setCelebrationJob] = useState<{ title: string; company: string } | null>(null);
+
+  // ── Test job generator ──────────────────────────────────────────────────
+  const TEST_JOB_TEMPLATES = [
+    {
+      title: 'Senior Software Engineer',
+      company: 'Acme Corp',
+      role: 'Senior Software Engineer',
+      location: 'San Francisco, CA',
+      workArrangement: 'hybrid' as const,
+      salaryMin: 160000,
+      salaryMax: 210000,
+      source: 'LinkedIn',
+      priority: 'high' as const,
+      impact: 'high' as const,
+      rawText: `Senior Software Engineer — Acme Corp
+
+Acme Corp is a fast-growing B2B SaaS company building the future of enterprise workflow automation.
+
+About the Role
+We are looking for a Senior Software Engineer to join our platform team. You will design, build, and maintain the core infrastructure that powers our product.
+
+Responsibilities
+- Architect and implement scalable backend services in TypeScript/Node.js
+- Lead code reviews and mentor junior engineers
+- Collaborate with product and design on technical feasibility
+- Drive adoption of best practices (testing, CI/CD, observability)
+
+Requirements
+- 5+ years of professional software engineering experience
+- Strong proficiency in TypeScript, React, and Node.js
+- Experience with PostgreSQL and cloud platforms (AWS/GCP)
+- Excellent written and verbal communication skills
+
+Preferred
+- Experience with Prisma or TypeORM
+- Familiarity with Kubernetes or Docker
+- Prior startup experience
+
+Compensation: $160,000 – $210,000 + equity
+Location: San Francisco, CA (Hybrid 3 days/week)
+
+Apply at careers.acmecorp.com`,
+      extractedInfo: {
+        role: 'Senior Software Engineer',
+        company: 'Acme Corp',
+        companyDescription: 'Fast-growing B2B SaaS company building enterprise workflow automation.',
+        location: 'San Francisco, CA',
+        workArrangement: 'hybrid',
+        salaryRange: '$160,000 – $210,000',
+        requiredSkills: ['TypeScript', 'React', 'Node.js', 'PostgreSQL', 'AWS'],
+        preferredSkills: ['Prisma', 'TypeORM', 'Kubernetes', 'Docker'],
+        responsibilities: [
+          'Architect scalable backend services',
+          'Lead code reviews and mentor engineers',
+          'Drive CI/CD and observability best practices',
+        ],
+        requirements: [
+          '5+ years engineering experience',
+          'TypeScript, React, Node.js proficiency',
+          'PostgreSQL and cloud platform experience',
+        ],
+      },
+    },
+    {
+      title: 'Product Manager — Growth',
+      company: 'WarpSpeed AI',
+      role: 'Product Manager',
+      location: 'Remote',
+      workArrangement: 'remote' as const,
+      salaryMin: 140000,
+      salaryMax: 185000,
+      source: 'Indeed',
+      priority: 'medium' as const,
+      impact: 'high' as const,
+      rawText: `Product Manager, Growth — WarpSpeed AI
+
+WarpSpeed AI is an AI-native startup reimagining how teams build and ship software.
+
+About the Role
+We need a data-driven PM to own our growth funnel from activation through expansion revenue.
+
+Responsibilities
+- Own the end-to-end product roadmap for growth
+- Run A/B experiments to improve conversion and retention
+- Partner with engineering, design, and marketing
+- Define and track KPIs; present to executive team quarterly
+
+Requirements
+- 4+ years product management experience
+- Strong analytical skills (SQL, Amplitude, Mixpanel)
+- Excellent written communication
+- Track record of shipping impactful features
+
+Nice to Have
+- Experience at a PLG company
+- Familiarity with AI/ML products
+
+Salary: $140,000 – $185,000 + equity
+Fully remote, US time zones preferred.`,
+      extractedInfo: {
+        role: 'Product Manager',
+        company: 'WarpSpeed AI',
+        companyDescription: 'AI-native startup reimagining software development.',
+        location: 'Remote',
+        workArrangement: 'remote',
+        salaryRange: '$140,000 – $185,000',
+        requiredSkills: ['Product Management', 'SQL', 'Amplitude', 'A/B Testing', 'KPI tracking'],
+        preferredSkills: ['PLG', 'AI/ML products', 'Mixpanel'],
+        responsibilities: [
+          'Own growth product roadmap',
+          'Run A/B experiments for conversion and retention',
+          'Define and track growth KPIs',
+        ],
+        requirements: [
+          '4+ years PM experience',
+          'Strong analytical skills',
+          'Track record of shipping features',
+        ],
+      },
+    },
+    {
+      title: 'Staff Design Engineer',
+      company: 'Meridian Health',
+      role: 'Staff Design Engineer',
+      location: 'New York, NY',
+      workArrangement: 'office' as const,
+      salaryMin: 175000,
+      salaryMax: 230000,
+      source: 'Referral',
+      priority: 'high' as const,
+      impact: 'medium' as const,
+      rawText: `Staff Design Engineer — Meridian Health
+
+Meridian Health is a healthcare technology company improving patient outcomes through better clinical tools.
+
+The Role
+We are seeking a Staff Design Engineer to bridge design systems and frontend engineering across our patient and clinician-facing products.
+
+What You'll Do
+- Define and maintain our cross-platform design system
+- Partner closely with product designers and frontend engineers
+- Build accessible, performant React components
+- Establish design token architecture and Figma-to-code pipelines
+
+What We're Looking For
+- 7+ years frontend engineering with design system expertise
+- Deep React and TypeScript knowledge
+- Experience with accessibility (WCAG 2.1 AA)
+- Strong visual design sensibility
+
+Bonus Points
+- Healthcare or regulated industry experience
+- Storybook, Chromatic, or similar tooling
+
+Compensation: $175,000 – $230,000
+Location: New York City (on-site)`,
+      extractedInfo: {
+        role: 'Staff Design Engineer',
+        company: 'Meridian Health',
+        companyDescription: 'Healthcare technology company improving patient outcomes.',
+        location: 'New York, NY',
+        workArrangement: 'office',
+        salaryRange: '$175,000 – $230,000',
+        requiredSkills: ['React', 'TypeScript', 'Design Systems', 'Accessibility', 'Figma'],
+        preferredSkills: ['Storybook', 'Chromatic', 'Healthcare experience'],
+        responsibilities: [
+          'Define and maintain cross-platform design system',
+          'Build accessible React components',
+          'Establish design token architecture',
+        ],
+        requirements: [
+          '7+ years frontend engineering',
+          'Deep React/TypeScript',
+          'WCAG 2.1 AA accessibility',
+        ],
+      },
+    },
+  ];
+
+  const handleCreateTestJob = async () => {
+    const idx = state.jobDescriptions.length % TEST_JOB_TEMPLATES.length;
+    const tpl = TEST_JOB_TEMPLATES[idx];
+    const now = new Date().toISOString();
+    const seqId = getNextSequentialId();
+
+    const testJob: JobDescription = {
+      id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      sequentialId: seqId,
+      title: tpl.title,
+      company: tpl.company,
+      role: tpl.role,
+      location: tpl.location,
+      workArrangement: tpl.workArrangement,
+      salaryMin: tpl.salaryMin,
+      salaryMax: tpl.salaryMax,
+      source: tpl.source,
+      priority: tpl.priority,
+      impact: tpl.impact,
+      rawText: tpl.rawText,
+      extractedInfo: tpl.extractedInfo,
+      keywords: tpl.extractedInfo.requiredSkills,
+      uploadDate: now,
+      lastActivityDate: now,
+      applicationStatus: 'not_applied',
+      linkedResumeIds: [],
+      linkedCoverLetterIds: [],
+      linkedDuplicateIds: [],
+      statusHistory: [{ status: 'not_applied', date: now, notes: 'Test job created' }],
+      noteItems: [{
+        id: `ni_${Date.now()}`,
+        timestamp: now,
+        text: `🧪 Test job #${seqId} created — "${tpl.title}" at ${tpl.company}`,
+        isAuto: true,
+      }],
+      aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0, parseCount: 1, lastParseDate: now },
+    };
+
+    try {
+      await saveJobDescription(testJob);
+      setState(prev => ({ ...prev, jobDescriptions: [testJob, ...prev.jobDescriptions] }));
+      showToast(`Test job "${tpl.title}" created (#${seqId})`, 'success');
+    } catch (error) {
+      console.error('Error creating test job:', error);
+      showToast('Failed to create test job.', 'error');
+    }
+  };
 
   // Scraper modal state
   const [scraperModalOpen, setScraperModalOpen] = useState(false);
@@ -831,23 +1060,68 @@ const JobDescriptionsPage: React.FC = () => {
 
   const handleSaveEditedJob = async (updatedJob: JobDescription) => {
     try {
+      const oldJob = state.jobDescriptions.find(jd => jd.id === updatedJob.id);
+
+      // Build auto-note items for any meaningful field changes
+      const TRACKED_FIELDS: Array<{ key: keyof JobDescription; label: string }> = [
+        { key: 'title', label: 'Title' },
+        { key: 'company', label: 'Company' },
+        { key: 'role', label: 'Role' },
+        { key: 'location', label: 'Location' },
+        { key: 'workArrangement', label: 'Work arrangement' },
+        { key: 'salaryMin', label: 'Min salary' },
+        { key: 'salaryMax', label: 'Max salary' },
+        { key: 'applicationStatus', label: 'Status' },
+        { key: 'interviewStage', label: 'Interview stage' },
+        { key: 'offerStage', label: 'Offer stage' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'impact', label: 'Impact' },
+        { key: 'applicationDate', label: 'Application date' },
+        { key: 'followUpDate', label: 'Follow-up date' },
+        { key: 'startDate', label: 'Start date' },
+        { key: 'source', label: 'Source' },
+      ];
+
+      let jobWithNotes = { ...updatedJob };
+      if (oldJob) {
+        const timestamp = new Date().toISOString();
+        const noteItems: Array<{ id: string; timestamp: string; text: string; isAuto: boolean }> = [];
+        for (const { key, label } of TRACKED_FIELDS) {
+          const oldVal = String(oldJob[key] ?? '').trim();
+          const newVal = String(updatedJob[key] ?? '').trim();
+          if (oldVal !== newVal) {
+            const text = oldVal
+              ? `${label} changed from "${oldVal}" to "${newVal}"`
+              : `${label} set to "${newVal}"`;
+            noteItems.push({
+              id: `activity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${key}`,
+              timestamp,
+              text,
+              isAuto: true
+            });
+          }
+        }
+        if (noteItems.length > 0) {
+          jobWithNotes = {
+            ...jobWithNotes,
+            noteItems: [...(jobWithNotes.noteItems || []), ...noteItems]
+          };
+        }
+      }
+
       // Update in state
       setState(prev => ({
         ...prev,
         jobDescriptions: prev.jobDescriptions.map(jd =>
-          jd.id === updatedJob.id ? updatedJob : jd
+          jd.id === jobWithNotes.id ? jobWithNotes : jd
         )
       }));
 
       // Save to storage
-      const result = await saveJobDescription(updatedJob);
-      if (result.success) {
-        showToast('Job updated successfully!', 'success');
-        setEditModalOpen(false);
-        setJobBeingEdited(null);
-      } else {
-        throw new Error(result.error || 'Failed to save job');
-      }
+      await saveJobDescription(jobWithNotes);
+      showToast('Job updated successfully!', 'success');
+      setEditModalOpen(false);
+      setJobBeingEdited(null);
     } catch (error) {
       console.error('Error saving edited job:', error);
       showToast('Failed to save changes. Please try again.', 'error');
@@ -1326,6 +1600,12 @@ const JobDescriptionsPage: React.FC = () => {
           jd.id === jobId ? updatedJobDescription : jd
         )
       }));
+
+      // Trigger celebration when offer is accepted
+      if (offerStage === 'accepted') {
+        setCelebrationJob({ title: jobDescription.title, company: jobDescription.company });
+        setTimeout(() => setCelebrationJob(null), 3500);
+      }
     } catch (error) {
       console.error('Error updating status:', error);
       showToast('Failed to update status. Please try again.', 'error');
@@ -1343,11 +1623,12 @@ const JobDescriptionsPage: React.FC = () => {
       ? `${jobDescription.notes}\n${newNote}`
       : newNote;
 
-    // Use activity logging to track note addition
-    const jobWithNotes = {
-      ...jobDescription,
-      notes: updatedNotes
-    };
+    // Use activity logging to track note addition, and append a note item
+    const jobWithNotes = appendNoteItem(
+      { ...jobDescription, notes: updatedNotes },
+      noteText,
+      false
+    );
 
     const updatedJobDescription = logActivity(jobWithNotes, 'note_added', {
       details: `Added note: ${noteText}`,
@@ -1613,6 +1894,24 @@ const JobDescriptionsPage: React.FC = () => {
 
   return (
     <div className="job-descriptions-page">
+
+      {/* Celebration modal for accepted offer */}
+      {celebrationJob && (
+        <div className="celebration-overlay" onClick={() => setCelebrationJob(null)}>
+          <div className="celebration-card" onClick={(e) => e.stopPropagation()}>
+            <div className="celebration-emoji">🎊</div>
+            <h2 className="celebration-title">Congratulations!</h2>
+            <p className="celebration-body">
+              You landed the role at <strong>{celebrationJob.company}</strong>!
+            </p>
+            <p className="celebration-role">{celebrationJob.title}</p>
+            <div className="celebration-progress">
+              <div className="celebration-progress-bar" />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="page-header">
         <div className="tab-navigation">
           <button
@@ -1641,6 +1940,13 @@ const JobDescriptionsPage: React.FC = () => {
               title="Add job from PDF, image, text, or URL using AI"
             >
               <FontAwesomeIcon icon={faFileImport} /> + Add Job
+            </button>
+            <button
+              className="test-job-button"
+              onClick={handleCreateTestJob}
+              title="Insert a pre-filled test job description to try features"
+            >
+              🧪 Test Job
             </button>
             <button
               className="import-csv-button"
@@ -2548,6 +2854,32 @@ AI will automatically fill in the job title and company name fields above!"
 
 
 
+                {/* Accepted job banner */}
+                {(() => {
+                  const acceptedJob = state.jobDescriptions.find(
+                    j => j.offerStage === 'accepted'
+                  );
+                  if (!acceptedJob) return null;
+                  const startDate = acceptedJob.startDate;
+                  let dateLabel = '';
+                  if (startDate) {
+                    const sd = new Date(startDate);
+                    const isPast = sd <= new Date();
+                    const formatted = sd.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+                    dateLabel = isPast ? `since ${formatted}` : `starting ${formatted}`;
+                  }
+                  return (
+                    <div className="accepted-job-banner" onClick={() => setSelectedJob(acceptedJob)}>
+                      <span className="accepted-job-banner-icon">🎉</span>
+                      <span className="accepted-job-banner-text">
+                        Current job — <strong>{acceptedJob.title}</strong> at <strong>{acceptedJob.company}</strong>
+                        {dateLabel && <span className="accepted-job-banner-date"> {dateLabel}</span>}
+                      </span>
+                      <span className="accepted-job-banner-hint">click to view</span>
+                    </div>
+                  );
+                })()}
+
                 <div className={`jobs-layout ${selectedJob ? 'split-view' : 'full-width'}`}>
                   <JobManagementTable
                     jobs={(() => {
@@ -3022,15 +3354,32 @@ AI will automatically fill in the job title and company name fields above!"
                           </div>
                         ) : (
                           <div className="notes-display">
+                            {/* Structured note items — auto and manual */}
+                            {selectedJob.noteItems && selectedJob.noteItems.length > 0 && (
+                              <div className="note-items-list">
+                                {[...selectedJob.noteItems]
+                                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                                  .map(item => (
+                                    <div key={item.id} className={`note-item ${item.isAuto ? 'note-item-auto' : 'note-item-manual'}`}>
+                                      <span className="note-item-dot">{item.isAuto ? '⚙' : '💬'}</span>
+                                      <span className="note-item-text">{item.text}</span>
+                                      <span className="note-item-time">
+                                        {new Date(item.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
+                            {/* Legacy free-form notes */}
                             {selectedJob.notes ? (
                               <div className="notes-content">
                                 {selectedJob.notes.split('\n').map((line, index) => (
                                   <p key={index}>{line}</p>
                                 ))}
                               </div>
-                            ) : (
+                            ) : (!selectedJob.noteItems || selectedJob.noteItems.length === 0) ? (
                               <p className="no-notes">No notes yet. Use quick actions above or click Edit to add notes.</p>
-                            )}
+                            ) : null}
                           </div>
                         )}
                       </div>

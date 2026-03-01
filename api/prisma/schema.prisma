@@ -106,6 +106,8 @@ model JobDescription {
   interviewDates    String?           // comma-separated date strings
   salaryDiscussed   String?
   notes             String?
+  noteItems         String?           // JSON array of { id, timestamp, text, isAuto }
+  startDate         DateTime?         // Start date for accepted offers
   
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt

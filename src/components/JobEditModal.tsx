@@ -312,6 +312,45 @@ export function JobEditModal({ job, isOpen, onClose, onSave }: JobEditModalProps
               </div>
             </div>
 
+            {/* Key Dates */}
+            <div className="edit-section">
+              <h3>Key Dates</h3>
+              <div className="field-grid">
+                <div className="field-group">
+                  <label>Application Date</label>
+                  <input
+                    type="date"
+                    value={editedJob.applicationDate ? editedJob.applicationDate.slice(0, 10) : ''}
+                    onChange={(e) => updateField('applicationDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
+                  />
+                </div>
+                <div className="field-group">
+                  <label>Start Date <span style={{ fontWeight: 'normal', color: '#888' }}>(for accepted offers)</span></label>
+                  <input
+                    type="date"
+                    value={editedJob.startDate ? editedJob.startDate.slice(0, 10) : ''}
+                    onChange={(e) => updateField('startDate', e.target.value || undefined)}
+                  />
+                </div>
+                <div className="field-group">
+                  <label>Follow-up Date</label>
+                  <input
+                    type="date"
+                    value={editedJob.followUpDate ? editedJob.followUpDate.slice(0, 10) : ''}
+                    onChange={(e) => updateField('followUpDate', e.target.value || undefined)}
+                  />
+                </div>
+                <div className="field-group">
+                  <label>Last Status Change</label>
+                  <input
+                    type="date"
+                    value={editedJob.lastActivityDate ? editedJob.lastActivityDate.slice(0, 10) : ''}
+                    onChange={(e) => updateField('lastActivityDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Notes - Keep this important! */}
             <div className="edit-section">
               <h3>Personal Notes</h3>

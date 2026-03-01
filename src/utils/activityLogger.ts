@@ -20,6 +20,26 @@ export const generateActivityId = (): string => {
 };
 
 /**
+ * Appends a single structured note item to a job's noteItems array.
+ */
+export const appendNoteItem = (
+  job: JobDescription,
+  text: string,
+  isAuto = false
+): JobDescription => {
+  const item = {
+    id: generateActivityId(),
+    timestamp: new Date().toISOString(),
+    text,
+    isAuto
+  };
+  return {
+    ...job,
+    noteItems: [...(job.noteItems || []), item]
+  };
+};
+
+/**
  * Logs an activity to a job's activity log
  */
 export const logActivity = (
@@ -104,6 +124,15 @@ export const logStatusChange = (
     notes: activities.map(a => a.details).join('; ')
   };
 
+  // Build human-readable note items for each change
+  const noteTexts: string[] = activities.map(a => a.details || '').filter(Boolean);
+  const newNoteItems = noteTexts.map(text => ({
+    id: generateActivityId(),
+    timestamp,
+    text,
+    isAuto: true as const
+  }));
+
   return {
     ...job,
     applicationStatus: newStatus,
@@ -112,7 +141,8 @@ export const logStatusChange = (
     applicationDate: newStatus === 'applied' && !job.applicationDate ? timestamp : job.applicationDate,
     lastActivityDate: timestamp,
     activityLog: [...(job.activityLog || []), ...activities],
-    statusHistory: [...(job.statusHistory || []), statusHistoryEntry]
+    statusHistory: [...(job.statusHistory || []), statusHistoryEntry],
+    noteItems: [...(job.noteItems || []), ...newNoteItems]
   };
 };
 
