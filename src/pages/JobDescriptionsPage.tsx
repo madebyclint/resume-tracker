@@ -2018,7 +2018,8 @@ Location: New York City (on-site)`,
         )}
       </div>
 
-      {/* Old manual form removed - using AI scraper only */}\n      {false && (
+      {/* Old manual form removed - using AI scraper only */}
+      {false && (
         <div
           className="add-job-form"
           ref={(el) => el?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -2854,11 +2855,11 @@ AI will automatically fill in the job title and company name fields above!"
 
 
 
-                {/* Accepted job banner */}
+                {/* Accepted job banner — shows most recently accepted job */}
                 {(() => {
-                  const acceptedJob = state.jobDescriptions.find(
-                    j => j.offerStage === 'accepted'
-                  );
+                  const acceptedJob = state.jobDescriptions
+                    .filter(j => j.offerStage === 'accepted' && !j.isArchived && j.applicationStatus !== 'archived')
+                    .sort((a, b) => new Date(b.lastActivityDate || b.uploadDate).getTime() - new Date(a.lastActivityDate || a.uploadDate).getTime())[0];
                   if (!acceptedJob) return null;
                   const startDate = acceptedJob.startDate;
                   let dateLabel = '';
@@ -2869,7 +2870,7 @@ AI will automatically fill in the job title and company name fields above!"
                     dateLabel = isPast ? `since ${formatted}` : `starting ${formatted}`;
                   }
                   return (
-                    <div className="accepted-job-banner" onClick={() => setSelectedJob(acceptedJob)}>
+                    <div className="accepted-job-banner" onClick={() => setSelectedJobId(acceptedJob.id)}>
                       <span className="accepted-job-banner-icon">🎉</span>
                       <span className="accepted-job-banner-text">
                         Current job — <strong>{acceptedJob.title}</strong> at <strong>{acceptedJob.company}</strong>
