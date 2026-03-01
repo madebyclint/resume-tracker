@@ -1612,25 +1612,64 @@ Location: New York City (on-site)`,
     }
   };
 
+  // Parse legacy free-form notes ("[date] text" lines) into noteItem objects
+  const parseLegacyNotes = (notesStr: string): Array<{ id: string; timestamp: string; text: string; isAuto: boolean }> => {
+    return notesStr
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map((line, i) => {
+        const match = line.match(/^\[(.+?)\]\s*(.*)/);
+        if (match) {
+          const parsed = new Date(match[1]);
+          return {
+            id: `legacy_${i}_${Date.now()}`,
+            timestamp: isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString(),
+            text: match[2] || line,
+            isAuto: false
+          };
+        }
+        return {
+          id: `legacy_${i}_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          text: line,
+          isAuto: false
+        };
+      });
+  };
+
   // Notes management handlers
-  const handleQuickNote = async (jobId: string, noteText: string) => {
+  const handleAddNote = (jobId: string) => {
+    setEditingNotesId(jobId);
+    setTempNotes('');
+  };
+
+  const handleSaveNewNote = async (jobId: string) => {
     const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
     if (!jobDescription) return;
 
-    const now = new Date().toLocaleString();
-    const newNote = `[${now}] ${noteText}`;
-    const updatedNotes = jobDescription.notes
-      ? `${jobDescription.notes}\n${newNote}`
-      : newNote;
+    const trimmed = tempNotes.trim();
+    if (!trimmed) {
+      setEditingNotesId(null);
+      setTempNotes('');
+      return;
+    }
 
-    // Use activity logging to track note addition, and append a note item
-    const jobWithNotes = appendNoteItem(
-      { ...jobDescription, notes: updatedNotes },
-      noteText,
-      false
-    );
+    const noteText = trimmed;
 
-    const updatedJobDescription = logActivity(jobWithNotes, 'note_added', {
+    // Migrate any legacy notes string into noteItems before appending the new note
+    let baseJob = jobDescription;
+    if (jobDescription.notes) {
+      const legacyItems = parseLegacyNotes(jobDescription.notes);
+      baseJob = {
+        ...jobDescription,
+        notes: undefined,
+        noteItems: [...(jobDescription.noteItems || []), ...legacyItems]
+      };
+    }
+
+    const jobWithNote = appendNoteItem(baseJob, noteText, false);
+    const updatedJobDescription = logActivity(jobWithNote, 'note_added', {
       details: `Added note: ${noteText}`,
       toValue: noteText
     });
@@ -1643,43 +1682,11 @@ Location: New York City (on-site)`,
           jd.id === jobId ? updatedJobDescription : jd
         )
       }));
-    } catch (error) {
-      console.error('Error adding quick note:', error);
-      alert('Failed to add note. Please try again.');
-    }
-  };
-
-  const handleEditNotes = (jobId: string) => {
-    const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
-    if (!jobDescription) return;
-
-    setEditingNotesId(jobId);
-    setTempNotes(jobDescription.notes || '');
-  };
-
-  const handleSaveNotes = async (jobId: string) => {
-    const jobDescription = state.jobDescriptions.find(jd => jd.id === jobId);
-    if (!jobDescription) return;
-
-    const updatedJobDescription: JobDescription = {
-      ...jobDescription,
-      notes: tempNotes.trim() || undefined,
-      lastActivityDate: new Date().toISOString()
-    };
-
-    try {
-      await saveJobDescription(updatedJobDescription);
-      setState(prev => ({
-        ...prev,
-        jobDescriptions: prev.jobDescriptions.map(jd =>
-          jd.id === jobId ? updatedJobDescription : jd
-        )
-      }));
       setEditingNotesId(null);
       setTempNotes('');
     } catch (error) {
-      console.error('Error saving notes:', error);
-      alert('Failed to save notes. Please try again.');
+      console.error('Error saving note:', error);
+      alert('Failed to save note. Please try again.');
     }
   };
 
@@ -3288,48 +3295,18 @@ AI will automatically fill in the job title and company name fields above!"
                         </div>
                       )}
 
-                      {/* Enhanced Notes Section */}
+                      {/* Notes Section */}
                       <div className="notes-section">
                         <div className="notes-header">
                           <h3>Notes</h3>
-                          <div className="notes-actions">
-                            <div className="quick-notes">
-                              <button
-                                className="quick-note-btn"
-                                onClick={() => handleQuickNote(selectedJob.id, 'Applied')}
-                                title="Mark as applied"
-                              >
-                                <FontAwesomeIcon icon={faFileAlt} /> Applied
-                              </button>
-                              <button
-                                className="quick-note-btn"
-                                onClick={() => handleQuickNote(selectedJob.id, 'Interview scheduled')}
-                                title="Note interview scheduled"
-                              >
-                                📅 Interview
-                              </button>
-                              <button
-                                className="quick-note-btn"
-                                onClick={() => handleQuickNote(selectedJob.id, 'Follow up needed')}
-                                title="Mark for follow up"
-                              >
-                                🔔 Follow up
-                              </button>
-                              <button
-                                className="quick-note-btn"
-                                onClick={() => handleQuickNote(selectedJob.id, 'Rejected')}
-                                title="Mark as rejected"
-                              >
-                                <FontAwesomeIcon icon={faTimes} /> Rejected
-                              </button>
-                            </div>
+                          {editingNotesId !== selectedJob.id && (
                             <button
                               className="edit-notes-btn"
-                              onClick={() => handleEditNotes(selectedJob.id)}
+                              onClick={() => handleAddNote(selectedJob.id)}
                             >
-                              ✏️ Edit
+                              + Add Note
                             </button>
-                          </div>
+                          )}
                         </div>
 
                         {editingNotesId === selectedJob.id ? (
@@ -3337,14 +3314,15 @@ AI will automatically fill in the job title and company name fields above!"
                             <textarea
                               value={tempNotes}
                               onChange={(e) => setTempNotes(e.target.value)}
-                              placeholder="Add your notes here..."
-                              rows={4}
+                              placeholder="Type your note..."
+                              rows={3}
                               className="notes-textarea"
+                              autoFocus
                             />
                             <div className="notes-edit-actions">
                               <button
                                 className="save-notes-btn"
-                                onClick={() => handleSaveNotes(selectedJob.id)}
+                                onClick={() => handleSaveNewNote(selectedJob.id)}
                               >
                                 Save
                               </button>
@@ -3358,12 +3336,18 @@ AI will automatically fill in the job title and company name fields above!"
                           </div>
                         ) : (
                           <div className="notes-display">
-                            {/* Structured note items — auto and manual */}
-                            {selectedJob.noteItems && selectedJob.noteItems.length > 0 && (
-                              <div className="note-items-list">
-                                {[...selectedJob.noteItems]
-                                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                                  .map(item => (
+                            {(() => {
+                              const structured = selectedJob.noteItems || [];
+                              const legacy = selectedJob.notes ? parseLegacyNotes(selectedJob.notes) : [];
+                              const allItems = [...structured, ...legacy].sort(
+                                (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                              );
+                              if (allItems.length === 0) {
+                                return <p className="no-notes">No notes yet. Click "+ Add Note" to add one.</p>;
+                              }
+                              return (
+                                <div className="note-items-list">
+                                  {allItems.map(item => (
                                     <div key={item.id} className={`note-item ${item.isAuto ? 'note-item-auto' : 'note-item-manual'}`}>
                                       <span className="note-item-dot">{item.isAuto ? '⚙' : '💬'}</span>
                                       <span className="note-item-text">{item.text}</span>
@@ -3372,18 +3356,9 @@ AI will automatically fill in the job title and company name fields above!"
                                       </span>
                                     </div>
                                   ))}
-                              </div>
-                            )}
-                            {/* Legacy free-form notes */}
-                            {selectedJob.notes ? (
-                              <div className="notes-content">
-                                {selectedJob.notes.split('\n').map((line, index) => (
-                                  <p key={index}>{line}</p>
-                                ))}
-                              </div>
-                            ) : (!selectedJob.noteItems || selectedJob.noteItems.length === 0) ? (
-                              <p className="no-notes">No notes yet. Use quick actions above or click Edit to add notes.</p>
-                            ) : null}
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>
