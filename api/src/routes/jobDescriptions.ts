@@ -1,14 +1,16 @@
 import { Router } from 'express';
-import { prisma } from '../server';
+import { prisma } from '../db';
+import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+router.use(requireAuth);
 
 // GET /api/job-descriptions - Get all job descriptions
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthRequest, res) => {
   try {
     const { status, archived, company, search } = req.query;
     
-    const where: any = {};
+    const where: any = { userId: req.userId };
     
     // Filter by application status
     if (status) {
@@ -84,12 +86,12 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/job-descriptions/:id - Get a specific job description
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     
-    const jobDescription = await prisma.jobDescription.findUnique({
-      where: { id },
+    const jobDescription = await prisma.jobDescription.findFirst({
+      where: { id, userId: req.userId },
       include: {
         linkedResumes: {
           include: {
@@ -138,7 +140,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/job-descriptions - Create a new job description
-router.post('/', async (req, res) => {
+router.post('/', async (req: AuthRequest, res) => {
   try {
     const {
       title,
@@ -176,8 +178,9 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Get next sequential ID
+    // Get next sequential ID (per user)
     const lastJob = await prisma.jobDescription.findFirst({
+      where: { userId: req.userId },
       orderBy: { sequentialId: 'desc' },
       select: { sequentialId: true }
     });
@@ -187,6 +190,7 @@ router.post('/', async (req, res) => {
     const jobDescription = await prisma.jobDescription.create({
       data: {
         sequentialId,
+        userId: req.userId,
         title,
         company,
         rawText,
@@ -244,7 +248,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/job-descriptions/:id - Update a job description
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -254,10 +258,11 @@ router.put('/:id', async (req, res) => {
     delete updateData.createdAt;
     delete updateData.updatedAt;
     delete updateData.sequentialId;
+    delete updateData.userId;
     
     // Get current job description for comparison
-    const currentJob = await prisma.jobDescription.findUnique({
-      where: { id }
+    const currentJob = await prisma.jobDescription.findFirst({
+      where: { id, userId: req.userId }
     });
     
     if (!currentJob) {
@@ -314,12 +319,12 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/job-descriptions/:id - Delete a job description
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     
-    await prisma.jobDescription.delete({
-      where: { id }
+    await prisma.jobDescription.deleteMany({
+      where: { id, userId: req.userId }
     });
     
     res.json({ message: 'Job description deleted successfully' });
@@ -333,12 +338,12 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST /api/job-descriptions/:id/archive - Archive a job description
-router.post('/:id/archive', async (req, res) => {
+router.post('/:id/archive', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     
-    const jobDescription = await prisma.jobDescription.update({
-      where: { id },
+    await prisma.jobDescription.updateMany({
+      where: { id, userId: req.userId },
       data: {
         isArchived: true,
         lastActivityDate: new Date()
@@ -354,7 +359,7 @@ router.post('/:id/archive', async (req, res) => {
       }
     });
     
-    res.json(jobDescription);
+    res.json({ message: 'Job description archived successfully' });
   } catch (error) {
     console.error('Error archiving job description:', error);
     res.status(500).json({ error: 'Failed to archive job description' });
@@ -362,12 +367,12 @@ router.post('/:id/archive', async (req, res) => {
 });
 
 // POST /api/job-descriptions/:id/duplicate/:duplicateId - Mark as duplicate
-router.post('/:id/duplicate/:duplicateId', async (req, res) => {
+router.post('/:id/duplicate/:duplicateId', async (req: AuthRequest, res) => {
   try {
     const { id, duplicateId } = req.params;
     
-    await prisma.jobDescription.update({
-      where: { id },
+    await prisma.jobDescription.updateMany({
+      where: { id, userId: req.userId },
       data: {
         duplicateOfId: duplicateId,
         applicationStatus: 'duplicate',
@@ -383,8 +388,9 @@ router.post('/:id/duplicate/:duplicateId', async (req, res) => {
 });
 
 // GET /api/job-descriptions/stats/summary - Get summary statistics
-router.get('/stats/summary', async (req, res) => {
+router.get('/stats/summary', async (req: AuthRequest, res) => {
   try {
+    const uid = req.userId;
     const [
       total,
       applied,
@@ -393,12 +399,12 @@ router.get('/stats/summary', async (req, res) => {
       offered,
       archived
     ] = await Promise.all([
-      prisma.jobDescription.count(),
-      prisma.jobDescription.count({ where: { applicationStatus: 'applied' } }),
-      prisma.jobDescription.count({ where: { applicationStatus: 'interviewing' } }),
-      prisma.jobDescription.count({ where: { applicationStatus: 'rejected' } }),
-      prisma.jobDescription.count({ where: { applicationStatus: 'offered' } }),
-      prisma.jobDescription.count({ where: { isArchived: true } })
+      prisma.jobDescription.count({ where: { userId: uid } }),
+      prisma.jobDescription.count({ where: { userId: uid, applicationStatus: 'applied' } }),
+      prisma.jobDescription.count({ where: { userId: uid, applicationStatus: 'interviewing' } }),
+      prisma.jobDescription.count({ where: { userId: uid, applicationStatus: 'rejected' } }),
+      prisma.jobDescription.count({ where: { userId: uid, applicationStatus: 'offered' } }),
+      prisma.jobDescription.count({ where: { userId: uid, isArchived: true } })
     ]);
     
     res.json({

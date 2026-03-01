@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppStateProvider, useAppState } from "./state/AppStateContext";
 import DashboardPage from "./pages/DashboardPage";
 import JobDescriptionsPage from "./pages/JobDescriptionsPage";
 import ResumeFormatterPage from "./pages/ResumeFormatterPage";
 import { ScraperTestButton } from "./components/ScraperTestButton";
 import { DataMigrationTool } from "./components/DataMigrationTool";
+import LoginScreen from "./components/LoginScreen";
+import { AuthUser, verifyToken, getCurrentUser, logout } from "./utils/authService";
 import "./App.css";
 
 type Page = 'dashboard' | 'jobs' | 'resume-formatter';
 
-function AppShell() {
+function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [currentPage, setCurrentPage] = useState<Page>('jobs');
   const { state, devMode, setDevMode } = useAppState();
 
@@ -53,6 +55,10 @@ function AppShell() {
           </div>
         </nav>
         <div className="sidebar-bottom">
+          <div className="sidebar-user">
+            <span className="sidebar-user-name">{user.name}</span>
+            <button className="sidebar-logout-btn" onClick={onLogout}>Sign out</button>
+          </div>
           <label className={`dev-mode-toggle ${devMode ? 'dev-mode-on' : ''}`}>
             <input
               type="checkbox"
@@ -77,9 +83,42 @@ function AppShell() {
 }
 
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    // Check for saved session on mount
+    verifyToken().then(u => {
+      if (u) setUser(u);
+      else {
+        // Fall back to localStorage cache (avoids flicker on slow networks)
+        const cached = getCurrentUser();
+        if (cached) setUser(cached);
+      }
+      setChecking(false);
+    });
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    setUser(null);
+  };
+
+  if (checking) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
+        Loading…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen onLogin={setUser} />;
+  }
+
   return (
     <AppStateProvider>
-      <AppShell />
+      <AppShell user={user} onLogout={handleLogout} />
     </AppStateProvider>
   );
 }

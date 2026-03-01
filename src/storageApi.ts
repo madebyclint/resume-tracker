@@ -1,6 +1,7 @@
 import { AppState, Resume, CoverLetter, JobDescription } from "./types";
 import { ScraperCache, ScraperResult } from "./types/scraperTypes";
 import { normalizeJobDescription } from "./storage";
+import { getToken } from "./utils/authService";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -28,10 +29,12 @@ class ApiStorage {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const token = getToken();
     
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
       ...options,

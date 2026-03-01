@@ -1,12 +1,15 @@
 import { Router } from 'express';
-import { prisma } from '../server';
+import { prisma } from '../db';
+import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+router.use(requireAuth);
 
 // GET /api/cover-letters - Get all cover letters
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthRequest, res) => {
   try {
     const coverLetters = await prisma.coverLetter.findMany({
+      where: { userId: req.userId },
       orderBy: { uploadDate: 'desc' },
       include: {
         linkedJobDescriptions: {
@@ -33,12 +36,12 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/cover-letters/:id - Get a specific cover letter
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     
-    const coverLetter = await prisma.coverLetter.findUnique({
-      where: { id },
+    const coverLetter = await prisma.coverLetter.findFirst({
+      where: { id, userId: req.userId },
       include: {
         linkedJobDescriptions: {
           include: {
@@ -68,7 +71,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/cover-letters - Create a new cover letter
-router.post('/', async (req, res) => {
+router.post('/', async (req: AuthRequest, res) => {
   try {
     const {
       name,
@@ -103,7 +106,8 @@ router.post('/', async (req, res) => {
         detectedCompany,
         detectedRole,
         targetCompany,
-        targetPosition
+        targetPosition,
+        userId: req.userId
       }
     });
     
@@ -115,7 +119,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/cover-letters/:id - Update a cover letter
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -124,7 +128,13 @@ router.put('/:id', async (req, res) => {
     delete updateData.id;
     delete updateData.createdAt;
     delete updateData.updatedAt;
+    delete updateData.userId;
     
+    const owned = await prisma.coverLetter.findFirst({ where: { id, userId: req.userId } });
+    if (!owned) {
+      return res.status(404).json({ error: 'Cover letter not found' });
+    }
+
     const coverLetter = await prisma.coverLetter.update({
       where: { id },
       data: updateData,
@@ -146,12 +156,12 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/cover-letters/:id - Delete a cover letter
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     
-    await prisma.coverLetter.delete({
-      where: { id }
+    await prisma.coverLetter.deleteMany({
+      where: { id, userId: req.userId }
     });
     
     res.json({ message: 'Cover letter deleted successfully' });

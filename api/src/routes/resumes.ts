@@ -1,12 +1,15 @@
 import { Router } from 'express';
-import { prisma } from '../server';
+import { prisma } from '../db';
+import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+router.use(requireAuth);
 
 // GET /api/resumes - Get all resumes
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthRequest, res) => {
   try {
     const resumes = await prisma.resume.findMany({
+      where: { userId: req.userId },
       orderBy: { uploadDate: 'desc' },
       include: {
         linkedJobDescriptions: {
@@ -33,12 +36,12 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/resumes/:id - Get a specific resume
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     
-    const resume = await prisma.resume.findUnique({
-      where: { id },
+    const resume = await prisma.resume.findFirst({
+      where: { id, userId: req.userId },
       include: {
         linkedJobDescriptions: {
           select: { id: true, title: true, company: true }
@@ -58,7 +61,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/resumes - Create a new resume
-router.post('/', async (req, res) => {
+router.post('/', async (req: AuthRequest, res) => {
   try {
     const {
       name,
@@ -89,7 +92,8 @@ router.post('/', async (req, res) => {
         textContent,
         markdownContent,
         detectedCompany,
-        detectedRole
+        detectedRole,
+        userId: req.userId
       }
     });
     
@@ -101,7 +105,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/resumes/:id - Update a resume
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -110,7 +114,13 @@ router.put('/:id', async (req, res) => {
     delete updateData.id;
     delete updateData.createdAt;
     delete updateData.updatedAt;
+    delete updateData.userId;
     
+    const owned = await prisma.resume.findFirst({ where: { id, userId: req.userId } });
+    if (!owned) {
+      return res.status(404).json({ error: 'Resume not found' });
+    }
+
     const resume = await prisma.resume.update({
       where: { id },
       data: updateData,
@@ -132,12 +142,12 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/resumes/:id - Delete a resume
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     
-    await prisma.resume.delete({
-      where: { id }
+    await prisma.resume.deleteMany({
+      where: { id, userId: req.userId }
     });
     
     res.json({ message: 'Resume deleted successfully' });

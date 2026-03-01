@@ -4,7 +4,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
 
 // Import routes
 import resumeRoutes from './routes/resumes';
@@ -12,14 +11,11 @@ import coverLetterRoutes from './routes/coverLetters';
 import jobDescriptionRoutes from './routes/jobDescriptions';
 import scraperCacheRoutes from './routes/scraperCache';
 import migrationRoutes from './routes/migration';
+import authRoutes from './routes/auth';
+import { prisma } from './db';
 
 // Load environment variables
 dotenv.config();
-
-// Initialize Prisma client
-export const prisma = new PrismaClient({
-  log: ['query', 'error', 'warn'],
-});
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -60,6 +56,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/cover-letters', coverLetterRoutes);
 app.use('/api/job-descriptions', jobDescriptionRoutes);
