@@ -1,8 +1,9 @@
 .job-descriptions-page {
   padding: 20px;
   height: 100vh;
-  overflow-y: auto;
-  scroll-behavior: smooth;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-header {

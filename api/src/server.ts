@@ -27,12 +27,7 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.'
 });
 
-// Security middleware
-app.use(helmet());
-app.use(compression());
-app.use(limiter);
-
-// CORS configuration
+// CORS must be first so even rate-limited responses include the header
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'];
 app.use(cors({
   origin: allowedOrigins,
@@ -40,6 +35,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+// Security middleware
+app.use(helmet());
+app.use(compression());
+app.use(limiter);
 
 // Body parsing middleware
 app.use(express.json({ 
