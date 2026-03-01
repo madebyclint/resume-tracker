@@ -501,7 +501,7 @@ Clint`;
       (job.id && job.id.toLowerCase().includes(searchTerm.toLowerCase()));
 
     // Hide inactive statuses unless 'Show All' is enabled
-    const hiddenStatuses = ['wont_apply', 'archived', 'duplicate', 'rejected', 'withdrawn'];
+    const hiddenStatuses = ['wont_apply', 'archived', 'duplicate'];
     const hiddenOfferStages = ['rejected', 'expired'];
 
     const isStatusHidden = hiddenStatuses.includes(job.applicationStatus || 'not_applied');
