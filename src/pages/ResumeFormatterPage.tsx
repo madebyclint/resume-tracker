@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import ReactDOMServer from 'react-dom/server';
-import { useAppState } from '../state/AppStateContext';
-import { saveGeneratedResume } from '../storage';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -22,42 +20,6 @@ const validateMarkdownResumePrompt = (text: string): Array<{ type: 'pass' | 'war
     results.push({ type: 'pass', message: '✅ Has proper Markdown headers' });
   } else {
     results.push({ type: 'error', message: '❌ Missing Markdown headers (use # for main title, ## for sections)' });
-  }
-
-  // Check for only ONE divider line
-  const dividerLines = text.match(/^[-=_*]{3,}$/gm);
-  if (dividerLines) {
-    if (dividerLines.length === 1) {
-      results.push({ type: 'pass', message: '✅ Has exactly one divider line' });
-    } else {
-      results.push({ type: 'error', message: `❌ Has ${dividerLines.length} divider lines, should have exactly 1` });
-    }
-  } else {
-    results.push({ type: 'error', message: '❌ Missing divider line after header (use --- or similar)' });
-  }
-
-  // Check divider placement (should be after header)
-  const lines = text.split('\n');
-  let headerFound = false;
-  let dividerAfterHeader = false;
-  let dividerLineNumber = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.match(/^#\s+/)) {
-      headerFound = true;
-    }
-    if (headerFound && line.match(/^[-=_*]{3,}$/)) {
-      dividerAfterHeader = true;
-      dividerLineNumber = i + 1;
-      break;
-    }
-  }
-
-  if (dividerAfterHeader) {
-    results.push({ type: 'pass', message: `✅ Divider correctly placed after header (line ${dividerLineNumber})` });
-  } else if (dividerLines && dividerLines.length > 0) {
-    results.push({ type: 'error', message: '❌ Divider should come immediately after header section' });
   }
 
   // Check for header with bullet separators in contact info
@@ -258,17 +220,10 @@ const validateResume = (text: string): Array<{ type: 'pass' | 'warning' | 'error
 };
 
 const ResumeFormatterPage: React.FC = () => {
-  const { state, setState } = useAppState();
-
   // Resume formatter state
   const [resumeInputText, setResumeInputText] = useState('');
   const [formattedHTML, setFormattedHTML] = useState('');
   const [validationResults, setValidationResults] = useState<Array<{ type: 'pass' | 'warning' | 'error', message: string }>>([]);
-
-  // Save resume modal state
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [saveFileName, setSaveFileName] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
 
   const validateResume = (text: string) => {
     const results = validateMarkdownResumePrompt(text);
@@ -337,63 +292,66 @@ const ResumeFormatterPage: React.FC = () => {
     previewWindow.focus();
   };
 
-  const handleSaveResume = () => {
-    if (!formattedHTML) {
-      alert('Please format the resume first.');
+  const handlePrintPDF = () => {
+    if (!resumeInputText.trim()) return;
+
+    const markdownComponent = (
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+        {resumeInputText}
+      </ReactMarkdown>
+    );
+    const renderedHTML = ReactDOMServer.renderToStaticMarkup(markdownComponent);
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to save as PDF.');
       return;
     }
-    // Generate a simple filename suggestion
-    const today = new Date().toISOString().split('T')[0];
-    setSaveFileName(`Resume_${today}`);
-    setShowSaveModal(true);
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Resume</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            color: #333;
+            margin: 0;
+            padding: 20px 40px;
+            background: white;
+          }
+          h1 { font-size: 16pt; margin: 0 0 4px 0; }
+          h2 { font-size: 12pt; margin: 16px 0 4px 0; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+          h3 { font-size: 11pt; margin: 8px 0 2px 0; }
+          ul { margin: 4px 0; padding-left: 20px; }
+          li { margin: 0 0 2px 0; }
+          p { margin: 4px 0; }
+          hr { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>${renderedHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   };
 
-  const handleConfirmSave = async () => {
-    if (!saveFileName.trim() || !formattedHTML) {
-      alert('Please enter a filename and ensure resume is formatted.');
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      // Create a mock job description for the saveGeneratedResume function
-      const mockJobDescription = {
-        id: 'temp-job',
-        title: 'Resume Formatter Job',
-        company: 'Manual Entry',
-        rawText: '',
-        url: '',
-        uploadDate: new Date().toISOString(),
-        sequentialId: 0,
-        linkedResumeIds: [],
-        linkedCoverLetterIds: [],
-        extractedInfo: {
-          requiredSkills: [],
-          preferredSkills: [],
-          responsibilities: [],
-          requirements: []
-        },
-        keywords: []
-      };
-
-      const savedResume = await saveGeneratedResume(saveFileName.trim(), resumeInputText, mockJobDescription);
-
-      setState(prev => ({
-        ...prev,
-        resumes: [...prev.resumes, savedResume]
-      }));
-
-      // Reset form
-      setShowSaveModal(false);
-      setSaveFileName('');
-      alert('Resume saved successfully!');
-    } catch (error) {
-      console.error('Error saving resume:', error);
-      alert('Error saving resume. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
+  const handleDownloadMarkdown = () => {
+    if (!resumeInputText.trim()) return;
+    const today = new Date().toISOString().split('T')[0];
+    const blob = new Blob([resumeInputText], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `resume_${today}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -407,10 +365,17 @@ const ResumeFormatterPage: React.FC = () => {
         <div className="output-controls">
           <button
             className="save-button"
-            onClick={handleSaveResume}
-            disabled={!formattedHTML}
+            onClick={handlePrintPDF}
+            disabled={!resumeInputText.trim()}
           >
-            💾 Save Resume
+            🖨️ Save as PDF
+          </button>
+          <button
+            className="preview-button"
+            onClick={handleDownloadMarkdown}
+            disabled={!resumeInputText.trim()}
+          >
+            ⬇️ Download .md
           </button>
           <button
             className="preview-button"
@@ -469,7 +434,6 @@ const ResumeFormatterPage: React.FC = () => {
                   </ul>
                   <p><strong>Prompt Requirements:</strong></p>
                   <ul>
-                    <li>Exactly ONE divider line after header (---)</li>
                     <li>Header with bullet separators (• or |)</li>
                     <li>Skills with bold categories and bullets</li>
                     <li>ASCII-safe characters only</li>
@@ -562,39 +526,6 @@ const ResumeFormatterPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Save Resume Modal */}
-      {showSaveModal && (
-        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Save Resume</h3>
-              <button onClick={() => setShowSaveModal(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label htmlFor="save-filename">Resume Name:</label>
-                <input
-                  id="save-filename"
-                  type="text"
-                  value={saveFileName}
-                  onChange={(e) => setSaveFileName(e.target.value)}
-                  placeholder="Enter resume name..."
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button onClick={() => setShowSaveModal(false)}>Cancel</button>
-              <button
-                onClick={handleConfirmSave}
-                disabled={!saveFileName.trim() || isSaving}
-              >
-                {isSaving ? 'Saving...' : 'Save Resume'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
