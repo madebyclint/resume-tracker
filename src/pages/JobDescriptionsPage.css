@@ -1171,6 +1171,9 @@
 /* Resume Formatter Styles */
 .resume-formatter-content {
   padding: 20px 0;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .formatter-header {
@@ -1193,7 +1196,6 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 30px;
-  height: calc(100vh - 200px);
 }
 
 .input-section,
