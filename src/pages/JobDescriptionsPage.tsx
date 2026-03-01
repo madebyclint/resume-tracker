@@ -2835,7 +2835,7 @@ AI will automatically fill in the job title and company name fields above!"
                       checked={hideRejectedJobs}
                       onChange={(e) => setHideRejectedJobs(e.target.checked)}
                     />
-                    Hide rejected applications
+                    Hide rejected/withdrawn
                   </label>
                   <label className="filter-checkbox">
                     <input
@@ -2897,10 +2897,11 @@ AI will automatically fill in the job title and company name fields above!"
                         );
                       }
 
-                      // Filter out rejected if hiding rejected
+                      // Filter out rejected and withdrawn if hiding rejected
                       if (hideRejectedJobs) {
                         filteredJobs = filteredJobs.filter(job =>
-                          job.applicationStatus !== 'rejected'
+                          job.applicationStatus !== 'rejected' &&
+                          job.applicationStatus !== 'withdrawn'
                         );
                       }
 
