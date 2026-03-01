@@ -1,8 +1,10 @@
 # Railway Project Configuration
 [build]
-builder = "DOCKERFILE"
+builder = "NIXPACKS"
+buildCommand = "cd api && npm install && npm run db:generate && npm run build"
 
 [deploy]
+startCommand = "cd api && npm run start"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

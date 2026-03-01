@@ -6,6 +6,15 @@ export const DataMigrationTool: React.FC = () => {
   const [status, setStatus] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [migrationResults, setMigrationResults] = useState<any>(null);
+  const [collapsed, setCollapsed] = useState(() => {
+    return localStorage.getItem('migrationToolCollapsed') === 'true';
+  });
+
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem('migrationToolCollapsed', String(next));
+  };
 
   const handleExportFromIndexedDB = async () => {
     setIsLoading(true);
@@ -117,16 +126,29 @@ export const DataMigrationTool: React.FC = () => {
       left: '10px', 
       background: '#fff', 
       border: '2px solid #2196F3', 
-      padding: '20px', 
+      padding: collapsed ? '8px 12px' : '20px', 
       borderRadius: '8px',
       boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
       zIndex: 9999,
-      minWidth: '400px',
+      minWidth: collapsed ? 'unset' : '400px',
       maxWidth: '500px'
     }}>
-      <h3 style={{ margin: '0 0 15px 0', color: '#2196F3' }}>🚀 Railway Migration Tool</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+        {collapsed
+          ? <span style={{ fontSize: '13px', color: '#2196F3', fontWeight: 600 }}>🚀 Migration Tool</span>
+          : <h3 style={{ margin: 0, color: '#2196F3' }}>🚀 Railway Migration Tool</h3>
+        }
+        <button
+          onClick={toggleCollapsed}
+          style={{ background: 'none', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', padding: '2px 8px', fontSize: '13px' }}
+        >
+          {collapsed ? 'Expand' : 'Minimize'}
+        </button>
+      </div>
+
+      {!collapsed && (<>
       
-      <div style={{ marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ marginTop: '15px', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <button 
           onClick={handleTestRailwayConnection}
           disabled={isLoading}
@@ -271,6 +293,7 @@ export const DataMigrationTool: React.FC = () => {
           }
         `}
       </style>
+      </>)}
     </div>
   );
 };
