@@ -34,120 +34,85 @@ export function isAIConfigured(): boolean {
 }
 
 // Fetch and extract text content from a URL
+/**
+ * Fetch a job posting page via Jina Reader (r.jina.ai).
+ * Jina proxies the page server-side and returns clean markdown.
+ * Works on Greenhouse, Lever, Workday, Indeed, and most public company career pages.
+ * LinkedIn blocks automated access — callers are given a clear copy/paste fallback message.
+ */
 export async function fetchJobDescriptionFromURL(url: string): Promise<{
   success: boolean;
   title?: string;
   company?: string;
   text?: string;
   error?: string;
-  corsBlocked?: boolean;
 }> {
+  // Basic URL validation
+  let urlObj: URL;
   try {
-    // Basic URL validation
-    const urlObj = new URL(url);
-    if (!['http:', 'https:'].includes(urlObj.protocol)) {
-      return {
-        success: false,
-        error: 'Only HTTP and HTTPS URLs are supported'
-      };
-    }
+    urlObj = new URL(url);
+  } catch {
+    return { success: false, error: 'Invalid URL — please include https://' };
+  }
 
-    // Check if this is a known problematic domain
-    const hostname = urlObj.hostname.toLowerCase();
-    const corsBlockedDomains = ['linkedin.com', 'indeed.com', 'glassdoor.com', 'monster.com'];
-    
-    if (corsBlockedDomains.some(domain => hostname.includes(domain))) {
-      return {
-        success: false,
-        corsBlocked: true,
-        error: `CORS blocked: ${hostname} doesn't allow direct browser access. Please copy and paste the job description text manually.`
-      };
-    }
+  if (!['http:', 'https:'].includes(urlObj.protocol)) {
+    return { success: false, error: 'Only HTTP and HTTPS URLs are supported' };
+  }
 
-    // Try to fetch with a timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; ResumeTracker/1.0)',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-        }
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: `Failed to fetch URL: ${response.status} ${response.statusText}`
-        };
-      }
-
-      const html = await response.text();
-      
-      // Extract text content from HTML
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      
-      // Remove script and style elements
-      const scripts = doc.querySelectorAll('script, style, nav, header, footer');
-      scripts.forEach(el => el.remove());
-      
-      // Try to extract title and company from common patterns
-      let title = '';
-      let company = '';
-      
-      // Try to get title from page title or h1 elements
-      const pageTitle = doc.title;
-      const h1Elements = doc.querySelectorAll('h1');
-      
-      if (h1Elements.length > 0) {
-        title = h1Elements[0].textContent?.trim() || '';
-      } else if (pageTitle) {
-        // Extract job title from page title (common patterns)
-        const titleMatch = pageTitle.match(/^([^|]*?)(?:\s*[-|]\s*([^|]*?))?(?:\s*[-|]\s*.*)?$/);
-        if (titleMatch) {
-          title = titleMatch[1]?.trim() || '';
-          company = titleMatch[2]?.trim() || '';
-        }
-      }
-      
-      // Get main content text
-      const bodyText = doc.body?.textContent || '';
-      
-      // Clean up the text
-      const cleanText = bodyText
-        .replace(/\s+/g, ' ')  // Normalize whitespace
-        .replace(/\n\s*\n/g, '\n\n')  // Normalize line breaks
-        .trim();
-
-      return {
-        success: true,
-        title: title || undefined,
-        company: company || undefined,
-        text: cleanText
-      };
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-  } catch (error) {
-    // Check if it's a CORS error
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      return {
-        success: false,
-        corsBlocked: true,
-        error: 'CORS blocked: This website doesn\'t allow direct browser access. Please copy and paste the job description text manually.'
-      };
-    }
-    
+  // LinkedIn blocks automated access — skip Jina and tell the user up front
+  if (urlObj.hostname.includes('linkedin.com')) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch URL'
+      error: 'LinkedIn blocks automated access. Open the job posting, select all (Cmd+A), copy, and paste the text into the text box instead.'
+    };
+  }
+
+  // Strip tracking query params for a cleaner request to Jina
+  const cleanUrl = `${urlObj.origin}${urlObj.pathname}`;
+  const jinaUrl = `https://r.jina.ai/${cleanUrl}`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s — Jina may need time for JS-heavy pages
+
+    const response = await fetch(jinaUrl, {
+      signal: controller.signal,
+      headers: { Accept: 'text/plain' }
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Jina Reader returned ${response.status} — the page may be behind a login or paywalled.`
+      };
+    }
+
+    const markdown = await response.text();
+
+    if (!markdown || markdown.trim().length < 100) {
+      return {
+        success: false,
+        error: 'Jina Reader returned an empty page. The job posting may require a login.'
+      };
+    }
+
+    // Extract a rough title from the first heading in the markdown
+    const headingMatch = markdown.match(/^#+\s+(.+)$/m);
+    const title = headingMatch?.[1]?.trim();
+
+    return {
+      success: true,
+      title,
+      text: markdown
+    };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return { success: false, error: 'Request timed out. Try again or paste the text manually.' };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch via Jina Reader'
     };
   }
 }

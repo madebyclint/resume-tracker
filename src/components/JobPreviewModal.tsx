@@ -130,6 +130,7 @@ export function JobPreviewModal({
         salaryMin: editedData.salary?.min || undefined,
         salaryMax: editedData.salary?.max || undefined,
         uploadDate: new Date().toISOString(),
+        lastActivityDate: new Date().toISOString(),
         applicationStatus: 'not_applied',
         interviewStage: undefined,
         offerStage: undefined,

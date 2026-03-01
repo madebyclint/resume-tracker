@@ -327,22 +327,14 @@ export function ScraperUploadZone({ onInputCreated, initialData }: ScraperUpload
 
   const renderTextInput = () => (
     <div className="text-input-section">
+      <div className="text-input-tips">
+        <span>💡 On any job page: <strong>Cmd+A</strong> (select all) → <strong>Cmd+C</strong> (copy) → paste here. Works on LinkedIn, Indeed, and anywhere.</span>
+        <span>📸 Or paste a <strong>screenshot</strong> directly — it'll be read with AI vision.</span>
+      </div>
       <textarea
         ref={textAreaRef}
         className="job-text-input"
-        placeholder="Paste the job description text here...
-
-Example:
-Senior Frontend Developer
-Company ABC - Remote
-$80,000 - $120,000
-
-We are looking for an experienced React developer...
-
-Requirements:
-• 5+ years JavaScript experience
-• React, TypeScript, Node.js
-• Experience with REST APIs"
+        placeholder="Paste job description text here — or paste a screenshot with Cmd+V..."
         value={textContent}
         onChange={(e) => setTextContent(e.target.value)}
         rows={12}
@@ -371,12 +363,12 @@ Requirements:
   const renderUrlInput = () => (
     <div className="url-input-section">
       <div className="url-input-info">
-        <FontAwesomeIcon icon={faExclamationTriangle} />
+        <FontAwesomeIcon icon={faCheckCircle} />
         <div>
-          <h4>URL Extraction (Experimental)</h4>
+          <h4>Paste a URL</h4>
           <p>
-            Due to CORS restrictions, URL extraction may not work for all job sites.
-            We recommend using the browser extension or copy/paste method for better results.
+            Works on most public job pages — LinkedIn, Indeed, Greenhouse, Lever, Workday, and more.
+            Fetched via Jina Reader so login-walled pages won't work.
           </p>
         </div>
       </div>
