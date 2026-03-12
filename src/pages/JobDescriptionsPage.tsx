@@ -226,7 +226,31 @@ const JobDescriptionsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'job-descriptions' | 'analytics'>('job-descriptions');
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   // Removed old manual form - now using AI scraper only
-  // Removed manual form data - using AI scraper for job entry
+  // Form data for the manual add/edit form (still used by URL fetch and re-parse flows)
+  const [formData, setFormData] = useState({
+    title: '',
+    company: '',
+    url: '',
+    rawText: '',
+    additionalContext: '',
+    notes: '',
+    sequentialId: '',
+    role: '',
+    location: '',
+    workArrangement: '' as 'hybrid' | 'remote' | 'office' | '',
+    source1Type: 'url' as 'url' | 'text',
+    source1Content: '',
+    source2Type: 'url' as 'url' | 'text',
+    source2Content: '',
+    salaryMin: '',
+    salaryMax: '',
+    contactName: '',
+    contactEmail: '',
+    contactPhone: '',
+    impact: '' as 'low' | 'medium' | 'high' | '',
+    applicationDate: '',
+    applicationStatus: '' as 'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | 'wont_apply' | 'duplicate' | 'archived' | ''
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingURL, setIsFetchingURL] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -2080,7 +2104,7 @@ Location: New York City (on-site)`,
             {fetchError && (
               <div style={{ color: '#e74c3c', fontSize: '12px', marginTop: '4px', padding: '8px', backgroundColor: '#fdf2f2', border: '1px solid #fecaca', borderRadius: '4px' }}>
                 <strong>URL Fetch Failed:</strong> {fetchError}
-                {fetchError.includes('CORS') && (
+                {fetchError?.includes('CORS') && (
                   <div style={{ marginTop: '4px', fontSize: '11px' }}>
                     <strong>Workaround:</strong> Open the job posting in a new tab, select all text (Ctrl/Cmd+A), copy it, and paste it in the "Job Description Text" field below.
                   </div>
@@ -2127,9 +2151,9 @@ AI will automatically fill in the job title and company name fields above!"
                     borderRadius: '3px',
                     border: '1px solid #e9ecef'
                   }}
-                    title={`Input: ${lastParseUsage.promptTokens} tokens, Output: ${lastParseUsage.completionTokens} tokens, Total: ${lastParseUsage.totalTokens} tokens`}
+                    title={`Input: ${lastParseUsage?.promptTokens} tokens, Output: ${lastParseUsage?.completionTokens} tokens, Total: ${lastParseUsage?.totalTokens} tokens`}
                   >
-                    <FontAwesomeIcon icon={faChartBar} /> {lastParseUsage.promptTokens}<FontAwesomeIcon icon={faArrowUp} /> {lastParseUsage.completionTokens}<FontAwesomeIcon icon={faArrowDown} /> • <FontAwesomeIcon icon={faDollarSign} /> {estimateCost(lastParseUsage)}
+                    <FontAwesomeIcon icon={faChartBar} /> {lastParseUsage?.promptTokens}<FontAwesomeIcon icon={faArrowUp} /> {lastParseUsage?.completionTokens}<FontAwesomeIcon icon={faArrowDown} /> • <FontAwesomeIcon icon={faDollarSign} /> {estimateCost(lastParseUsage!)}
                   </small>
                 )}
 
@@ -3507,11 +3531,9 @@ AI will automatically fill in the job title and company name fields above!"
       {/* Job Scraper Modal */}
       {scraperModalOpen && (
         <div>
-          {console.log('Rendering JobScraperModal, scraperModalOpen:', scraperModalOpen)}
           <JobScraperModal
             isOpen={scraperModalOpen}
             onClose={() => {
-              console.log('Closing scraper modal');
               setScraperModalOpen(false);
             }}
             onJobCreated={handleScrapedJobCreated}

@@ -58,7 +58,7 @@ class ApiStorage {
       }
       
       console.error(`API request failed: ${url}`, error);
-      throw new ApiError(0, `Network error: ${error.message}`);
+      throw new ApiError(0, `Network error: ${(error as Error).message}`);
     }
   }
 

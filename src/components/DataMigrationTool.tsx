@@ -29,7 +29,7 @@ export const DataMigrationTool: React.FC = () => {
       
       return data;
     } catch (error) {
-      setStatus(`Error exporting from IndexedDB: ${error.message}`);
+      setStatus(`Error exporting from IndexedDB: ${(error as any).message}`);
       throw error;
     } finally {
       setIsLoading(false);
@@ -64,7 +64,7 @@ export const DataMigrationTool: React.FC = () => {
           setMigrationResults(results);
           setStatus('Backup data imported successfully!');
         } catch (error) {
-          setStatus(`Error importing backup: ${error.message}`);
+          setStatus(`Error importing backup: ${(error as any).message}`);
         } finally {
           setIsLoading(false);
         }
@@ -72,7 +72,7 @@ export const DataMigrationTool: React.FC = () => {
       
       input.click();
     } catch (error) {
-      setStatus(`Error: ${error.message}`);
+      setStatus(`Error: ${(error as any).message}`);
       setIsLoading(false);
     }
   };
@@ -80,9 +80,16 @@ export const DataMigrationTool: React.FC = () => {
   const handleFullMigration = async () => {
     try {
       const data = await handleExportFromIndexedDB();
-      await handleImportToRailway(data);
+      setIsLoading(true);
+      setStatus('Importing data to Railway database...');
+      const results = await storage.importFromIndexedDB(data);
+      setMigrationResults(results);
+      setStatus('Migration to Railway completed successfully!');
     } catch (error) {
       console.error('Migration failed:', error);
+      setStatus(`Migration failed: ${(error as any).message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -99,7 +106,7 @@ export const DataMigrationTool: React.FC = () => {
       await deleteDatabase();
       setStatus('IndexedDB deleted successfully! You can now refresh the page to use Railway storage.');
     } catch (error) {
-      setStatus(`Error deleting IndexedDB: ${error.message}`);
+      setStatus(`Error deleting IndexedDB: ${(error as any).message}`);
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +120,7 @@ export const DataMigrationTool: React.FC = () => {
       await storage.getStats();
       setStatus('✅ Railway database connection successful!');
     } catch (error) {
-      setStatus(`❌ Railway database connection failed: ${error.message}`);
+      setStatus(`❌ Railway database connection failed: ${(error as any).message}`);
     } finally {
       setIsLoading(false);
     }
