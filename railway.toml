@@ -1,10 +1,10 @@
 # Railway Project Configuration
 [build]
 builder = "NIXPACKS"
-buildCommand = "cd api && npm install && npm run db:generate && npm run build"
+buildCommand = "npm install && npm run build && cd api && npm install && npm run db:generate && npm run build"
 
 [deploy]
-startCommand = "cd api && npm run start"
+startCommand = "cd api && npx prisma db push && npm run start"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

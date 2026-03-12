@@ -140,7 +140,11 @@ router.put('/:id', async (req: AuthRequest, res) => {
       data: updateData,
       include: {
         linkedJobDescriptions: {
-          select: { id: true, title: true, company: true }
+          include: {
+            jobDescription: {
+              select: { id: true, title: true, company: true }
+            }
+          }
         }
       }
     });
@@ -148,7 +152,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
     res.json(coverLetter);
   } catch (error) {
     console.error('Error updating cover letter:', error);
-    if (error.code === 'P2025') {
+    if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Cover letter not found' });
     }
     res.status(500).json({ error: 'Failed to update cover letter' });
@@ -167,7 +171,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
     res.json({ message: 'Cover letter deleted successfully' });
   } catch (error) {
     console.error('Error deleting cover letter:', error);
-    if (error.code === 'P2025') {
+    if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Cover letter not found' });
     }
     res.status(500).json({ error: 'Failed to delete cover letter' });
@@ -190,7 +194,7 @@ router.post('/:id/link-job/:jobId', async (req, res) => {
     res.json({ message: 'Cover letter linked to job description successfully' });
   } catch (error) {
     console.error('Error linking cover letter to job:', error);
-    if (error.code === 'P2002') {
+    if ((error as any).code === 'P2002') {
       return res.status(400).json({ error: 'Cover letter is already linked to this job' });
     }
     res.status(500).json({ error: 'Failed to link cover letter to job description' });

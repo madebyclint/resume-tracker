@@ -44,7 +44,11 @@ router.get('/:id', async (req: AuthRequest, res) => {
       where: { id, userId: req.userId },
       include: {
         linkedJobDescriptions: {
-          select: { id: true, title: true, company: true }
+          include: {
+            jobDescription: {
+              select: { id: true, title: true, company: true }
+            }
+          }
         }
       }
     });
@@ -126,7 +130,11 @@ router.put('/:id', async (req: AuthRequest, res) => {
       data: updateData,
       include: {
         linkedJobDescriptions: {
-          select: { id: true, title: true, company: true }
+          include: {
+            jobDescription: {
+              select: { id: true, title: true, company: true }
+            }
+          }
         }
       }
     });
@@ -134,7 +142,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
     res.json(resume);
   } catch (error) {
     console.error('Error updating resume:', error);
-    if (error.code === 'P2025') {
+    if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Resume not found' });
     }
     res.status(500).json({ error: 'Failed to update resume' });
@@ -153,7 +161,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
     res.json({ message: 'Resume deleted successfully' });
   } catch (error) {
     console.error('Error deleting resume:', error);
-    if (error.code === 'P2025') {
+    if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Resume not found' });
     }
     res.status(500).json({ error: 'Failed to delete resume' });
@@ -176,7 +184,7 @@ router.post('/:id/link-job/:jobId', async (req, res) => {
     res.json({ message: 'Resume linked to job description successfully' });
   } catch (error) {
     console.error('Error linking resume to job:', error);
-    if (error.code === 'P2002') {
+    if ((error as any).code === 'P2002') {
       return res.status(400).json({ error: 'Resume is already linked to this job' });
     }
     res.status(500).json({ error: 'Failed to link resume to job description' });

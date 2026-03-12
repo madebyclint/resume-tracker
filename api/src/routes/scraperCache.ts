@@ -106,7 +106,7 @@ router.delete('/:inputHash', async (req, res) => {
     res.json({ message: 'Cache entry deleted successfully' });
   } catch (error) {
     console.error('Error deleting cache entry:', error);
-    if (error.code === 'P2025') {
+    if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Cache entry not found' });
     }
     res.status(500).json({ error: 'Failed to delete cache entry' });

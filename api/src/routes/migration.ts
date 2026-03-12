@@ -215,7 +215,7 @@ router.post('/import-from-indexeddb', async (req, res) => {
                 });
               } catch (linkError) {
                 // Ignore duplicate link errors
-                if (linkError.code !== 'P2002') {
+                if ((linkError as any).code !== 'P2002') {
                   console.error('Error linking resume:', linkError);
                 }
               }
@@ -233,7 +233,7 @@ router.post('/import-from-indexeddb', async (req, res) => {
                 });
               } catch (linkError) {
                 // Ignore duplicate link errors
-                if (linkError.code !== 'P2002') {
+                if ((linkError as any).code !== 'P2002') {
                   console.error('Error linking cover letter:', linkError);
                 }
               }

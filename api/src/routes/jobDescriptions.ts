@@ -235,7 +235,7 @@ router.post('/', async (req: AuthRequest, res) => {
       data: {
         jobDescriptionId: jobDescription.id,
         type: 'status_change',
-        toValue: { status: applicationStatus },
+        toValue: JSON.stringify({ status: applicationStatus }),
         description: 'Job description created'
       }
     });
@@ -387,7 +387,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
     res.json(jobDescription);
   } catch (error) {
     console.error('Error updating job description:', error);
-    if (error.code === 'P2025') {
+    if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Job description not found' });
     }
     res.status(500).json({ error: 'Failed to update job description' });
@@ -406,7 +406,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
     res.json({ message: 'Job description deleted successfully' });
   } catch (error) {
     console.error('Error deleting job description:', error);
-    if (error.code === 'P2025') {
+    if ((error as any).code === 'P2025') {
       return res.status(404).json({ error: 'Job description not found' });
     }
     res.status(500).json({ error: 'Failed to delete job description' });
@@ -430,7 +430,7 @@ router.post('/:id/archive', async (req: AuthRequest, res) => {
       data: {
         jobDescriptionId: id,
         type: 'status_change',
-        toValue: { archived: true },
+        toValue: JSON.stringify({ archived: true }),
         description: 'Job description archived'
       }
     });

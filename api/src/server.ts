@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
 
 // Import routes
 import resumeRoutes from './routes/resumes';
@@ -87,13 +88,21 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Not Found',
-    message: `Route ${req.originalUrl} not found`
+// In production, serve the Vite frontend build and handle SPA routing
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '../../dist');
+  app.use(express.static(distPath));
+  app.use('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
   });
-});
+} else {
+  app.use('*', (req, res) => {
+    res.status(404).json({
+      error: 'Not Found',
+      message: `Route ${req.originalUrl} not found`
+    });
+  });
+}
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
