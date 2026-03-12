@@ -41,11 +41,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   /** Save a job to the DB — no-op in DEV mode, writes to API in PROD mode */
   const persistJobDescription = useCallback(async (job: JobDescription): Promise<void> => {
     if (devMode) return;
-    try {
-      await apiStorage.saveJobDescription(job);
-    } catch (error) {
-      console.error('Failed to persist job to API:', error);
-    }
+    await apiStorage.saveJobDescription(job);
   }, [devMode]);
 
   /** Delete a job from the DB — no-op in DEV mode, deletes from API in PROD mode */

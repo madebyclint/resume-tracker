@@ -251,27 +251,103 @@ router.post('/', async (req: AuthRequest, res) => {
 router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
-    
-    // Remove fields that shouldn't be updated directly
-    delete updateData.id;
-    delete updateData.createdAt;
-    delete updateData.updatedAt;
-    delete updateData.sequentialId;
-    delete updateData.userId;
-    
+    const body = req.body;
+
     // Get current job description for comparison
     const currentJob = await prisma.jobDescription.findFirst({
       where: { id, userId: req.userId }
     });
-    
+
     if (!currentJob) {
       return res.status(404).json({ error: 'Job description not found' });
     }
 
-    // Update lastActivityDate
-    updateData.lastActivityDate = new Date();
-    
+    // Extract only known scalar fields — prevents sending relation arrays,
+    // computed fields, or frontend-only fields to Prisma which would throw.
+    const {
+      title,
+      company,
+      role,
+      location,
+      workArrangement,
+      source1Type,
+      source1Content,
+      source2Type,
+      source2Content,
+      salaryMin,
+      salaryMax,
+      salaryRange,
+      contactName,
+      contactEmail,
+      contactPhone,
+      url,
+      rawText,
+      additionalContext,
+      keywords,
+      uploadDate,
+      extractedInfo,
+      applicationStatus,
+      interviewStage,
+      offerStage,
+      isArchived,
+      duplicateOfId,
+      applicationDate,
+      submissionDate,
+      source,
+      contactPerson,
+      secondaryContact,
+      priority,
+      impact,
+      waitingForResponse,
+      followUpDate,
+      interviewDates,
+      salaryDiscussed,
+      notes,
+      noteItems,
+      startDate,
+    } = body;
+
+    // Build prisma-safe update payload
+    const updateData: Record<string, any> = { lastActivityDate: new Date() };
+
+    const scalarMap: Record<string, any> = {
+      title, company, role, location, workArrangement,
+      source1Type, source1Content, source2Type, source2Content,
+      salaryMin, salaryMax, salaryRange,
+      contactName, contactEmail, contactPhone,
+      url, rawText, additionalContext,
+      applicationStatus, interviewStage, offerStage,
+      isArchived, duplicateOfId,
+      source, contactPerson, secondaryContact,
+      priority, impact, waitingForResponse,
+      salaryDiscussed, notes,
+    };
+
+    for (const [key, value] of Object.entries(scalarMap)) {
+      if (value !== undefined) updateData[key] = value;
+    }
+
+    // Serialize array/object fields to strings for storage
+    if (keywords !== undefined) {
+      updateData.keywords = Array.isArray(keywords) ? keywords.join(',') : (keywords ?? null);
+    }
+    if (extractedInfo !== undefined) {
+      updateData.extractedInfo = typeof extractedInfo === 'string' ? extractedInfo : JSON.stringify(extractedInfo);
+    }
+    if (noteItems !== undefined) {
+      updateData.noteItems = typeof noteItems === 'string' ? noteItems : JSON.stringify(noteItems);
+    }
+    if (interviewDates !== undefined) {
+      updateData.interviewDates = Array.isArray(interviewDates) ? interviewDates.join(',') : (interviewDates ?? null);
+    }
+
+    // Convert date strings to Date objects
+    if (uploadDate !== undefined) updateData.uploadDate = new Date(uploadDate);
+    if (applicationDate !== undefined) updateData.applicationDate = applicationDate ? new Date(applicationDate) : null;
+    if (submissionDate !== undefined) updateData.submissionDate = submissionDate ? new Date(submissionDate) : null;
+    if (followUpDate !== undefined) updateData.followUpDate = followUpDate ? new Date(followUpDate) : null;
+    if (startDate !== undefined) updateData.startDate = startDate ? new Date(startDate) : null;
+
     const jobDescription = await prisma.jobDescription.update({
       where: { id },
       data: updateData,
@@ -285,15 +361,15 @@ router.put('/:id', async (req: AuthRequest, res) => {
       }
     });
 
-    // Log status changes
-    if (updateData.applicationStatus && updateData.applicationStatus !== currentJob.applicationStatus) {
+    // Log status changes to dedicated tables
+    if (applicationStatus && applicationStatus !== currentJob.applicationStatus) {
       await prisma.statusHistory.create({
         data: {
           jobDescriptionId: id,
-          status: updateData.applicationStatus,
-          interviewStage: updateData.interviewStage,
-          offerStage: updateData.offerStage,
-          notes: updateData.notes || `Status changed to ${updateData.applicationStatus}`
+          status: applicationStatus,
+          interviewStage: interviewStage,
+          offerStage: offerStage,
+          notes: notes || `Status changed to ${applicationStatus}`
         }
       });
 
@@ -301,13 +377,13 @@ router.put('/:id', async (req: AuthRequest, res) => {
         data: {
           jobDescriptionId: id,
           type: 'status_change',
-          fromValue: { status: currentJob.applicationStatus },
-          toValue: { status: updateData.applicationStatus },
-          description: `Status changed from ${currentJob.applicationStatus} to ${updateData.applicationStatus}`
+          fromValue: JSON.stringify({ status: currentJob.applicationStatus }),
+          toValue: JSON.stringify({ status: applicationStatus }),
+          description: `Status changed from ${currentJob.applicationStatus} to ${applicationStatus}`
         }
       });
     }
-    
+
     res.json(jobDescription);
   } catch (error) {
     console.error('Error updating job description:', error);
