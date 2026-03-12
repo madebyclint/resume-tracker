@@ -21,8 +21,9 @@ function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) 
       case 'resume-formatter':
         return <ResumeFormatterPage />;
       case 'dashboard':
+        return <JobDescriptionsPage />;
       default:
-        return <DashboardPage />;
+        return <JobDescriptionsPage />;
     }
   };
 
@@ -31,13 +32,6 @@ function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) 
       <aside className="sidebar">
         <div className="logo">Resume Tracker</div>
         <nav>
-          <div
-            className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('dashboard')}
-            style={{ cursor: 'pointer' }}
-          >
-            📊 Dashboard
-          </div>
           <div
             className={`nav-item ${currentPage === 'jobs' ? 'active' : ''}`}
             onClick={() => setCurrentPage('jobs')}
