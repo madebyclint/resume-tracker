@@ -3,16 +3,17 @@ import { AppStateProvider, useAppState } from "./state/AppStateContext";
 import DashboardPage from "./pages/DashboardPage";
 import JobDescriptionsPage from "./pages/JobDescriptionsPage";
 import ResumeFormatterPage from "./pages/ResumeFormatterPage";
+import AdminPage from "./pages/AdminPage";
 import { DataMigrationTool } from "./components/DataMigrationTool";
 import LoginScreen from "./components/LoginScreen";
 import { AuthUser, verifyToken, getCurrentUser, logout } from "./utils/authService";
 import "./App.css";
 
-type Page = 'dashboard' | 'jobs' | 'resume-formatter';
+type Page = 'dashboard' | 'jobs' | 'resume-formatter' | 'admin';
 
 function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [currentPage, setCurrentPage] = useState<Page>('jobs');
-  const { state, devMode, setDevMode } = useAppState();
+  const { devMode, setDevMode } = useAppState();
 
   const renderCurrentPage = () => {
     switch (currentPage) {
@@ -20,6 +21,8 @@ function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) 
         return <JobDescriptionsPage />;
       case 'resume-formatter':
         return <ResumeFormatterPage />;
+      case 'admin':
+        return <AdminPage currentUser={user} />;
       case 'dashboard':
         return <JobDescriptionsPage />;
       default:
@@ -46,24 +49,37 @@ function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) 
           >
             📄 Resume Formatter
           </div>
+          {user.isAdmin && (
+            <div
+              className={`nav-item ${currentPage === 'admin' ? 'active' : ''}`}
+              onClick={() => setCurrentPage('admin')}
+              style={{ cursor: 'pointer' }}
+            >
+              ⚙️ Admin
+            </div>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-user">
             <span className="sidebar-user-name">{user.name}</span>
             <button className="sidebar-logout-btn" onClick={onLogout}>Sign out</button>
           </div>
-          <label className={`dev-mode-toggle ${devMode ? 'dev-mode-on' : ''}`}>
-            <input
-              type="checkbox"
-              checked={devMode}
-              onChange={e => setDevMode(e.target.checked)}
-            />
-            <span className="dev-mode-label">
-              {devMode ? '🧪 DEV mode' : '🔒 PROD mode'}
-            </span>
-          </label>
-          {devMode && (
-            <div className="dev-mode-badge">DB writes disabled</div>
+          {user.isAdmin && (
+            <>
+              <label className={`dev-mode-toggle ${devMode ? 'dev-mode-on' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={devMode}
+                  onChange={e => setDevMode(e.target.checked)}
+                />
+                <span className="dev-mode-label">
+                  {devMode ? '🧪 DEV mode' : '🔒 PROD mode'}
+                </span>
+              </label>
+              {devMode && (
+                <div className="dev-mode-badge">DB writes disabled</div>
+              )}
+            </>
           )}
         </div>
       </aside>

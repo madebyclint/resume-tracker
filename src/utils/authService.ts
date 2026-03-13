@@ -110,3 +110,83 @@ export async function changePassword(
     return { success: false, error: 'Network error' };
   }
 }
+
+// ── Admin user management ─────────────────────────────────────────────────────
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  isAdmin: boolean;
+  createdAt: string;
+}
+
+export async function listUsers(): Promise<AdminUser[]> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/admin/users`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to fetch users');
+  const data = await res.json();
+  return data.users as AdminUser[];
+}
+
+export async function createUser(input: {
+  email: string;
+  name: string;
+  password: string;
+  isAdmin: boolean;
+}): Promise<{ success: boolean; user?: AdminUser; error?: string }> {
+  const token = getToken();
+  try {
+    const res = await fetch(`${API_BASE_URL}/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(input),
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, error: data.error || 'Failed to create user' };
+    return { success: true, user: data.user };
+  } catch {
+    return { success: false, error: 'Network error' };
+  }
+}
+
+export async function updateUser(
+  id: string,
+  updates: { name?: string; email?: string; isAdmin?: boolean; password?: string }
+): Promise<{ success: boolean; user?: AdminUser; error?: string }> {
+  const token = getToken();
+  try {
+    const res = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(updates),
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, error: data.error || 'Failed to update user' };
+    return { success: true, user: data.user };
+  } catch {
+    return { success: false, error: 'Network error' };
+  }
+}
+
+export async function deleteUser(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = getToken();
+  try {
+    const res = await fetch(`${API_BASE_URL}/admin/users/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      return { success: false, error: data.error };
+    }
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Network error' };
+  }
+}
+
