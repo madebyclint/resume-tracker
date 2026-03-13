@@ -4,6 +4,7 @@ import DashboardPage from "./pages/DashboardPage";
 import JobDescriptionsPage from "./pages/JobDescriptionsPage";
 import ResumeFormatterPage from "./pages/ResumeFormatterPage";
 import AdminPage from "./pages/AdminPage";
+import AccountModal from "./components/AccountModal";
 import { DataMigrationTool } from "./components/DataMigrationTool";
 import LoginScreen from "./components/LoginScreen";
 import { AuthUser, verifyToken, getCurrentUser, logout } from "./utils/authService";
@@ -11,8 +12,9 @@ import "./App.css";
 
 type Page = 'dashboard' | 'jobs' | 'resume-formatter' | 'admin';
 
-function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+function AppShell({ user, onLogout, onUserUpdated }: { user: AuthUser; onLogout: () => void; onUserUpdated: (u: AuthUser) => void }) {
   const [currentPage, setCurrentPage] = useState<Page>('jobs');
+  const [showAccount, setShowAccount] = useState(false);
   const { devMode, setDevMode } = useAppState();
 
   const renderCurrentPage = () => {
@@ -61,7 +63,7 @@ function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) 
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-user">
-            <span className="sidebar-user-name">{user.name}</span>
+            <button className="sidebar-user-name" onClick={() => setShowAccount(true)} title="Edit profile">{user.name}</button>
             <button className="sidebar-logout-btn" onClick={onLogout}>Sign out</button>
           </div>
           {user.isAdmin && (
@@ -87,6 +89,13 @@ function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) 
         {renderCurrentPage()}
       </main>
       {devMode && <DataMigrationTool />}
+      {showAccount && (
+        <AccountModal
+          user={user}
+          onClose={() => setShowAccount(false)}
+          onUserUpdated={u => { onUserUpdated(u); setShowAccount(false); }}
+        />
+      )}
     </div>
   );
 }
@@ -127,7 +136,7 @@ export default function App() {
 
   return (
     <AppStateProvider>
-      <AppShell user={user} onLogout={handleLogout} />
+      <AppShell user={user} onLogout={handleLogout} onUserUpdated={setUser} />
     </AppStateProvider>
   );
 }

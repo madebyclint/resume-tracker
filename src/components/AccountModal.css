@@ -1,0 +1,193 @@
+.acct-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.acct-modal {
+  background: #fff;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.acct-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 0;
+}
+
+.acct-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.acct-close {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+}
+
+.acct-close:hover {
+  color: #374151;
+}
+
+/* Tabs */
+.acct-tabs {
+  display: flex;
+  gap: 0;
+  padding: 1rem 1.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+  margin-top: 0.75rem;
+}
+
+.acct-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.acct-tab:hover {
+  color: #374151;
+}
+
+.acct-tab.active {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+}
+
+/* Form */
+.acct-form {
+  padding: 1.25rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.acct-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.acct-field label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.acct-field input[type="text"],
+.acct-field input[type="email"],
+.acct-field input[type="password"] {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.acct-field input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+/* Password peek */
+.acct-pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.acct-pw-wrap input {
+  padding-right: 2.5rem;
+}
+
+.acct-peek {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.15rem 0.2rem;
+  color: #6b7280;
+}
+
+/* Feedback */
+.acct-error {
+  color: #dc2626;
+  font-size: 0.85rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+}
+
+.acct-success {
+  color: #166534;
+  font-size: 0.85rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+}
+
+/* Actions */
+.acct-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.acct-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.acct-btn:hover {
+  background: #f9fafb;
+}
+
+.acct-btn-primary {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.acct-btn-primary:hover {
+  background: #4338ca;
+  border-color: #4338ca;
+}

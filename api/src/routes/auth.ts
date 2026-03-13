@@ -99,4 +99,40 @@ router.post('/change-password', requireAuth, async (req: AuthRequest, res: Respo
   }
 });
 
+// PUT /api/auth/profile — update own name and/or email
+router.put('/profile', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, email } = req.body;
+
+    if (!name && !email) {
+      return res.status(400).json({ error: 'Provide at least one field to update (name or email)' });
+    }
+
+    const data: { name?: string; email?: string } = {};
+    if (name) data.name = name.trim();
+    if (email) data.email = email.toLowerCase().trim();
+
+    // Check email uniqueness before updating
+    if (data.email) {
+      const existing = await prisma.user.findFirst({
+        where: { email: data.email, NOT: { id: req.userId } },
+      });
+      if (existing) {
+        return res.status(409).json({ error: 'That email is already in use' });
+      }
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data,
+      select: { id: true, email: true, name: true, isAdmin: true },
+    });
+
+    res.json({ user });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

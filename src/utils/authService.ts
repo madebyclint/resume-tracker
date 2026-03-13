@@ -111,6 +111,28 @@ export async function changePassword(
   }
 }
 
+export async function updateProfile(
+  updates: { name?: string; email?: string }
+): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
+  const token = getToken();
+  if (!token) return { success: false, error: 'Not authenticated' };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(updates),
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, error: data.error || 'Failed to update profile' };
+    // Keep localStorage cache in sync
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    return { success: true, user: data.user as AuthUser };
+  } catch {
+    return { success: false, error: 'Network error' };
+  }
+}
+
 // ── Admin user management ─────────────────────────────────────────────────────
 
 export interface AdminUser {
