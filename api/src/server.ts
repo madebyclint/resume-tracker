@@ -39,7 +39,28 @@ app.use(cors({
 }));
 
 // Security middleware
-app.use(helmet());
+const connectSrcHosts: string[] = ["'self'", 'https://api.openai.com'];
+if (process.env.VITE_OPENAI_API_URL) {
+  try {
+    const parsed = new URL(process.env.VITE_OPENAI_API_URL);
+    const origin = `${parsed.protocol}//${parsed.host}`;
+    if (!connectSrcHosts.includes(origin)) connectSrcHosts.push(origin);
+  } catch { /* ignore invalid URLs */ }
+}
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: connectSrcHosts,
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameSrc: ["'none'"],
+    },
+  },
+}));
 app.use(compression());
 app.use(limiter);
 
@@ -92,9 +113,11 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 
 // In production, serve the Vite frontend build and handle SPA routing
 if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '../../dist');
+  // __dirname is api/dist after tsc build; ../../dist resolves to project-root/dist
+  const distPath = path.resolve(__dirname, '../../dist');
+  console.log(`[static] serving frontend from: ${distPath}`);
   app.use(express.static(distPath));
-  app.use('*', (req, res) => {
+  app.get('*', (req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 } else {
