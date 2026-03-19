@@ -56,6 +56,7 @@ app.use(helmet({
       imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: connectSrcHosts,
       fontSrc: ["'self'"],
+      workerSrc: ["'self'", 'blob:'],
       objectSrc: ["'none'"],
       frameSrc: ["'none'"],
     },

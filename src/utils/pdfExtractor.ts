@@ -10,8 +10,12 @@ export class PDFExtractor {
 
   private initializePDFJS() {
     if (!this.isInitialized) {
-      // Set up PDF.js worker - use jsdelivr CDN which is more reliable
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
+      // Bundle the worker locally via Vite's URL resolution so it is served
+      // from 'self' and not blocked by Content Security Policy in production.
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url
+      ).href;
       this.isInitialized = true;
     }
   }

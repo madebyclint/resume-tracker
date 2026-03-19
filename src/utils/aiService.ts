@@ -1093,6 +1093,111 @@ export async function parseScrapedJobDescription(
   }
 }
 
+// Parse a job description image directly with GPT-4 Vision (no local OCR required)
+export async function parseImageJobDescriptionVision(
+  base64Data: string
+): Promise<{
+  success: boolean;
+  parsedData?: ParsedJobData;
+  extractedText?: string;
+  confidence: number;
+  errors: string[];
+  aiUsage: AIUsageMetrics;
+}> {
+  const config = getAIConfig();
+  if (!config.apiKey) {
+    return {
+      success: false,
+      errors: ['AI service not configured. Please add your OpenAI API key in settings.'],
+      confidence: 0,
+      aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+    };
+  }
+
+  // Normalise data URL — accept both raw base64 and data:image/... URLs
+  const mimeType = base64Data.startsWith('data:')
+    ? base64Data.split(';')[0].split(':')[1]
+    : 'image/png';
+  const base64Content = base64Data.includes(',')
+    ? base64Data.split(',')[1]
+    : base64Data;
+
+  try {
+    const response = await fetch(config.apiUrl!, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: config.model || 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: JOB_SCRAPER_SYSTEM_PROMPT
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Content}`,
+                  detail: 'high'
+                }
+              },
+              {
+                type: 'text',
+                text: 'This is a screenshot of a job posting. Read all visible text and extract the structured job information as JSON following the schema above.'
+              }
+            ]
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Vision API error:', errorText);
+      if (response.status === 401) {
+        return { success: false, errors: ['Invalid API key.'], confidence: 0, aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 } };
+      }
+      if (response.status === 400 && errorText.includes('vision')) {
+        return { success: false, errors: ['Your configured model does not support vision. Please use gpt-4o or gpt-4-turbo.'], confidence: 0, aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 } };
+      }
+      return { success: false, errors: [`AI API error: ${response.status} ${response.statusText}`], confidence: 0, aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 } };
+    }
+
+    const data = await response.json();
+    const aiUsage = calculateAIUsage(data.usage || {});
+    const content = data.choices?.[0]?.message?.content;
+
+    if (!content) {
+      return { success: false, errors: ['No response from AI service'], confidence: 0, aiUsage };
+    }
+
+    try {
+      const parsedData = JSON.parse(content) as ParsedJobData;
+      const confidence = calculateParsingConfidence(parsedData, content);
+      return { success: true, parsedData, extractedText: content, confidence, errors: [], aiUsage };
+    } catch {
+      // AI returned text instead of JSON — treat the raw content as extracted text
+      // and try wrapping it so the caller still gets something useful
+      return { success: false, errors: ['AI returned non-JSON response for image. Try the text/paste mode instead.'], confidence: 0, aiUsage };
+    }
+  } catch (error) {
+    console.error('Error calling Vision API:', error);
+    return {
+      success: false,
+      errors: [`Vision API error: ${error instanceof Error ? error.message : 'Unknown error'}`],
+      confidence: 0,
+      aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 }
+    };
+  }
+}
+
 // Build the user prompt for job scraping
 function buildJobScrapingPrompt(rawText: string, inputType: string): string {
   let contextInfo = '';

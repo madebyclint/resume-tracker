@@ -11,7 +11,7 @@ import {
 } from '../types/scraperTypes';
 import { PDFExtractor } from './pdfExtractor';
 import { ImageExtractor } from './imageExtractor';
-import { parseScrapedJobDescription } from './aiService';
+import { parseScrapedJobDescription, parseImageJobDescriptionVision } from './aiService';
 import { getCachedScraperResult, cacheScraperResult } from '../storage';
 // Removed crypto import - we'll use a simpler hash function for browser compatibility
 
@@ -53,10 +53,36 @@ export class ScraperService {
         };
       }
 
-      // 3. Extract raw text based on input type
+      // 3. For images, use GPT-4 Vision directly (no local OCR/Tesseract needed)
+      if (input.type === 'image') {
+        const visionResult = await parseImageJobDescriptionVision(input.content);
+        if (!visionResult.success) {
+          return {
+            success: false,
+            errors: visionResult.errors,
+            confidence: 0,
+            processingTime: Date.now() - startTime,
+            aiUsage: visionResult.aiUsage
+          };
+        }
+        const validatedVisionData = this.validateParsedData(visionResult.parsedData!);
+        const visionFinalResult: ScraperResult = {
+          success: true,
+          extractedText: visionResult.extractedText,
+          parsedData: validatedVisionData,
+          confidence: visionResult.confidence,
+          errors: [],
+          processingTime: Date.now() - startTime,
+          aiUsage: visionResult.aiUsage
+        };
+        await cacheScraperResult(inputHash, visionFinalResult);
+        return visionFinalResult;
+      }
+
+      // 4. Extract raw text based on input type (pdf / text / url)
       const extractedText = await this.extractText(input);
       
-      // 4. Validate extracted text quality
+      // 5. Validate extracted text quality
       const textValidation = this.validateExtractedText(extractedText);
       if (!textValidation.isValid) {
         return {
@@ -69,7 +95,7 @@ export class ScraperService {
         };
       }
 
-      // 5. Parse with AI
+      // 6. Parse with AI
       const aiResult = await parseScrapedJobDescription(extractedText, input.type);
       
       if (!aiResult.success) {
@@ -83,10 +109,10 @@ export class ScraperService {
         };
       }
 
-      // 6. Validate and clean parsed data
+      // 7. Validate and clean parsed data
       const validatedData = this.validateParsedData(aiResult.parsedData!);
       
-      // 7. Calculate final confidence
+      // 8. Calculate final confidence
       const finalConfidence = this.calculateConfidence(validatedData, extractedText);
 
       const result: ScraperResult = {
