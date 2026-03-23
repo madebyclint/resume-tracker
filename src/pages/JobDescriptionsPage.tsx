@@ -2939,7 +2939,13 @@ AI will automatically fill in the job title and company name fields above!"
                     onStatusChange={handleStatusChange}
                     onToggleWaitingForResponse={handleToggleWaitingForResponse}
                     onProcessJob={handleProcessJob}
-                    onSelect={setSelectedJobId}
+                    onSelect={(jobId) => {
+                      if (window.innerWidth <= 768) {
+                        handleEditJobDescription(jobId);
+                      } else {
+                        setSelectedJobId(jobId);
+                      }
+                    }}
                     selectedJobId={selectedJobId}
                     preserveOrder={showUnparsedFirst}
                   />
