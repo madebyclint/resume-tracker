@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faTimes,
@@ -20,10 +20,13 @@ interface JobEditModalProps {
 export function JobEditModal({ job, isOpen, onClose, onSave }: JobEditModalProps) {
   const [editedJob, setEditedJob] = useState<JobDescription>({ ...job });
   const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   if (!isOpen) return null;
 
   const handleSave = async () => {
+    if (savingRef.current) return; // synchronous guard against double-tap
+    savingRef.current = true;
     setIsSaving(true);
     try {
       await onSave(editedJob);
@@ -32,6 +35,7 @@ export function JobEditModal({ job, isOpen, onClose, onSave }: JobEditModalProps
       console.error('Failed to save job:', error);
       alert('Failed to save changes. Please try again.');
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
