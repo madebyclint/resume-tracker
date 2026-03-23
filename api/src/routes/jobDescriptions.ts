@@ -143,6 +143,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
 router.post('/', async (req: AuthRequest, res) => {
   try {
     const {
+      id: clientId,
       title,
       company,
       rawText,
@@ -189,6 +190,7 @@ router.post('/', async (req: AuthRequest, res) => {
 
     const jobDescription = await prisma.jobDescription.create({
       data: {
+        ...(clientId ? { id: clientId } : {}),
         sequentialId,
         userId: req.userId,
         title,

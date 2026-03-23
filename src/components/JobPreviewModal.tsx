@@ -43,6 +43,7 @@ export function JobPreviewModal({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showRawText, setShowRawText] = useState(false);
+  const savingRef = React.useRef(false);
   const { persistJobDescription: saveJobDescription } = useAppState();
 
   const handleFieldUpdate = (path: string, value: any) => {
@@ -118,6 +119,8 @@ export function JobPreviewModal({
   };
 
   const handleCreateJob = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setIsSaving(true);
 
     try {
@@ -187,6 +190,7 @@ export function JobPreviewModal({
       console.error('Failed to create job:', error);
       alert('Failed to save job description. Please try again.');
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
