@@ -18,6 +18,9 @@ interface DocumentMetadata {
   error?: string;
 }
 
+// Vision-capable model — always used for image parsing regardless of the user's configured default model
+const VISION_MODEL = 'gpt-4o';
+
 // Get AI configuration from environment variables
 function getAIConfig(): AIConfig {
   return {
@@ -908,6 +911,11 @@ export async function getCombinedResumeText(): Promise<string> {
 
 // Job Description Scraper - AI Parsing Functions
 
+/** Strip ```json ... ``` or ``` ... ``` markdown code fences that models sometimes wrap JSON in */
+function stripJsonFences(raw: string): string {
+  return raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+}
+
 // System prompt for job scraper parsing
 const JOB_SCRAPER_SYSTEM_PROMPT = `You are an expert job description parser. Extract structured data from job postings in any format (text, PDF content, or OCR'd images). Return valid JSON only.
 
@@ -1050,8 +1058,8 @@ export async function parseScrapedJobDescription(
     }
 
     try {
-      // Parse JSON response
-      const parsedData = JSON.parse(content) as ParsedJobData;
+      // Parse JSON response — strip markdown code fences models sometimes add
+      const parsedData = JSON.parse(stripJsonFences(content)) as ParsedJobData;
       const confidence = calculateParsingConfidence(parsedData, rawText);
       
       return {
@@ -1130,7 +1138,7 @@ export async function parseImageJobDescriptionVision(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: config.model || 'gpt-4o',
+        model: VISION_MODEL,
         messages: [
           {
             role: 'system',
@@ -1164,7 +1172,7 @@ export async function parseImageJobDescriptionVision(
       if (response.status === 401) {
         return { success: false, errors: ['Invalid API key.'], confidence: 0, aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 } };
       }
-      if (response.status === 400 && errorText.includes('vision')) {
+      if (response.status === 400 && (errorText.includes('vision') || errorText.includes('image_url'))) {
         return { success: false, errors: ['Your configured model does not support vision. Please use gpt-4o or gpt-4-turbo.'], confidence: 0, aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 } };
       }
       return { success: false, errors: [`AI API error: ${response.status} ${response.statusText}`], confidence: 0, aiUsage: { totalTokens: 0, promptTokens: 0, completionTokens: 0, estimatedCost: 0 } };
@@ -1179,12 +1187,13 @@ export async function parseImageJobDescriptionVision(
     }
 
     try {
-      const parsedData = JSON.parse(content) as ParsedJobData;
+      // Strip markdown code fences models sometimes add before parsing
+      const parsedData = JSON.parse(stripJsonFences(content)) as ParsedJobData;
       const confidence = calculateParsingConfidence(parsedData, content);
       return { success: true, parsedData, extractedText: content, confidence, errors: [], aiUsage };
-    } catch {
-      // AI returned text instead of JSON — treat the raw content as extracted text
-      // and try wrapping it so the caller still gets something useful
+    } catch (parseError) {
+      console.error('Failed to parse vision API JSON response:', parseError);
+      console.error('Vision API response content:', content);
       return { success: false, errors: ['AI returned non-JSON response for image. Try the text/paste mode instead.'], confidence: 0, aiUsage };
     }
   } catch (error) {

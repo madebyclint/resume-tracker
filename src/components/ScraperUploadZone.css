@@ -405,7 +405,7 @@
   }
   
   .job-text-input {
-    min-height: 250px;
+    min-height: 140px;
     padding: 12px;
     font-size: 13px;
   }
@@ -433,9 +433,13 @@
     padding: 8px 6px;
     font-size: 11px;
   }
-  
+
   .url-input-info {
-    padding: 12px;
+    display: none;
+  }
+
+  .drop-zone {
+    padding: 16px 12px;
   }
   
   .file-info {
