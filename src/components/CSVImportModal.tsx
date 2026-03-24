@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { parseCSV, convertToJobDescriptions, CSVJobApplication } from '../utils/csvParser';
 import { JobDescription } from '../types';
+import { analytics } from '../utils/analyticsService';
 import './GeneratedContentModal.css'; // Reuse existing modal styles
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFileAlt } from '@fortawesome/free-solid-svg-icons';
@@ -19,6 +20,11 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, onImpo
   const [preview, setPreview] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Track when the modal is opened
+  useEffect(() => {
+    if (isOpen) analytics.track('feature', 'csv_import_opened');
+  }, [isOpen]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -93,6 +99,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, onImpo
 
     try {
       const jobDescriptions = convertToJobDescriptions(csvData, existingJobs);
+      analytics.track('feature', 'csv_import_completed', { count: jobDescriptions.length });
       onImport(jobDescriptions);
       onClose();
       resetState();

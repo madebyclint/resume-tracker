@@ -12,6 +12,7 @@ import {
 import { ScraperInput, ScraperResult, ParsedJobData, ExtensionCaptureData } from '../types/scraperTypes';
 import { JobDescription } from '../types';
 import { ScraperService } from '../utils/scraperService';
+import { analytics } from '../utils/analyticsService';
 import { ScraperUploadZone } from './ScraperUploadZone';
 import { JobPreviewModal } from './JobPreviewModal';
 import { ScraperStatusIndicator } from './ScraperStatusIndicator';
@@ -64,7 +65,9 @@ export function JobScraperModal({
 
   // Reset state when modal opens/closes
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      analytics.track('feature', 'scraper_opened');
+    } else {
       setStep('input');
       setInput(null);
       setResult(null);
@@ -109,6 +112,7 @@ export function JobScraperModal({
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      analytics.track('error', 'scraper_error');
       setError(errorMessage);
       setStep('error');
     } finally {
@@ -118,6 +122,7 @@ export function JobScraperModal({
   };
 
   const handleJobCreated = (jobDescription: JobDescription) => {
+    analytics.track('feature', 'scraper_completed');
     onJobCreated(jobDescription);
     onClose();
   };

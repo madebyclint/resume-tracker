@@ -8,6 +8,7 @@ import AccountModal from "./components/AccountModal";
 import { DataMigrationTool } from "./components/DataMigrationTool";
 import LoginScreen from "./components/LoginScreen";
 import { AuthUser, verifyToken, getCurrentUser, logout } from "./utils/authService";
+import { analytics } from "./utils/analyticsService";
 import "./App.css";
 
 type Page = 'dashboard' | 'jobs' | 'resume-formatter' | 'admin';
@@ -15,7 +16,29 @@ type Page = 'dashboard' | 'jobs' | 'resume-formatter' | 'admin';
 function AppShell({ user, onLogout, onUserUpdated }: { user: AuthUser; onLogout: () => void; onUserUpdated: (u: AuthUser) => void }) {
   const [currentPage, setCurrentPage] = useState<Page>('jobs');
   const [showAccount, setShowAccount] = useState(false);
+  const [showNotice, setShowNotice] = useState(
+    () => !localStorage.getItem('analyticsNoticeDismissed')
+  );
   const { devMode, setDevMode } = useAppState();
+
+  // Track page views when the user navigates
+  useEffect(() => {
+    analytics.track('page_view', currentPage);
+  }, [currentPage]);
+
+  // Sync analytics enabled/disabled with dev mode
+  useEffect(() => {
+    analytics.setEnabled(!devMode);
+  }, [devMode]);
+
+  const handleNavigate = (page: Page) => {
+    setCurrentPage(page);
+  };
+
+  const handleDismissNotice = () => {
+    localStorage.setItem('analyticsNoticeDismissed', 'true');
+    setShowNotice(false);
+  };
 
   const renderCurrentPage = () => {
     switch (currentPage) {
@@ -39,14 +62,14 @@ function AppShell({ user, onLogout, onUserUpdated }: { user: AuthUser; onLogout:
         <nav>
           <div
             className={`nav-item ${currentPage === 'jobs' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('jobs')}
+            onClick={() => handleNavigate('jobs')}
             style={{ cursor: 'pointer' }}
           >
             🗂️ Job Descriptions
           </div>
           <div
             className={`nav-item ${currentPage === 'resume-formatter' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('resume-formatter')}
+            onClick={() => handleNavigate('resume-formatter')}
             style={{ cursor: 'pointer' }}
           >
             📄 Resume Formatter
@@ -54,7 +77,7 @@ function AppShell({ user, onLogout, onUserUpdated }: { user: AuthUser; onLogout:
           {user.isAdmin && (
             <div
               className={`nav-item ${currentPage === 'admin' ? 'active' : ''}`}
-              onClick={() => setCurrentPage('admin')}
+              onClick={() => handleNavigate('admin')}
               style={{ cursor: 'pointer' }}
             >
               ⚙️ Admin
@@ -89,6 +112,12 @@ function AppShell({ user, onLogout, onUserUpdated }: { user: AuthUser; onLogout:
         {renderCurrentPage()}
       </main>
       {devMode && <DataMigrationTool />}
+      {showNotice && (
+        <div className="analytics-notice">
+          <span>We collect anonymous usage data to improve the app during alpha.</span>
+          <button className="analytics-notice-dismiss" onClick={handleDismissNotice}>Got it</button>
+        </div>
+      )}
       {showAccount && (
         <AccountModal
           user={user}
@@ -118,6 +147,8 @@ export default function App() {
   }, []);
 
   const handleLogout = () => {
+    analytics.track('session', 'end');
+    analytics.flush();
     logout();
     setUser(null);
   };
@@ -131,7 +162,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <LoginScreen onLogin={setUser} />;
+    return <LoginScreen onLogin={(u) => { setUser(u); analytics.track('session', 'start'); }} />;
   }
 
   return (

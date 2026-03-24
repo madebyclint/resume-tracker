@@ -22,6 +22,7 @@ model User {
   resumes      Resume[]
   coverLetters CoverLetter[]
   jobDescriptions JobDescription[]
+  analyticsEvents AnalyticsEvent[]
 
   @@map("users")
 }
@@ -209,4 +210,21 @@ model ScraperCache {
   createdAt    DateTime @default(now())
   
   @@map("scraper_cache")
+}
+
+model AnalyticsEvent {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId   String
+  eventType   String   // page_view | session | job | feature | search | error
+  eventName   String   // the specific event name
+  properties  Json?    // optional metadata
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([sessionId])
+  @@map("analytics_events")
 }

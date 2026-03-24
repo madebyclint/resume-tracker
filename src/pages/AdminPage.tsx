@@ -6,9 +6,23 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  getToken,
 } from '../utils/authService';
 import { useAppState } from '../state/AppStateContext';
 import './AdminPage.css';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+interface AnalyticsSummary {
+  days: number;
+  totalEvents: number;
+  uniqueUsers: number;
+  topFeatures: { name: string; count: number }[];
+  pageViews: { page: string; count: number }[];
+  errors: { name: string; count: number }[];
+  userSummary: { userId: string; email: string; name: string; sessionCount: number; eventCount: number; lastSeen: string }[];
+  eventsByDay: { date: string; count: number }[];
+}
 
 interface AdminPageProps {
   currentUser: AuthUser;
@@ -41,6 +55,30 @@ export default function AdminPage({ currentUser }: AdminPageProps) {
   const [deleteError, setDeleteError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // Analytics state
+  const [analyticsDays, setAnalyticsDays] = useState(30);
+  const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState('');
+
+  const loadAnalytics = useCallback(async (days: number) => {
+    setAnalyticsLoading(true);
+    setAnalyticsError('');
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE_URL}/analytics/admin/summary?days=${days}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setAnalyticsSummary(data);
+    } catch (e) {
+      setAnalyticsError('Failed to load analytics.');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, []);
+
   const loadUsers = useCallback(async () => {
     setLoadError('');
     try {
@@ -54,6 +92,10 @@ export default function AdminPage({ currentUser }: AdminPageProps) {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  useEffect(() => {
+    loadAnalytics(analyticsDays);
+  }, [loadAnalytics, analyticsDays]);
 
   function openAdd() {
     setForm(emptyForm());
@@ -307,6 +349,153 @@ export default function AdminPage({ currentUser }: AdminPageProps) {
           </div>
         </div>
       )}
+
+      {/* ── User Activity Analytics ─────────────────────────────────── */}
+      <section className="admin-section analytics-section">
+        <div className="admin-section-header">
+          <h2 className="admin-section-title">User Activity</h2>
+          <div className="analytics-days-selector">
+            {[7, 14, 30].map(d => (
+              <button
+                key={d}
+                className={`admin-btn admin-btn-sm ${analyticsDays === d ? 'admin-btn-primary' : ''}`}
+                onClick={() => setAnalyticsDays(d)}
+              >
+                {d}d
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {analyticsLoading && <p className="admin-empty">Loading analytics…</p>}
+        {analyticsError && <div className="admin-error">{analyticsError}</div>}
+
+        {analyticsSummary && !analyticsLoading && (
+          <>
+            {/* Summary cards */}
+            <div className="analytics-cards">
+              <div className="analytics-card">
+                <div className="analytics-card-value">{analyticsSummary.totalEvents.toLocaleString()}</div>
+                <div className="analytics-card-label">Total Events</div>
+              </div>
+              <div className="analytics-card">
+                <div className="analytics-card-value">{analyticsSummary.uniqueUsers}</div>
+                <div className="analytics-card-label">Active Users</div>
+              </div>
+              <div className="analytics-card">
+                <div className="analytics-card-value">
+                  {analyticsSummary.userSummary.reduce((s, u) => s + u.sessionCount, 0)}
+                </div>
+                <div className="analytics-card-label">Total Sessions</div>
+              </div>
+              <div className="analytics-card">
+                <div className="analytics-card-value">
+                  {analyticsSummary.errors.reduce((s, e) => s + e.count, 0)}
+                </div>
+                <div className="analytics-card-label">Errors</div>
+              </div>
+            </div>
+
+            <div className="analytics-columns">
+              {/* Feature usage */}
+              {analyticsSummary.topFeatures.length > 0 && (
+                <div className="analytics-column">
+                  <h3 className="analytics-col-title">Feature Usage</h3>
+                  <table className="admin-table">
+                    <thead><tr><th>Feature</th><th>Count</th><th style={{ width: '120px' }}></th></tr></thead>
+                    <tbody>
+                      {analyticsSummary.topFeatures.map(f => {
+                        const max = analyticsSummary.topFeatures[0]?.count || 1;
+                        return (
+                          <tr key={f.name}>
+                            <td>{f.name.replace(/_/g, ' ')}</td>
+                            <td>{f.count}</td>
+                            <td>
+                              <div className="analytics-bar-track">
+                                <div className="analytics-bar" style={{ width: `${(f.count / max) * 100}%` }} />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Page views */}
+              {analyticsSummary.pageViews.length > 0 && (
+                <div className="analytics-column">
+                  <h3 className="analytics-col-title">Page Views</h3>
+                  <table className="admin-table">
+                    <thead><tr><th>Page</th><th>Views</th></tr></thead>
+                    <tbody>
+                      {analyticsSummary.pageViews.map(p => (
+                        <tr key={p.page}>
+                          <td>{p.page}</td>
+                          <td>{p.count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {analyticsSummary.errors.length > 0 && (
+                    <>
+                      <h3 className="analytics-col-title" style={{ marginTop: '1.5rem' }}>Errors</h3>
+                      <table className="admin-table">
+                        <thead><tr><th>Error</th><th>Count</th></tr></thead>
+                        <tbody>
+                          {analyticsSummary.errors.map(e => (
+                            <tr key={e.name}>
+                              <td>{e.name.replace(/_/g, ' ')}</td>
+                              <td>{e.count}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Per-user breakdown */}
+            {analyticsSummary.userSummary.length > 0 && (
+              <>
+                <h3 className="analytics-col-title" style={{ marginTop: '1.5rem' }}>User Breakdown</h3>
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Sessions</th>
+                        <th>Events</th>
+                        <th>Last Seen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analyticsSummary.userSummary.map(u => (
+                        <tr key={u.userId}>
+                          <td>{u.name}</td>
+                          <td>{u.email}</td>
+                          <td>{u.sessionCount}</td>
+                          <td>{u.eventCount}</td>
+                          <td>{new Date(u.lastSeen).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {analyticsSummary.totalEvents === 0 && (
+              <p className="admin-empty">No events recorded in the last {analyticsDays} days yet.</p>
+            )}
+          </>
+        )}
+      </section>
     </div>
   );
 }

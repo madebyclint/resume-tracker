@@ -14,6 +14,7 @@ import scraperCacheRoutes from './routes/scraperCache';
 import migrationRoutes from './routes/migration';
 import authRoutes from './routes/auth';
 import adminUserRoutes from './routes/users';
+import analyticsRoutes from './routes/analytics';
 import { prisma } from './db';
 
 // Load environment variables
@@ -82,6 +83,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/users', adminUserRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/cover-letters', coverLetterRoutes);
 app.use('/api/job-descriptions', jobDescriptionRoutes);

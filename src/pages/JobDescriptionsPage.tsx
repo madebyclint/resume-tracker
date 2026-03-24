@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { useAppState } from '../state/AppStateContext';
 import { JobDescription, Resume, CoverLetter } from '../types';
+import { analytics } from '../utils/analyticsService';
 import { parseJobDescription, generateTailoredResumeFromFullText, generateTailoredCoverLetterFromFullText, getCombinedResumeText, isAIConfigured, fetchJobDescriptionFromURL } from '../utils/aiService';
 import { saveGeneratedResume, saveGeneratedCoverLetter, exportAllDataAsJSON, importAllDataFromJSON } from '../storage';
 import { calculateDocumentMatches, DocumentMatch } from '../utils/documentMatcher';
@@ -278,6 +279,22 @@ const JobDescriptionsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicateSearchQuery, setDuplicateSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'not_applied' | 'applied' | 'interviewing' | 'rejected' | 'offered' | 'withdrawn' | ''>('');
+
+  // Analytics: debounced search + filter tracking
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      analytics.track('search', 'query_entered', { hasText: searchQuery.trim().length > 0 });
+    }, 1000);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (statusFilter) analytics.track('search', 'filter_changed', { filter: statusFilter });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   // Document matching toggle state
   const [showDocumentMatching, setShowDocumentMatching] = useState<Record<string, boolean>>({});
@@ -561,6 +578,7 @@ Location: New York City (on-site)`,
 
       // Close modal and show success message
       setScraperModalOpen(false);
+      analytics.track('job', 'scraped');
       showToast('Job description scraped and saved successfully!', 'success');
 
     } catch (error) {
@@ -848,6 +866,7 @@ Location: New York City (on-site)`,
           company: result.company || prev.company,
           rawText: result.text || prev.rawText
         }));
+        analytics.track('job', 'url_fetched');
         setFetchError(null);
       } else {
         setFetchError(result.error || 'Failed to fetch job description from URL');
@@ -957,6 +976,7 @@ Location: New York City (on-site)`,
         if (result.fromCache) {
           showToast('Job description processed successfully using cached data (no additional AI cost)!', 'success');
         } else {
+          analytics.track('job', 'ai_parsed');
           showToast('Job description re-parsed successfully! Check the extracted details.', 'success');
         }
       } else {
@@ -1340,6 +1360,7 @@ Location: New York City (on-site)`,
         applicationStatus: ''
       });
 
+      analytics.track('job', 'created');
       showToast('Job description saved successfully!', 'success');
 
     } catch (error) {
@@ -1357,6 +1378,7 @@ Location: New York City (on-site)`,
 
     try {
       await deleteJobDescription(id);
+      analytics.track('job', 'deleted');
       setState(prev => ({
         ...prev,
         jobDescriptions: prev.jobDescriptions.filter(jd => jd.id !== id)
@@ -1385,6 +1407,7 @@ Location: New York City (on-site)`,
             : job
         )
       }));
+      analytics.track('job', 'archived');
       showToast('Job archived successfully', 'success');
     } catch (error) {
       console.error('Error archiving job:', error);
@@ -1565,6 +1588,7 @@ Location: New York City (on-site)`,
 
     try {
       await saveJobDescription(updatedJobDescription);
+      analytics.track('job', 'status_changed', { from: jobDescription.applicationStatus, to: status });
       setState(prev => ({
         ...prev,
         jobDescriptions: prev.jobDescriptions.map(jd =>
@@ -1718,6 +1742,7 @@ Location: New York City (on-site)`,
         throw new Error(result.error || 'Failed to generate resume');
       }
 
+      analytics.track('feature', 'ai_resume_generated');
       setGeneratedContent(result.content);
     } catch (error) {
       console.error('Error generating resume:', error);
@@ -1773,6 +1798,7 @@ Location: New York City (on-site)`,
         throw new Error(result.error || 'Failed to generate cover letter');
       }
 
+      analytics.track('feature', 'ai_cover_letter_generated');
       setGeneratedContent(result.content);
     } catch (error) {
       console.error('Error generating cover letter:', error);
@@ -1846,6 +1872,7 @@ Location: New York City (on-site)`,
         jobDescriptions: [...prev.jobDescriptions, ...jobDescriptions]
       }));
 
+      analytics.track('job', 'csv_imported', { count: jobDescriptions.length });
       showToast(`Successfully imported ${jobDescriptions.length} job description${jobDescriptions.length === 1 ? '' : 's'}!`, 'success');
     } catch (error) {
       console.error('Error importing CSV:', error);

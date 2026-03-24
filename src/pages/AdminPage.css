@@ -1,6 +1,6 @@
 .admin-page {
   padding: 2rem;
-  max-width: 900px;
+  max-width: 1100px;
 }
 
 .admin-title {
@@ -330,3 +330,81 @@
   margin: 0 0 1rem;
   line-height: 1.5;
 }
+
+/* ── Analytics section ───────────────────────────────────────── */
+.analytics-section {
+  max-width: 100%;
+}
+
+.analytics-days-selector {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.analytics-cards {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.analytics-card {
+  flex: 1;
+  min-width: 120px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  text-align: center;
+}
+
+.analytics-card-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+}
+
+.analytics-card-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.analytics-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 700px) {
+  .analytics-columns { grid-template-columns: 1fr; }
+}
+
+.analytics-col-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.analytics-bar-track {
+  background: #f3f4f6;
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.analytics-bar {
+  background: #6366f1;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  min-width: 2px;
+}
+

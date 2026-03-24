@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import ValidationMessage from '../components/ValidationMessage';
+import { analytics } from '../utils/analyticsService';
 import './JobDescriptionsPage.css';
 
 // Markdown Resume Generation Prompt Validator
@@ -294,6 +295,7 @@ const ResumeFormatterPage: React.FC = () => {
 
   const handlePrintPDF = () => {
     if (!resumeInputText.trim()) return;
+    analytics.track('feature', 'resume_exported_pdf');
 
     const markdownComponent = (
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
@@ -344,6 +346,7 @@ const ResumeFormatterPage: React.FC = () => {
 
   const handleDownloadMarkdown = () => {
     if (!resumeInputText.trim()) return;
+    analytics.track('feature', 'resume_exported_md');
     const today = new Date().toISOString().split('T')[0];
     const blob = new Blob([resumeInputText], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -388,6 +391,7 @@ const ResumeFormatterPage: React.FC = () => {
             className="validate-button"
             onClick={() => {
               if (resumeInputText.trim()) {
+                analytics.track('feature', 'resume_validated');
                 const promptResults = validateMarkdownResumePrompt(resumeInputText);
                 setValidationResults([
                   { type: 'pass' as const, message: '✅ Markdown Generation Prompt Validation' },
